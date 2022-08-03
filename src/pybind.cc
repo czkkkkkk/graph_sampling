@@ -3,13 +3,15 @@
 
 #include "./graph.h"
 
-namespace gs {
+using namespace gs;
 
-TORCH_LIBRARY(graph, m) {
+TORCH_LIBRARY(gs_classes, m) {
   m.class_<Graph>("Graph")
     .def(torch::init<bool>())
-    .def("ColumnwiseSlicing", &Graph::ColumnwiseSlicing)
+    .def("columnwise_slicing", &Graph::ColumnwiseSlicing)
   ;
 }
+
+namespace gs {
 
 }
