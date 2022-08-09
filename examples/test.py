@@ -19,5 +19,5 @@ def wrapper(data):
 gm = gs_symbolic_trace(wrapper)
 print(gm.graph)
 t = torch.ones(10)
-for i, k in zip(gm(t), [3, 2, 4, 1]):
-    assert (i._graph.get().equal(t * k))
+for i, j in zip(gm(t), wrapper(t)):
+    assert (i._graph.get().equal(j._graph.get()))
