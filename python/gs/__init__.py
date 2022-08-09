@@ -6,3 +6,4 @@ so_path = os.path.join(package_path, 'libgs.so')
 torch.classes.load_library(so_path)
 
 from .matrix_api import Matrix
+from .compiler import gsTracer, gs_symbolic_trace
