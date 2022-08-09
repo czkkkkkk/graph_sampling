@@ -3,9 +3,11 @@
 namespace gs {
 
 c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_ids) {
-  // auto ret = c10::intrusive_ptr<Graph>(new Graph(true));
-  // ret.SetCSC(CSCColumnwiseSlicing(csc_, column_ids));
-  return c10::intrusive_ptr<Graph>();
+  auto tensor = this->test_trace_data_ + column_ids;
+  auto ret_graph = Graph(tensor);
+  return c10::make_intrusive<Graph>(ret_graph);
 }
+
+torch::Tensor Graph::Get() { return this->test_trace_data_; }
 
 }  // namespace gs

@@ -1,4 +1,5 @@
 import torch
+from torch.fx import Proxy
 
 class Matrix(object):
     def __init__(self, graph: torch.classes.gs_classes.Graph):
@@ -9,13 +10,15 @@ class Matrix(object):
         pass
 
     def __getitem__(self, data):
-        # assert isinstance(data, tuple), 'data type is {}'.format(type(data))
-        # r_slice = data[0]
+        ret = self._graph
+        r_slice = data[0]
         c_slice = data[1]
-        # Columnwise Slicing
-        # if r_slice == slice(None, None, None) and isinstance(c_slice, torch.Tensor):
-        return Matrix(self._graph.columnwise_slicing(c_slice))
-        # else:
-        #     pass
+        if isinstance(r_slice, Proxy) or isinstance(r_slice, torch.Tensor):
+            ret = ret.columnwise_slicing(r_slice)
+
+        if isinstance(c_slice, Proxy) or isinstance(c_slice, torch.Tensor):
+            ret = ret.columnwise_slicing(c_slice)
+
+        return Matrix(ret)
 
 

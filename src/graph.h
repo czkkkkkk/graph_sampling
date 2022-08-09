@@ -10,12 +10,14 @@ namespace gs {
 
 class Graph : public torch::CustomClassHolder {
  public:
-  Graph(bool is_subgraph) { is_subgraph_ = is_subgraph; }
+  Graph(torch::Tensor test_data) { test_trace_data_ = test_data; }
   c10::intrusive_ptr<Graph> ColumnwiseSlicing(torch::Tensor column_ids);
+  torch::Tensor Get();
 
  private:
   bool is_subgraph_;
   std::shared_ptr<CSC> csc_;
+  torch::Tensor test_trace_data_;
 };
 
 }  // namespace gs
