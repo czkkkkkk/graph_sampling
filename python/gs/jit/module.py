@@ -94,7 +94,6 @@ class compile_class:
             return func(*new_args)
 
         gm = gs_symbolic_trace(inner_wrapper)
-        print(gm.graph)
         self.gm = gm
 
     def __call__(self, *args):

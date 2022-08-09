@@ -10,14 +10,14 @@ _graph = torch.classes.gs_classes.Graph(torch.ones(10))
 m = gs.Matrix(_graph)
 t = torch.ones(10)
 
-comipled_func = gs.jit.compile_class(sampling, (m, t))
+compiled_func = gs.jit.compile_class(sampling, (m, t))
 
-for i in comipled_func(m, t):
+for i in compiled_func(m, t):
     print(i._graph.get())
 
-for i in comipled_func(m, torch.ones(10) * 20):
+for i in compiled_func(m, torch.ones(10) * 20):
     print(i._graph.get())
 
-for i in comipled_func(
+for i in compiled_func(
         gs.Matrix(torch.classes.gs_classes.Graph(torch.ones(10) * 10)), t):
     print(i._graph.get())
