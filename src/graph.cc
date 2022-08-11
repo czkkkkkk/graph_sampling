@@ -24,7 +24,8 @@ torch::Tensor Graph::RowIndices() { return torch::Tensor(); }
 
 void Graph::Print() const {
   std::stringstream ss;
-  ss << "# Nodes: " << csc_->indptr.size(0) - 1 << " # Edges: " << csc_->indices.size(0) << "\n";
+  ss << "# Nodes: " << csc_->indptr.size(0) - 1
+     << " # Edges: " << csc_->indices.size(0) << "\n";
   ss << "CSC indptr: " << csc_->indptr << "\n";
   ss << "CSC indices: " << csc_->indices << "\n";
   std::cout << ss.str();
