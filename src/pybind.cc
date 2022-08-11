@@ -9,6 +9,9 @@ TORCH_LIBRARY(gs_classes, m) {
   m.class_<Graph>("Graph")
     .def(torch::init<bool>())
     .def("columnwise_slicing", &Graph::ColumnwiseSlicing)
+    .def("load_csc", &Graph::LoadCSC)
+    .def("row_indices", &Graph::RowIndices)
+    .def("print", &Graph::Print);
   ;
 }
 

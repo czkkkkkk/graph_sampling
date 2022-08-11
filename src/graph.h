@@ -11,7 +11,12 @@ namespace gs {
 class Graph : public torch::CustomClassHolder {
  public:
   Graph(bool is_subgraph) { is_subgraph_ = is_subgraph; }
+  void LoadCSC(torch::Tensor indptr, torch::Tensor indices);
+  void SetCSC(std::shared_ptr<CSC> csc);
   c10::intrusive_ptr<Graph> ColumnwiseSlicing(torch::Tensor column_ids);
+  torch::Tensor RowIndices();
+
+  void Print() const;
 
  private:
   bool is_subgraph_;
