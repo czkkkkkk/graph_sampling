@@ -6,7 +6,7 @@ from torch.fx import GraphModule
 from ..matrix_api import Matrix
 
 
-class gsTracer(Tracer):
+class GSTracer(Tracer):
 
     def __init__(self,
                  autowrap_modules=(math, ),
@@ -25,7 +25,7 @@ class gsTracer(Tracer):
 
 
 def gs_symbolic_trace(root, concrete_args=None) -> GraphModule:
-    gs_tracer = gsTracer()
+    gs_tracer = GSTracer()
     graph = gs_tracer.trace(root, None)
     name = root.__class__.__name__ if isinstance(
         root, torch.nn.Module) else root.__name__
