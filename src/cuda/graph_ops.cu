@@ -6,19 +6,19 @@ namespace impl {
 __global__ void _GetSubSizeKernel(int64_t* sub_indptr, int64_t* indptr,
                                   int64_t* column_ids, int64_t size) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid == 0) {
+    sub_indptr[tid] = 0;
+  }
   while (tid < size) {
     int64_t col = column_ids[tid];
     sub_indptr[tid + 1] = indptr[col + 1] - indptr[col];
     tid += gridDim.x * blockDim.x;
   }
-  if (tid == 0) {
-    sub_indptr[tid] = 0;
-  }
 }
 
 torch::Tensor GetSubIndptr(torch::Tensor indptr, torch::Tensor ids) {
   int64_t size = ids.numel();
-  auto sub_size = torch::zeros(size + 1, indptr.options());
+  auto sub_size = torch::empty(size + 1, indptr.options());
 
   int64_t n_threads = 512;
   int64_t n_blocks = (size + n_threads - 1) / n_threads;
