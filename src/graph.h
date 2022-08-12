@@ -21,7 +21,6 @@ class Graph : public torch::CustomClassHolder {
  private:
   bool is_subgraph_;
   std::shared_ptr<CSC> csc_;
-  torch::Tensor test_trace_data_;
 };
 
 }  // namespace gs
