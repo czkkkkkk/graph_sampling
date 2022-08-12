@@ -31,6 +31,4 @@ void Graph::Print() const {
   std::cout << ss.str();
 }
 
-torch::Tensor Graph::Get() { return this->test_trace_data_; }
-
 }  // namespace gs
