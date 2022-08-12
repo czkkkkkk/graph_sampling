@@ -1,5 +1,3 @@
-from ast import arg
-from re import A
 from typing import List
 from .trace import gs_symbolic_trace
 from ..matrix_api import Matrix
@@ -79,7 +77,7 @@ def generate_new_args(args, graph_args, static_args, actions):
     return tuple(new_args)
 
 
-class compile_class:
+class compile:
 
     def __init__(self, func, args):
         actions = get_actions(args)
