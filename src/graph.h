@@ -25,3 +25,4 @@ class Graph : public torch::CustomClassHolder {
 
 }  // namespace gs
 
+#endif
