@@ -9,6 +9,9 @@ class Matrix(object):
     def load_dgl_graph(self):
         pass
 
+    def columnwise_slicing(self, t):
+        return Matrix(self._graph.columnwise_slicing(t))
+
     def __getitem__(self, data):
         ret = self._graph
         r_slice = data[0]

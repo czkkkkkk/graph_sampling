@@ -1,20 +1,13 @@
-from difflib import Match
-import gs
+from gs import Graph
 import torch
-from gs import gs_symbolic_trace
 
-
-def sampling(A: gs.Matrix, t: torch.Tensor):
-    return A[:, t * 2], A[t * 1, :], A[t * 1, t * 2], A[:, :]
-
-
-_graph = torch.classes.gs_classes.Graph(torch.ones(10))
-
-
-def wrapper(data):
-    m = gs.Matrix(_graph)
-    return sampling(m, data)
-
+A = Graph(False)
+indptr = torch.LongTensor([0, 1, 1, 3, 4]).to('cuda:0')
+indices = torch.LongTensor([4, 0, 1, 2]).to('cuda:0')
+column_ids = torch.LongTensor([2, 3]).to('cuda:0')
+A.load_csc(indptr, indices)
+subA = A.columnwise_slicing(column_ids)
+subA.print()
 
 gm = gs_symbolic_trace(wrapper)
 print(gm.graph)
