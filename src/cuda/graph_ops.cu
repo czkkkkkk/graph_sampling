@@ -17,10 +17,8 @@ __global__ void _GetSubSizeKernel(int64_t* sub_indptr, int64_t* indptr,
 }
 
 torch::Tensor GetSubIndptr(torch::Tensor indptr, torch::Tensor ids) {
-  auto topt =
-      torch::TensorOptions().dtype(indptr.dtype()).device(indptr.device());
-  int64_t size = ids.size(0);
-  auto sub_size = torch::empty(size + 1, topt);
+  int64_t size = ids.numel();
+  auto sub_size = torch::zeros(size + 1, indptr.options());
 
   int64_t n_threads = 512;
   int64_t n_blocks = (size + n_threads - 1) / n_threads;
@@ -51,12 +49,10 @@ __global__ void _GetSubIndicesKernel(int64_t* out_indices, int64_t* indptr,
 torch::Tensor GetSubIndices(torch::Tensor indptr, torch::Tensor indices,
                             torch::Tensor sub_indptr,
                             torch::Tensor column_ids) {
-  int64_t size = column_ids.size(0);
+  int64_t size = column_ids.numel();
   // FIXME
   auto n_edges = sub_indptr.to(torch::kCPU).data_ptr<int64_t>()[size];
-  auto topt =
-      torch::TensorOptions().dtype(indptr.dtype()).device(indptr.device());
-  auto sub_indices = torch::empty(n_edges, topt);
+  auto sub_indices = torch::empty(n_edges, indptr.options());
 
   dim3 block(32, 8);
   dim3 grid((size + block.x - 1) / block.x);
