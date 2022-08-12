@@ -69,7 +69,7 @@ def generate_new_args(args, graph_args, static_args, actions):
         else:
             _, offset, a = action
             if a == CONVERT_2_MATRIX:
-                new_args.append(Matrix(graph_args[index]))
+                new_args.append(Matrix(graph_args[offset]))
             elif a == STATIS_LIST:
                 new_args.append(static_args[offset])
             else:
