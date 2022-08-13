@@ -80,20 +80,48 @@ def generate_new_args(args, graph_args, static_args, actions):
 class compile:
 
     def __init__(self, func, args):
+        '''
+        This is auto wrapper for user's func.
+        We will create an func inner_wrapper according user's func and its args.
+        Each arg in args will have an action, which is used to tell what we should do for the arg.
+
+        There are three types action, 'None', 'GRAPH_ARG', 'STATIC_ARG'.
+        We use actions to generate graph_args, static_args.
+        And in inner_wrapper, we will leverage graph_args, static_args and user's args with actions to generate new_args.
+        By this way, we can convert some args into static args (e.g. fanout=[5,10]) and expand Matrix's methods.
+
+        For 'None' action, we will do nothing and pass arg through into inner_wrapper.
+
+        For 'GRAPH_ARG' action, where arg is 'Matrix', we will store Matrix._graph in graph_args
+        and in inner_wrapper, we will use Matrix._graph in graph_args to re-generate origin Matrix.
+
+        For 'STATIC_ARG' action, where arg will not change during training (e.g. fanout, metapath or others). We will store them
+        in static_args and they will appear as constants in torch.fx.
+        '''
+
+        # generate actions
         actions = get_actions(args)
+        # extract graph_actions and static_actions from acitons
         graph_actions, static_actions = split_actions(actions)
         self.graph_actions = graph_actions
         self.static_actions = static_actions
+        # generate static_args via static_actions
         static_args = generate_static_args(args, self.static_actions)
 
         def inner_wrapper(inner_args, inner_graph_args):
+            # generate new_args for user's arg.
+            # arg in static_args will be compiled as contants.
+            # arg in graph_args will be leveraged to generate Matrix.
             new_args = generate_new_args(inner_args, inner_graph_args,
                                          static_args, actions)
             return func(*new_args)
 
+        # compiled to torch.fx IR
         gm = gs_symbolic_trace(inner_wrapper)
         self.gm = gm
 
     def __call__(self, *args):
+        # generate graph_actions via graph_actions
+        # In fact, it stores *._graph in graph_args
         graph_args = generate_graph_args(args, self.graph_actions)
         return self.gm(args, graph_args)
