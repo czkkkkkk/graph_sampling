@@ -1,0 +1,5 @@
+.vscode/
+build/
+python/build/
+python/dist/
+python/gs.egg-info/

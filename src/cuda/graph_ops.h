@@ -11,7 +11,17 @@ namespace impl {
 std::pair<torch::Tensor, torch::Tensor> CSCColumnwiseSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids);
 
-}
+std::pair<torch::Tensor, torch::Tensor> CSCColumnwiseSamplingCUDA(
+    torch::Tensor indptr, torch::Tensor indices, int64_t fanout, bool replace);
+
+std::pair<torch::Tensor, torch::Tensor>
+CSCColumnwiseFusedSlicingAndSamplingCUDA(torch::Tensor indptr,
+                                         torch::Tensor indices,
+                                         torch::Tensor column_ids,
+                                         int64_t fanout,
+                                         bool replace);
+
+}  // namespace impl
 }  // namespace gs
 
 #endif
