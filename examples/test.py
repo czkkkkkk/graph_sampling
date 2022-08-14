@@ -1,4 +1,5 @@
-from gs import Graph
+from gs import Graph, Matrix
+import gs
 import torch
 
 A = Graph(False)
@@ -24,3 +25,20 @@ subA = subA.columnwise_sampling(2, True)
 subA.print()
 subA = A.fused_columnwise_slicing_sampling(column_ids, 2, True)
 subA.print()
+
+
+def sampling(A: Matrix):
+    column_ids = torch.LongTensor([2, 3]).to('cuda:0')
+    return A[:, column_ids]
+
+
+m = Matrix(A)
+compiled_func = gs.jit.compile(func=sampling, args=(m, ))
+print("\nOrigin:")
+sampling(m)._graph.print()
+
+print()
+
+print("\nCompiled:")
+print(compiled_func(m, ))
+compiled_func(m, )._graph.print()
