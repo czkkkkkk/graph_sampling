@@ -5,7 +5,7 @@ def dce(gm: fx.GraphModule) -> fx.GraphModule:
     used_nodes_set = set()
     nodes_list = gm.graph.nodes
     for node in reversed(nodes_list):
-        if node.op == 'output':
+        if node.op == 'output' or node.op == 'placeholder':
             used_nodes_set.add(node)
 
         if node in used_nodes_set:
