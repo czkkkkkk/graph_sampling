@@ -14,6 +14,8 @@ class Graph : public torch::CustomClassHolder {
   void LoadCSC(torch::Tensor indptr, torch::Tensor indices);
   void SetCSC(std::shared_ptr<CSC> csc);
   c10::intrusive_ptr<Graph> ColumnwiseSlicing(torch::Tensor column_ids);
+  c10::intrusive_ptr<Graph> ColumnwiseSampling(int64_t fanout, bool replace);
+  c10::intrusive_ptr<Graph> ColumnwiseFusedSlicingAndSampling(torch::Tensor column_ids, int64_t fanout, bool replace);
   torch::Tensor RowIndices();
 
   void Print() const;
