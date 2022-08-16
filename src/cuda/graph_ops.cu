@@ -9,6 +9,13 @@
 #include <thrust/remove.h>
 #include <cub/cub.cuh>
 
+#include <c10/cuda/CUDACachingAllocator.h>
+#include <curand_kernel.h>
+
+#include <thrust/device_ptr.h>
+#include <thrust/remove.h>
+#include <cub/cub.cuh>
+
 namespace gs {
 namespace impl {
 

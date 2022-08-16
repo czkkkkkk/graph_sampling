@@ -63,4 +63,3 @@ std::shared_ptr<CSC> CSCColumnwiseFusedSlicingAndSampling(
 }
 
 }  // namespace gs
-
