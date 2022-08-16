@@ -76,5 +76,9 @@ void Graph::Print() const {
   std::cout << ss.str();
 }
 
+std::vector<torch::Tensor> Graph::MetaData() {
+  return {_col_ids, csc_->indptr, csc_->indices};
+}
+
 }  // namespace gs
 

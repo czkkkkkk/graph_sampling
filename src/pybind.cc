@@ -15,7 +15,8 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("row_indices", &Graph::RowIndices)
       .def("print", &Graph::Print)
       .def("all_indices",&Graph::AllIndices)
-      .def("relabel",&Graph::Relabel);
+      .def("relabel",&Graph::Relabel)
+      .def("_CAPI_metadata",&Graph::MetaData);
 }
 
 namespace gs {}

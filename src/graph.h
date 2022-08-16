@@ -22,6 +22,7 @@ class Graph : public torch::CustomClassHolder {
   torch::Tensor RowIndices();
   torch::Tensor AllIndices();
   std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> Relabel();
+  std::vector<torch::Tensor> MetaData();
 
   void Print() const;
 
