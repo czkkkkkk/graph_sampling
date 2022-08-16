@@ -6,8 +6,18 @@ class Matrix(object):
         # Graph bind to a C++ object
         self._graph = graph
 
-    def load_dgl_graph(self):
-        pass
+    def load_dgl_graph(self, g):
+        # import csc
+        import dgl
+        from dgl import DGLHeteroGraph
+        if not isinstance(g, DGLHeteroGraph):
+            raise ValueError
+        reverse_g = dgl.reverse(g)
+        reverse_g = reverse_g.formats(['csr'])
+        csc = reverse_g.adj(scipy_fmt='csr')
+        csc_indptr = torch.tensor(csc.indptr).long().cuda()
+        csc_indices = torch.tensor(csc.indices).long().cuda()
+        self._graph.load_csc(csc_indptr, csc_indices)
 
     def columnwise_slicing(self, t):
         return Matrix(self._graph.columnwise_slicing(t))
