@@ -13,8 +13,9 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("fused_columnwise_slicing_sampling", &Graph::ColumnwiseFusedSlicingAndSampling)
       .def("load_csc", &Graph::LoadCSC)
       .def("row_indices", &Graph::RowIndices)
-      .def("print", &Graph::Print);
-  ;
+      .def("print", &Graph::Print)
+      .def("all_indices",&Graph::AllIndices)
+      .def("relabel",&Graph::Relabel);
 }
 
 namespace gs {}

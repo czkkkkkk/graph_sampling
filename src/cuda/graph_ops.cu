@@ -1,4 +1,13 @@
 #include "graph_ops.h"
+#include "relabel.cu.h"
+#include <thrust/device_vector.h>
+
+#include <c10/cuda/CUDACachingAllocator.h>
+#include <curand_kernel.h>
+
+#include <thrust/device_ptr.h>
+#include <thrust/remove.h>
+#include <cub/cub.cuh>
 
 #include <c10/cuda/CUDACachingAllocator.h>
 #include <curand_kernel.h>
@@ -30,7 +39,7 @@ inline void cub_exclusiveSum(IdType* arrays, const IdType array_length) {
 
 template <typename IdType>
 torch::Tensor GetSubIndptr(torch::Tensor indptr, torch::Tensor column_ids) {
-  int64_t size = column_ids.size(0);
+  int64_t size = column_ids.numel();
   auto new_indptr = torch::zeros(size + 1, indptr.options());
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(new_indptr.data_ptr<IdType>()));
@@ -73,7 +82,7 @@ template <typename IdType>
 torch::Tensor GetSubIndices(torch::Tensor indptr, torch::Tensor indices,
                             torch::Tensor sub_indptr,
                             torch::Tensor column_ids) {
-  int64_t size = column_ids.size(0);
+  int64_t size = column_ids.numel();
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
   int n_edges = item_prefix[size];  // cpu
@@ -100,7 +109,7 @@ std::pair<torch::Tensor, torch::Tensor> CSCColumnwiseSlicingCUDA(
 template <typename IdType>
 torch::Tensor GetSampledSubIndptr(torch::Tensor indptr, int64_t fanout,
                                   bool replace) {
-  int64_t size = indptr.size(0);
+  int64_t size = indptr.numel();
   auto new_indptr = torch::zeros(size, indptr.options());
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(new_indptr.data_ptr<IdType>()));
@@ -153,7 +162,7 @@ __global__ void _SampleSubIndicesKernel(IdType* sub_indices, IdType* indptr,
 template <typename IdType>
 torch::Tensor SampleSubIndices(torch::Tensor indptr, torch::Tensor indices,
                                torch::Tensor sub_indptr) {
-  int64_t size = sub_indptr.size(0) - 1;
+  int64_t size = sub_indptr.numel() - 1;
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
   int n_edges = item_prefix[size];  // cpu
@@ -179,7 +188,7 @@ template <typename IdType>
 torch::Tensor GetSampledSubIndptrFused(torch::Tensor indptr,
                                        torch::Tensor column_ids, int64_t fanout,
                                        bool replace) {
-  int64_t size = column_ids.size(0);
+  int64_t size = column_ids.numel();
   auto sub_indptr = torch::empty(size + 1, indptr.options());
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
@@ -236,7 +245,7 @@ template <typename IdType>
 torch::Tensor SampleSubIndicesFused(torch::Tensor indptr, torch::Tensor indices,
                                     torch::Tensor sub_indptr,
                                     torch::Tensor column_ids, bool replace) {
-  int64_t size = sub_indptr.size(0) - 1;
+  int64_t size = sub_indptr.numel() - 1;
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
   int n_edges = item_prefix[size];  // cpu
@@ -268,5 +277,61 @@ CSCColumnwiseFusedSlicingAndSamplingCUDA(torch::Tensor indptr,
   return {sub_indptr, sub_indices};
 }
 
+torch::Tensor TensorUniqueCUDA(torch::Tensor node_ids) {
+  HostOrderedHashTable<int64_t> *table;
+
+  thrust::device_vector<int64_t> inputs;
+  thrust::device_vector<int64_t> outputs;
+  int64_t size = node_ids.numel();
+  inputs.resize(size);
+  const int64_t *p = node_ids.data_ptr<int64_t>();
+  thrust::copy(p, p + size, inputs.begin());
+
+  thrust::device_vector<int64_t> unique_items;
+  unique_items.clear();
+  table =FillWithDuplicates(thrust::raw_pointer_cast(inputs.data()), inputs.size(), unique_items);
+  torch::Tensor uniqueTensor = torch::empty(unique_items.size(), node_ids.options());
+  thrust::copy(unique_items.begin(), unique_items.end(), uniqueTensor.data_ptr<int64_t>());
+  delete table;
+  return  uniqueTensor; 
+}
+
+
+std::tuple<torch::Tensor, torch::Tensor> relabelCUDA(torch::Tensor col_ids, torch::Tensor indices){
+  HostOrderedHashTable<int64_t> *table;
+  thrust::device_vector<int64_t> inputs;
+  
+  int64_t seed_size = col_ids.numel();
+  int64_t total_size = col_ids.numel() + indices.numel();
+  inputs.resize(total_size);
+  const int64_t *p = col_ids.data_ptr<int64_t>();
+  const int64_t *q = indices.data_ptr<int64_t>();
+  //1. generate hashmap
+  thrust::copy(p, p + seed_size, inputs.begin());
+  thrust::copy(q, q + indices.numel(),inputs.begin() + seed_size);
+  thrust::device_vector<int64_t> unique_items;
+  unique_items.clear();
+  table =FillWithDuplicates(thrust::raw_pointer_cast(inputs.data()), inputs.size(), unique_items);
+  //2. get unique tensor
+  int64_t unique_size = unique_items.size();
+  torch::Tensor uniqueTensor = torch::empty(unique_size, col_ids.options());
+  thrust::copy(unique_items.begin(), unique_items.end(), uniqueTensor.data_ptr<int64_t>());
+  //3. get relabel tensor
+  torch::Tensor relabel_tensor = torch::zeros_like(indices);
+  DeviceOrderedHashTable<int64_t> device_table = table->DeviceHandle();
+  using it = thrust::counting_iterator<int64_t>;
+  thrust::for_each(it(0),it(unique_size),
+      [device_table,
+      in = indices.data_ptr<int64_t>(),
+      out = relabel_tensor.data_ptr<int64_t>()
+      ] __device__(int64_t id) mutable {
+          using Iterator =
+              typename DeviceOrderedHashTable<int64_t>::Iterator;
+          Iterator iter = device_table.Search(in[id]);
+          out[id] = static_cast<int64_t>((*iter).local);
+      });
+  delete table;
+  return  std::make_tuple(uniqueTensor, relabel_tensor); 
+}
 }  // namespace impl
 }  // namespace gs

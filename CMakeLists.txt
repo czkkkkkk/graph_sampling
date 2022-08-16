@@ -20,6 +20,7 @@ find_package(Torch REQUIRED)
 file(GLOB GS_SRC
   src/*.cc
   src/cuda/*.cu
+  src/cuda/*.cu.h
 )
 
 add_library(gs SHARED ${GS_SRC})

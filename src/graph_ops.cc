@@ -18,6 +18,24 @@ std::shared_ptr<CSC> CSCColumnwiseSlicing(std::shared_ptr<CSC> csc,
   }
 }
 
+torch::Tensor TensorUnique(torch::Tensor node_ids) {
+  if (node_ids.device().type() == torch::kCUDA) {  
+  return  impl::TensorUniqueCUDA(node_ids);
+  } else {
+    std::cerr << "Not implemented warning";
+    return torch::Tensor();
+  }
+}
+
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphRelabel(torch::Tensor col_ids, torch::Tensor indptr, torch::Tensor indices){
+  torch::Tensor frontier, relabeled_indices, relabeled_indptr;
+  std::tie(frontier, relabeled_indices) = 
+      impl::relabelCUDA(col_ids, indices);
+  relabeled_indptr = indptr.clone();
+  return std::make_tuple(frontier,relabeled_indptr,relabeled_indices);
+}
+
 std::shared_ptr<CSC> CSCColumnwiseSampling(std::shared_ptr<CSC> csc,
                                            int64_t fanout, bool replace) {
   if (csc->indptr.device().type() == torch::kCUDA) {
