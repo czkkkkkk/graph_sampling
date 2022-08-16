@@ -1,6 +1,7 @@
 from typing import List
 from .trace import gs_symbolic_trace
 from ..matrix_api import Matrix
+from .passes import dce, cse
 
 CONVERT_2_MATRIX = "Convert2Matrix"
 STATIS_LIST = "StatisList"
@@ -118,6 +119,8 @@ class compile:
 
         # compiled to torch.fx IR
         gm = gs_symbolic_trace(inner_wrapper)
+        gm = cse(gm)
+        gm = dce(gm)
         self.gm = gm
 
     def __call__(self, *args):

@@ -1,4 +1,14 @@
 import torch.fx as fx
+from typing import List, Tuple
+
+def flatten(iter):
+    ret = []
+    for i in iter:
+        if isinstance(i, List) or isinstance(i, Tuple):
+            ret = ret + flatten(i)
+        else:
+            ret.append(i)
+    return ret
 
 
 def dce(gm: fx.GraphModule) -> fx.GraphModule:
@@ -9,11 +19,11 @@ def dce(gm: fx.GraphModule) -> fx.GraphModule:
             used_nodes_set.add(node)
 
         if node in used_nodes_set:
-            for pre_node in node.args:
+            for pre_node in flatten(node.args):
                 if isinstance(pre_node, fx.Node):
                     used_nodes_set.add(pre_node)
 
-            for _, value in node.kwargs.items():
+            for _, value in flatten(node.kwargs.items()):
                 if isinstance(value, fx.Node):
                     used_nodes_set.aad(value)
 
@@ -24,7 +34,6 @@ def dce(gm: fx.GraphModule) -> fx.GraphModule:
     gm.graph.lint()
     gm.recompile()
     return gm
-
 
 def cse(gm: fx.GraphModule) -> fx.GraphModule:
     nodes_list = gm.graph.nodes
