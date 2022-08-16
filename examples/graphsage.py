@@ -1,4 +1,3 @@
-from json import load
 from typing import List
 import gs
 import torch
@@ -25,8 +24,40 @@ print("Check load successfully:", m._graph._CAPI_metadata(), '\n')
 
 seeds = torch.arange(0, 5000).long().cuda()
 compiled_func = gs.jit.compile(func=graphsage, args=(m, seeds, [25, 10]))
+print(compiled_func.gm)
 input_node, output_node, matrixs = compiled_func(m, seeds, [2, 2])
 print("ret input_node:", input_node.numel(), input_node, '\n')
 print("ret output_node:", output_node.numel(), output_node, '\n')
 for m in matrixs:
     print(m._graph._CAPI_metadata())
+
+
+from gs.jit.passes import dce
+
+def slicing_and_sampling_fuse(gm):
+    """
+    Fuses columnwise_slicing and columnwise_sampling
+    """
+    for node in gm.graph.nodes:
+        if node.target == 'columnwise_sampling' and node.args[
+                0].target == 'columnwise_slicing':
+            if len(node.args[0].users) > 1:
+                continue
+            with gm.graph.inserting_after(node):
+                new_node = gm.graph.call_method(
+                    'fused_columnwise_slicing_sampling', args=(*node.args[0].args, *node.args[1:], ))
+                node.replace_all_uses_with(new_node)
+    gm.graph.lint()
+    gm.recompile()
+    return gm
+
+
+compiled_func.gm = dce(slicing_and_sampling_fuse(compiled_func.gm))
+print(compiled_func.gm)
+
+
+#input_node, output_node, matrixs = compiled_func(m, seeds, [2, 2])
+#print("ret input_node:", input_node.numel(), input_node, '\n')
+#print("ret output_node:", output_node.numel(), output_node, '\n')
+#for m in matrixs:
+#    print(m._graph._CAPI_metadata())
