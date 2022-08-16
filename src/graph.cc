@@ -34,12 +34,14 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_ids) {
 c10::intrusive_ptr<Graph> Graph::ColumnwiseSampling(int64_t fanout, bool replace) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(true)));
   ret->SetCSC(CSCColumnwiseSampling(csc_, fanout, replace));
+  ret->SetColIds(_col_ids);
   return ret;
 }
 
 c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(torch::Tensor column_ids, int64_t fanout, bool replace) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(true)));
   ret->SetCSC(CSCColumnwiseFusedSlicingAndSampling(csc_, column_ids, fanout, replace));
+  ret->SetColIds(_col_ids);
   return ret;
 }
 
@@ -52,8 +54,8 @@ torch::Tensor Graph::AllIndices() {
   }
   else{
   int64_t size = csc_->indptr.numel();
-  torch::Tensor nodeids = torch::arange(size).to(torch::kCUDA);
-  torch::Tensor cat = torch::cat({nodeids,csc_->indices});
+  //torch::Tensor nodeids = torch::arange(size).to(torch::kCUDA);
+  torch::Tensor cat = torch::cat({ csc_->indptr.slice(0, 0, size-1),csc_->indices});
   return TensorUnique(cat);
   }
 }
