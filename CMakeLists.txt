@@ -4,7 +4,7 @@ project(GS LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 14)
 
 file(TO_NATIVE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/scripts/find_torch.py FIND_TORCH_PY)
-set(PYTHON_INTERP /home/gpzlx1/graph_sampling/venv/bin/python)
+set(PYTHON_INTERP python)
 message(STATUS "Using Python interpreter: ${PYTHON_INTERP}")
 execute_process(
   COMMAND ${PYTHON_INTERP} ${FIND_TORCH_PY}
