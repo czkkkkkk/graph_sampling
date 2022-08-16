@@ -12,6 +12,12 @@ class Matrix(object):
     def columnwise_slicing(self, t):
         return Matrix(self._graph.columnwise_slicing(t))
 
+    def columnwise_sampling(self, fanout, replace=True):
+        return Matrix(self._graph.columnwise_sampling(fanout, replace))
+        
+    def all_indices(self) -> torch.Tensor:
+        return self._graph.all_indices()
+
     def __getitem__(self, data):
         ret = self._graph
         r_slice = data[0]
