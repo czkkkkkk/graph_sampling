@@ -28,8 +28,8 @@ print(compiled_func.gm)
 input_node, output_node, matrixs = compiled_func(m, seeds, [25, 15])
 print("ret input_node:", input_node.numel(), input_node, '\n')
 print("ret output_node:", output_node.numel(), output_node, '\n')
-for m in matrixs:
-    print(m._graph._CAPI_metadata())
+for g in matrixs:
+    print(g._graph._CAPI_metadata())
 
 
 from gs.jit.passes import dce
@@ -59,5 +59,5 @@ print(compiled_func.gm)
 input_node, output_node, matrixs = compiled_func(m, seeds, [25, 15])
 print("ret input_node:", input_node.numel(), input_node, '\n')
 print("ret output_node:", output_node.numel(), output_node, '\n')
-for m in matrixs:
-    print(m._graph._CAPI_metadata())
+for g in matrixs:
+    print(g._graph._CAPI_metadata())
