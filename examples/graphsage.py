@@ -23,9 +23,9 @@ m.load_dgl_graph(dgl_graph)
 print("Check load successfully:", m._graph._CAPI_metadata(), '\n')
 
 seeds = torch.arange(0, 5000).long().cuda()
-compiled_func = gs.jit.compile(func=graphsage, args=(m, seeds, [25, 10]))
+compiled_func = gs.jit.compile(func=graphsage, args=(m, seeds, [25, 15]))
 print(compiled_func.gm)
-input_node, output_node, matrixs = compiled_func(m, seeds, [2, 2])
+input_node, output_node, matrixs = compiled_func(m, seeds, [25, 15])
 print("ret input_node:", input_node.numel(), input_node, '\n')
 print("ret output_node:", output_node.numel(), output_node, '\n')
 for m in matrixs:
@@ -56,8 +56,8 @@ compiled_func.gm = dce(slicing_and_sampling_fuse(compiled_func.gm))
 print(compiled_func.gm)
 
 
-#input_node, output_node, matrixs = compiled_func(m, seeds, [2, 2])
-#print("ret input_node:", input_node.numel(), input_node, '\n')
-#print("ret output_node:", output_node.numel(), output_node, '\n')
-#for m in matrixs:
-#    print(m._graph._CAPI_metadata())
+input_node, output_node, matrixs = compiled_func(m, seeds, [25, 15])
+print("ret input_node:", input_node.numel(), input_node, '\n')
+print("ret output_node:", output_node.numel(), output_node, '\n')
+for m in matrixs:
+    print(m._graph._CAPI_metadata())
