@@ -1,3 +1,4 @@
+add_compile_definitions(_GLIBCXX_USE_CXX11_ABI=0)
 cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
 
 project(GS LANGUAGES CXX CUDA)
@@ -27,3 +28,12 @@ target_link_libraries(gs "${TORCH_LIBRARIES}")
 set_target_properties(gs PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 set_target_properties(gs PROPERTIES CUDA_STANDARD 14)
 set_target_properties(gs PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+enable_testing()
+add_subdirectory(third_party/googletest)
+include_directories(third_party/googletest/googletest/include)
+include_directories("src")
+file(GLOB_RECURSE TEST_SRC_FILES ${PROJECT_SOURCE_DIR}/tests/*.cc)
+add_executable(runUnitTests ${TEST_SRC_FILES})
+target_link_libraries(runUnitTests gs gtest gtest_main)
+add_test(UnitTests runUnitTests)

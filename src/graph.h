@@ -13,6 +13,7 @@ class Graph : public torch::CustomClassHolder {
   Graph(bool is_subgraph) { is_subgraph_ = is_subgraph; }
   void LoadCSC(torch::Tensor indptr, torch::Tensor indices);
   void SetCSC(std::shared_ptr<CSC> csc);
+  std::shared_ptr<CSC> GetCSC();
   c10::intrusive_ptr<Graph> ColumnwiseSlicing(torch::Tensor column_ids);
   c10::intrusive_ptr<Graph> ColumnwiseSampling(int64_t fanout, bool replace);
   c10::intrusive_ptr<Graph> ColumnwiseFusedSlicingAndSampling(torch::Tensor column_ids, int64_t fanout, bool replace);
