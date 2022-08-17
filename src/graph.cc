@@ -34,14 +34,14 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_ids) {
 c10::intrusive_ptr<Graph> Graph::ColumnwiseSampling(int64_t fanout, bool replace) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(true)));
   ret->SetCSC(CSCColumnwiseSampling(csc_, fanout, replace));
-  ret->SetColIds(_col_ids);
+  ret->SetColIds(_col_ids); // todo(ping), maybe bug here
   return ret;
 }
 
 c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(torch::Tensor column_ids, int64_t fanout, bool replace) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(true)));
   ret->SetCSC(CSCColumnwiseFusedSlicingAndSampling(csc_, column_ids, fanout, replace));
-  ret->SetColIds(_col_ids);
+  ret->SetColIds(column_ids);
   return ret;
 }
 
