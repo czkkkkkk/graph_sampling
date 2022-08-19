@@ -42,6 +42,7 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(true)));
   ret->SetCSC(
       CSCColumnwiseFusedSlicingAndSampling(csc_, column_ids, fanout, replace));
+  ret->SetColIds(column_ids);
   return ret;
 }
 
