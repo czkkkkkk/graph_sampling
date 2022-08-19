@@ -1,7 +1,5 @@
 #include "./graph.h"
-
 #include <sstream>
-
 #include "./graph_ops.h"
 
 namespace gs {
@@ -23,7 +21,6 @@ void Graph::SetColIds(torch::Tensor column_ids){
 torch::Tensor Graph::GetcolIds(){
   return _col_ids;
 }
-std::shared_ptr<CSC> Graph::GetCSC() { return csc_; }
 
 c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_ids) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(true)));
