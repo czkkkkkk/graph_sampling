@@ -7,22 +7,6 @@ from dgl.transforms.functional import to_block
 import time
 import numpy as np
 
-def bench(func, args):
-    time_list = []
-    for i in range(100):
-        torch.cuda.synchronize()
-        begin = time.time()
-        
-        func(*args)
-        
-        torch.cuda.synchronize()
-        end = time.time()
-        
-        time_list.append(end - begin)
-        
-    print("AVG:", np.mean(time_list[10:]) * 1000)
-
-
 device = torch.device('cuda:%d' % 0)
 
 dataset = load_graph.load_reddit()
@@ -48,5 +32,21 @@ def graphsage_baseline(g, seeds, fan_out):
     return seed_nodes, output_nodes, blocks
 
 
-print(graphsage_baseline(g, seeds, [25,15]))
-bench(graphsage_baseline, args=(g, seeds, [25,15]))
+# seed_nodes, output_nodes, blocks = graphsage_baseline(g, seeds, [25,15])
+
+def bench(func, args):
+    time_list = []
+    for i in range(100):
+        torch.cuda.synchronize()
+        begin = time.time()
+        
+        ret = func(*args)
+        
+        torch.cuda.synchronize()
+        end = time.time()
+        
+        time_list.append(end - begin)
+        
+    print("dgl graphsage sampling AVG:", np.mean(time_list[10:])*1000, " ms.")
+    
+bench(graphsage_baseline, args=(g,seeds,[25,15],))

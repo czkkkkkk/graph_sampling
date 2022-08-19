@@ -1,7 +1,5 @@
 #include "./graph.h"
-
 #include <sstream>
-
 #include "./graph_ops.h"
 
 namespace gs {
@@ -31,17 +29,19 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_ids) {
   return ret;
 }
 
-c10::intrusive_ptr<Graph> Graph::ColumnwiseSampling(int64_t fanout, bool replace) {
+c10::intrusive_ptr<Graph> Graph::ColumnwiseSampling(int64_t fanout,
+                                                    bool replace) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(true)));
   ret->SetCSC(CSCColumnwiseSampling(csc_, fanout, replace));
   ret->SetColIds(_col_ids); // todo(ping), maybe bug here
   return ret;
 }
 
-c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(torch::Tensor column_ids, int64_t fanout, bool replace) {
+c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
+    torch::Tensor column_ids, int64_t fanout, bool replace) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(true)));
-  ret->SetCSC(CSCColumnwiseFusedSlicingAndSampling(csc_, column_ids, fanout, replace));
-  ret->SetColIds(column_ids);
+  ret->SetCSC(
+      CSCColumnwiseFusedSlicingAndSampling(csc_, column_ids, fanout, replace));
   return ret;
 }
 
@@ -66,13 +66,17 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> Graph::Relabel(){
 
 void Graph::Print() const {
   std::stringstream ss;
-  ss << "# Nodes: " << csc_->indptr.numel() - 1
-     << " # Edges: " << csc_->indices.numel() << "\n";
   if(is_subgraph_){ 
      ss << "col ids: "    << _col_ids << "\n";
   }
-  ss << "CSC indptr: " << "\n" << csc_->indptr << "\n";
-  ss << "CSC indices: " << "\n" << csc_->indices << "\n";
+  ss << "# Nodes: " << csc_->indptr.size(0) - 1
+     << " # Edges: " << csc_->indices.size(0) << "\n";
+  ss << "CSC indptr: "
+     << "\n"
+     << csc_->indptr << "\n";
+  ss << "CSC indices: "
+     << "\n"
+     << csc_->indices << "\n";
   std::cout << ss.str();
 }
 
