@@ -17,10 +17,10 @@ message(STATUS "Configuring for PyTorch ${TORCH_VER}")
 set(Torch_DIR "${TORCH_PREFIX}/Torch")
 find_package(Torch REQUIRED)
 
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src/cuda/include")
 file(GLOB GS_SRC
   src/*.cc
   src/cuda/*.cu
-  src/cuda/*.cu.h
 )
 
 add_library(gs SHARED ${GS_SRC})
