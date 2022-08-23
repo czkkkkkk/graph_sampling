@@ -12,7 +12,7 @@ std::shared_ptr<CSC> CSCColumnwiseSlicing(std::shared_ptr<CSC> csc,
     torch::Tensor sub_indptr, sub_indices;
     std::tie(sub_indptr, sub_indices) =
         impl::CSCColumnwiseSlicingCUDA(csc->indptr, csc->indices, column_ids);
-    return std::make_shared<CSC>(CSC{sub_indptr, sub_indices});
+    return std::make_shared<CSC>(CSC{column_ids, sub_indptr, sub_indices});
   } else {
     std::cerr << "Not implemented warning";
   }
@@ -42,7 +42,7 @@ std::shared_ptr<CSC> CSCColumnwiseSampling(std::shared_ptr<CSC> csc,
     torch::Tensor sub_indptr, sub_indices;
     std::tie(sub_indptr, sub_indices) = impl::CSCColumnwiseSamplingCUDA(
         csc->indptr, csc->indices, fanout, replace);
-    return std::make_shared<CSC>(CSC{sub_indptr, sub_indices});
+    return std::make_shared<CSC>(CSC{csc->col_ids, sub_indptr, sub_indices});
   } else {
     std::cerr << "Not implemented warning";
   }
@@ -56,7 +56,7 @@ std::shared_ptr<CSC> CSCColumnwiseFusedSlicingAndSampling(
     std::tie(sub_indptr, sub_indices) =
         impl::CSCColumnwiseFusedSlicingAndSamplingCUDA(
             csc->indptr, csc->indices, column_ids, fanout, replace);
-    return std::make_shared<CSC>(CSC{sub_indptr, sub_indices});
+    return std::make_shared<CSC>(CSC{column_ids, sub_indptr, sub_indices});
   } else {
     std::cerr << "Not implemented warning";
   }

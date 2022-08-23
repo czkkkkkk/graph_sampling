@@ -12,6 +12,7 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("columnwise_sampling", &Graph::ColumnwiseSampling)
       .def("fused_columnwise_slicing_sampling", &Graph::ColumnwiseFusedSlicingAndSampling)
       .def("load_csc", &Graph::LoadCSC)
+      .def("load_csc_with_col_ids", &Graph::LoadCSCWithColIds)
       .def("row_indices", &Graph::RowIndices)
       .def("print", &Graph::Print)
       .def("all_indices",&Graph::AllIndices)
