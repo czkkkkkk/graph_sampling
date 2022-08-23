@@ -44,6 +44,15 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
 
 torch::Tensor Graph::RowIndices() { return torch::Tensor(); }
 
+/**
+ * @brief Returns the set of all nodes of the graph. Nodes in return tensor are
+ * sorted in the order of their first occurrence in {col_ids, indices}.
+ * For example, 
+ *    if graph.csc_.col_ids = [0, 2, 4, 2] and graph.csc_.indices = [4, 2, 1], 
+ *    graph.AllIndices() will be [0, 2, 4, 1]
+ *
+ * @return torch::Tensor
+ */
 torch::Tensor Graph::AllIndices() {
   if(is_subgraph_){
   torch::Tensor cat = torch::cat({csc_->col_ids, csc_->indices});
@@ -57,6 +66,19 @@ torch::Tensor Graph::AllIndices() {
   }
 }
 
+/**
+ * @brief Do relabel operation on graph.col_ids and graph.indices;
+ * It will return {all_indices, new_csc_indptr, new_csc_indices}.
+ * Specifically, all_indices = graph.AllIndices(); new_csc_indptr is the
+ * csc_indptr of the relabeled graph; new_csc_indices is the csc_indices of the
+ * relabeled graph.
+ * For example,
+ *    if graph.csc_.col_ids = [0, 2, 4, 2], graph.csc_.indptr = [0, 0, 1, 1, 3]
+ *    and graph.csc_.indices = [4, 2, 1], 
+ *    graph.relabel will return {[0, 2, 4, 1], [0, 0, 1, 1, 3], [2, 1, 3]}
+ *
+ * @return std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+ */
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> Graph::Relabel(){
   return GraphRelabel(csc_->col_ids, csc_->indptr, csc_->indices);
 }
