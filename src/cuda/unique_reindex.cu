@@ -1,6 +1,28 @@
-#include "cuda_ops.cuh"
-#include "atomic.cuh"
+#include "graph_ops.h"
+#include "atomic.h"
 
+#include <thrust/device_ptr.h>
+#include <thrust/remove.h>
+#include <cub/cub.cuh>
+
+#include <c10/cuda/CUDACachingAllocator.h>
+
+namespace gs {
+namespace impl {
+
+template <typename IdType>
+inline void cub_exclusiveSum(IdType* arrays, const IdType array_length) {
+  void* d_temp_storage = NULL;
+  size_t temp_storage_bytes = 0;
+  cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
+                                arrays, array_length);
+
+  c10::Allocator* cuda_allocator = c10::cuda::CUDACachingAllocator::get();
+  c10::DataPtr _temp_data = cuda_allocator->allocate(temp_storage_bytes);
+  d_temp_storage = _temp_data.get();
+  cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
+                                arrays, array_length);
+}
 
 template <typename IdType>
 struct RelabelHashmap
@@ -115,12 +137,9 @@ inline std::vector<torch::Tensor> unique_core(
          }
     );
 
-
     // prefix sum
-    c10::Allocator* cuda_allocator =  ogs::get_cuda_allocator();
-    c10::DataPtr item_prefix_data = cuda_allocator->allocate((num_items + 1) * sizeof(IdType));
-    thrust::device_ptr<IdType> item_prefix(static_cast<IdType*>(item_prefix_data.get()));
-    thrust::fill(item_prefix, item_prefix + num_items + 1, (IdType) 0);
+    torch::Tensor item_prefix_tensor = torch::empty(num_items + 1, total_tensor.options());
+    thrust::device_ptr<IdType> item_prefix(static_cast<IdType*>(item_prefix_tensor.data_ptr<int64_t>()));
     thrust::for_each(it(0), it(num_items),
             [  key = key_tensor.data_ptr<IdType>(), 
                index = index_tensor.data_ptr<IdType>(),
@@ -130,22 +149,19 @@ inline std::vector<torch::Tensor> unique_core(
                dir_size
             ] __device__(IdType i) mutable {
                 RelabelHashmap<IdType> table(key, index, dir_size);
-                if(table.SearchForValue(in[i]) == i){
-                    count[i] = 1;
-                }
+                count[i] = table.SearchForValue(in[i]) == i ? 1 : 0;
             }
     );
     cub_exclusiveSum<IdType>(thrust::raw_pointer_cast(item_prefix), num_items + 1);
 
     // unique
     int tot = item_prefix[num_items];
-    torch::Tensor unique_tensor = torch::zeros({tot,}, total_tensor.options());
+    torch::Tensor unique_tensor = torch::empty({tot,}, total_tensor.options());
 
     torch::Tensor value_tensor;
     if(need_cached){
        value_tensor = torch::full({dir_size,}, -1, total_tensor.options());
     }
-
 
     thrust::for_each(it(0), it(num_items),
             [ key = key_tensor.data_ptr<IdType>(), 
@@ -202,65 +218,6 @@ inline torch::Tensor relabel_core(
 }
 
 
-
-torch::Tensor unorder_unique(
-    std::vector<torch::Tensor> data
-){
-    torch::Tensor total_tensor = torch::cat(data, 0);
-    return std::get<0>(torch::_unique(total_tensor, false, false));
-}
-
-torch::Tensor unorder_unique_single(
-    torch::Tensor data
-){
-    torch::Tensor total_tensor = data;
-    return std::get<0>(torch::_unique(total_tensor, false, false));
-}
-
-torch::Tensor unique(
-    std::vector<torch::Tensor> data
-){
-    torch::Tensor total_tensor = torch::cat(data, 0);
-    torch::Tensor ret_tensor;
-    OGS_ID_TYPE_SWITCH(total_tensor.dtype(), IdType, {
-        ret_tensor = unique_core<IdType, false>(total_tensor)[0];
-    });
-    return ret_tensor;
-}
-
-torch::Tensor unique_single(
-    torch::Tensor data
-){
-    torch::Tensor total_tensor = data;
-    torch::Tensor ret_tensor;
-    OGS_ID_TYPE_SWITCH(total_tensor.dtype(), IdType, {
-        ret_tensor = unique_core<IdType, false>(total_tensor)[0];
-    });
-    return ret_tensor;
-}
-
-std::vector<torch::Tensor> unique_with_cache(
-    std::vector<torch::Tensor> data
-){
-    torch::Tensor total_tensor = torch::cat(data, 0);
-    std::vector<torch::Tensor> ret;
-    OGS_ID_TYPE_SWITCH(total_tensor.dtype(), IdType, {
-        ret = unique_core<IdType, true>(total_tensor);
-    });
-    return ret;
-}
-
-std::vector<torch::Tensor> unique_with_cache_single(
-    torch::Tensor data
-){
-    torch::Tensor total_tensor = data;
-    std::vector<torch::Tensor> ret;
-    OGS_ID_TYPE_SWITCH(total_tensor.dtype(), IdType, {
-        ret = unique_core<IdType, true>(total_tensor);
-    });
-    return ret;
-}
-
 std::tuple<torch::Tensor, std::vector<torch::Tensor>> Relabel(
     std::vector<torch::Tensor> data
 ){
@@ -272,76 +229,44 @@ std::tuple<torch::Tensor, std::vector<torch::Tensor>> Relabel(
     torch::Tensor total_tensor = torch::cat(data, 0);
     torch::Tensor unique_tensor;
     torch::Tensor reindex_tensor;
-    OGS_ID_TYPE_SWITCH(total_tensor.dtype(), IdType, {
-        std::vector<torch::Tensor> unique_result = unique_core<IdType, true>(total_tensor);
-        unique_tensor = unique_result[0];
-        reindex_tensor = relabel_core<IdType>(total_tensor, unique_result[1], unique_result[2]);
-    });
-
+    std::vector<torch::Tensor> unique_result = unique_core<int64_t, true>(total_tensor);
+    unique_tensor = unique_result[0];
+    reindex_tensor = relabel_core<int64_t>(total_tensor, unique_result[1], unique_result[2]);
+    
     std::vector<torch::Tensor> ret = reindex_tensor.split_with_sizes(split_sizes, 0);
     return std::make_tuple(unique_tensor, ret);
 }
 
-std::tuple<torch::Tensor, torch::Tensor> relabel_single(
-    torch::Tensor data
-){
+
+
+
+torch::Tensor TensorUniqueCUDA(torch::Tensor node_ids) {
+    torch::Tensor ret_tensor = unique_core<int64_t, false>(node_ids)[0];
+    return ret_tensor;
+}
+
+
+std::tuple<torch::Tensor, torch::Tensor> RelabelCUDA(torch::Tensor col_ids, torch::Tensor indices){
+  std::vector<torch::Tensor> data = {col_ids, indices};
+  
+  //data.push_back(col_ids);
+  //data.push_back(indices);
+  std::vector<int64_t> split_sizes;
+  for(auto d : data){
+    split_sizes.push_back(d.numel());
+  }
+
+  torch::Tensor total_tensor = torch::cat(data, 0);
+  torch::Tensor unique_tensor;
+  torch::Tensor reindex_tensor;
+  std::vector<torch::Tensor> unique_result = unique_core<int64_t, true>(total_tensor);
+  unique_tensor = unique_result[0];
+  reindex_tensor = relabel_core<int64_t>(total_tensor, unique_result[1], unique_result[2]);
     
-    torch::Tensor total_tensor = data;
-    torch::Tensor unique_tensor;
-    torch::Tensor reindex_tensor;
-    OGS_ID_TYPE_SWITCH(total_tensor.dtype(), IdType, {
-        std::vector<torch::Tensor> unique_result = unique_core<IdType, true>(total_tensor);
-        unique_tensor = unique_result[0];
-        reindex_tensor = relabel_core<IdType>(total_tensor, unique_result[1], unique_result[2]);
-    });
+  std::vector<torch::Tensor> ret = reindex_tensor.split_with_sizes(split_sizes, 0);
 
-    return std::make_tuple(unique_tensor, reindex_tensor);
+  torch::Tensor relabeled_indices= ret[1];
+  return  std::make_tuple(unique_tensor, relabeled_indices); 
 }
-
-
-std::vector<torch::Tensor> relabel_with_cache(
-    std::vector<torch::Tensor> data,
-    torch::Tensor key_tensor,
-    torch::Tensor value_tensor
-){
-    std::vector<int64_t> split_sizes;
-    for(auto d : data){
-        split_sizes.push_back(d.numel());
-    }
-
-    torch::Tensor total_tensor = torch::cat(data, 0);
-    torch::Tensor reindex_tensor;
-    OGS_ID_TYPE_SWITCH(total_tensor.dtype(), IdType, {
-        reindex_tensor = relabel_core<IdType>(total_tensor, key_tensor, value_tensor);
-    });
-
-    return reindex_tensor.split_with_sizes(split_sizes, 0);
-}
-
-torch::Tensor relabel_with_cache_single(
-    torch::Tensor data,
-    torch::Tensor key_tensor,
-    torch::Tensor value_tensor
-){
-
-    torch::Tensor total_tensor = data;
-    torch::Tensor reindex_tensor;
-    OGS_ID_TYPE_SWITCH(total_tensor.dtype(), IdType, {
-        reindex_tensor = relabel_core<IdType>(total_tensor, key_tensor, value_tensor);
-    });
-
-    return reindex_tensor;
-}
-
-static auto registry =
-    torch::RegisterOperators(
-        "ogs::unique(Tensor[] data) -> Tensor", &unique)
-        .op("ogs::unique_single(Tensor data) -> Tensor", &unique_single)
-        .op("ogs::unique_with_cache(Tensor[] data) -> Tensor[]", &unique_with_cache)
-        .op("ogs::unique_with_cache_single(Tensor data) -> Tensor[]", &unique_with_cache_single)
-        .op("ogs::Relabel(Tensor[] data) -> (Tensor, Tensor[])", &Relabel)
-        .op("ogs::relabel_single(Tensor data) -> (Tensor, Tensor)", &relabel_single)
-        .op("ogs::relabel_with_cache(Tensor[] data, Tensor key_tensor, Tensor value_tensor) -> Tensor[]", &relabel_with_cache)
-        .op("ogs::relabel_with_cache_single(Tensor data, Tensor key_tensor, Tensor value_tensor) -> Tensor", &relabel_with_cache_single)
-        .op("ogs::unorder_unique(Tensor[] data) -> Tensor", &unorder_unique)
-        .op("ogs::unorder_unique_single(Tensor data) -> Tensor", &unorder_unique_single);
+}  // namespace impl
+}  // namespace gs

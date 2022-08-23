@@ -1,13 +1,4 @@
 #include "graph_ops.h"
-#include "cuda_ops.cuh"
-#include <thrust/device_vector.h>
-
-#include <c10/cuda/CUDACachingAllocator.h>
-#include <curand_kernel.h>
-
-#include <thrust/device_ptr.h>
-#include <thrust/remove.h>
-#include <cub/cub.cuh>
 
 #include <c10/cuda/CUDACachingAllocator.h>
 #include <curand_kernel.h>
@@ -281,21 +272,6 @@ CSCColumnwiseFusedSlicingAndSamplingCUDA(torch::Tensor indptr,
   return {sub_indptr, sub_indices};
 }
 
-torch::Tensor TensorUniqueCUDA(torch::Tensor node_ids) {
-  return unique_single(node_ids);
-}
 
-
-std::tuple<torch::Tensor, torch::Tensor> RelabelCUDA(torch::Tensor col_ids, torch::Tensor indices){
-  std::vector<torch::Tensor> data;
-  std::vector<torch::Tensor> ret;
-  
-  torch::Tensor unique_tensor;
-  data.push_back(col_ids);
-  data.push_back(indices);
-  std::tie(unique_tensor,ret) = Relabel(data);
-  torch::Tensor relabeled_indices= ret[1];
-  return  std::make_tuple(unique_tensor, relabeled_indices); 
-}
 }  // namespace impl
 }  // namespace gs
