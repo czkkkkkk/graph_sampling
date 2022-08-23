@@ -1,5 +1,7 @@
 import torch
 from torch.fx import Proxy
+import dgl
+from dgl import DGLHeteroGraph
 
 class Matrix(object):
     def __init__(self, graph: torch.classes.gs_classes.Graph):
@@ -8,8 +10,6 @@ class Matrix(object):
 
     def load_dgl_graph(self, g):
         # import csc
-        import dgl
-        from dgl import DGLHeteroGraph
         if not isinstance(g, DGLHeteroGraph):
             raise ValueError
         reverse_g = dgl.reverse(g)
