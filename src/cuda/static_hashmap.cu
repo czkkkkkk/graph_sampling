@@ -11,7 +11,7 @@ int64_t UpPower(int64_t key){
 
 /******************************* shifthash **************************************/
 /**************** Thomas Wang's 32 bit and 64 bit Mix Function ******************/
-__device__ inline uint32_t hash32shift(uint32_t key){
+__device__ inline uint32_t Hash32Shift(uint32_t key){
     key = ~key + (key << 15);               // # key = (key << 15) - key - 1;
     key = key ^ (key >> 12);
     key = key + (key << 2);
@@ -36,10 +36,10 @@ __device__ inline uint64_t hash64shift(uint64_t key)
 
 
 template<typename K, typename V, typename Op>
-struct static_hashmap
+struct StaticHashmap
 {
-    // Kptr, Vptr should be initialized before construct the static_hashmap
-    __device__ inline static_hashmap(K* Kptr, K emptykey, V* Vptr, V defaultvalue, size_t dir_size) : 
+    // Kptr, Vptr should be initialized before construct the StaticHashmap
+    __device__ inline StaticHashmap(K* Kptr, K emptykey, V* Vptr, V defaultvalue, size_t dir_size) : 
         kEmptyKey(emptykey),
         DefaultValue(defaultvalue),
         kptr(Kptr),
@@ -95,11 +95,11 @@ struct static_hashmap
 
 
     __device__ inline uint32_t hash(int32_t key){
-        return hash32shift(key) & (capacity - 1);
+        return Hash32Shift(key) & (capacity - 1);
     }
 
     __device__ inline uint32_t hash(uint32_t key){
-        return hash32shift(key) & (capacity - 1);
+        return Hash32Shift(key) & (capacity - 1);
     }
 
     __device__ inline uint32_t hash(int64_t key){
@@ -143,7 +143,7 @@ void static_hashmap_update_core(
             _value_buffer = value_buffer.data_ptr<VType>(),
             empty_key, default_value, dir_size
         ]  __device__(KType i) mutable {
-            static_hashmap<KType, VType, Op> hashmap(
+            StaticHashmap<KType, VType, Op> hashmap(
                 _key_buffer, empty_key, _value_buffer, default_value, dir_size);
 
             hashmap.Update(_key[i], _value[i]);
@@ -175,7 +175,7 @@ torch::Tensor static_hashmap_search_core(
             _value_buffer = value_buffer.data_ptr<VType>(),
             empty_key, default_value, dir_size
         ]  __device__(KType i) mutable {
-            static_hashmap<KType, VType, Op> hashmap(
+            StaticHashmap<KType, VType, Op> hashmap(
                 _key_buffer, empty_key, _value_buffer, default_value, dir_size);
 
             _value[i] = hashmap.SearchForValue(_key[i]);

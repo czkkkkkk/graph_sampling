@@ -31,7 +31,7 @@ torch::Tensor TensorUnique(torch::Tensor node_ids) {
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphRelabel(torch::Tensor col_ids, torch::Tensor indptr, torch::Tensor indices){
   torch::Tensor frontier, relabeled_indices, relabeled_indptr;
   std::tie(frontier, relabeled_indices) = 
-      impl::relabelCUDA(col_ids, indices);
+      impl::RelabelCUDA(col_ids, indices);
   relabeled_indptr = indptr.clone();
   return std::make_tuple(frontier,relabeled_indptr,relabeled_indices);
 }

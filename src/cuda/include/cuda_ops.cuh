@@ -97,6 +97,6 @@ std::tuple<torch::Tensor, torch::Tensor> relabel_single(
   torch::Tensor data
 );
 
-std::tuple<torch::Tensor, std::vector<torch::Tensor>> relabel(
+std::tuple<torch::Tensor, std::vector<torch::Tensor>> Relabel(
   std::vector<torch::Tensor> data
 );

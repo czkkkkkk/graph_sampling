@@ -3,9 +3,9 @@
 
 
 template <typename IdType>
-struct relabel_hashmap
+struct RelabelHashmap
 {
-    __device__ inline relabel_hashmap(IdType* Kptr, IdType* Vptr, size_t numel) :
+    __device__ inline RelabelHashmap(IdType* Kptr, IdType* Vptr, size_t numel) :
         kptr(Kptr),
         vptr(Vptr),
         capacity(numel) {};
@@ -87,7 +87,7 @@ inline int UpPower(int key){
 }
 
 
-// relabel
+// Relabel
 template<typename IdType, bool need_cached>
 inline std::vector<torch::Tensor> unique_core(
     torch::Tensor total_tensor
@@ -110,7 +110,7 @@ inline std::vector<torch::Tensor> unique_core(
              num_items,
              dir_size
             ] __device__(IdType i) mutable {
-             relabel_hashmap<IdType> table(key, index, dir_size);
+             RelabelHashmap<IdType> table(key, index, dir_size);
              table.Update(in[i], i);
          }
     );
@@ -129,7 +129,7 @@ inline std::vector<torch::Tensor> unique_core(
                num_items,
                dir_size
             ] __device__(IdType i) mutable {
-                relabel_hashmap<IdType> table(key, index, dir_size);
+                RelabelHashmap<IdType> table(key, index, dir_size);
                 if(table.SearchForValue(in[i]) == i){
                     count[i] = 1;
                 }
@@ -157,7 +157,7 @@ inline std::vector<torch::Tensor> unique_core(
               num_items,
               dir_size
             ] __device__(IdType i) mutable {
-                    relabel_hashmap<IdType> table(key, index, dir_size);
+                    RelabelHashmap<IdType> table(key, index, dir_size);
                     IdType pos = table.SearchForPos(in[i]);
                     if(index[pos] == i){
                         unique[prefix[i]] = in[i];
@@ -194,7 +194,7 @@ inline torch::Tensor relabel_core(
               out = relabel_tensor.data_ptr<IdType>(),
               dir_size
             ] __device__(IdType i) mutable {
-                    relabel_hashmap<IdType> table(key, value, dir_size);
+                    RelabelHashmap<IdType> table(key, value, dir_size);
                     out[i] = table.SearchForValue(in[i]);
                 }
             );
@@ -261,7 +261,7 @@ std::vector<torch::Tensor> unique_with_cache_single(
     return ret;
 }
 
-std::tuple<torch::Tensor, std::vector<torch::Tensor>> relabel(
+std::tuple<torch::Tensor, std::vector<torch::Tensor>> Relabel(
     std::vector<torch::Tensor> data
 ){
     std::vector<int64_t> split_sizes;
@@ -339,7 +339,7 @@ static auto registry =
         .op("ogs::unique_single(Tensor data) -> Tensor", &unique_single)
         .op("ogs::unique_with_cache(Tensor[] data) -> Tensor[]", &unique_with_cache)
         .op("ogs::unique_with_cache_single(Tensor data) -> Tensor[]", &unique_with_cache_single)
-        .op("ogs::relabel(Tensor[] data) -> (Tensor, Tensor[])", &relabel)
+        .op("ogs::Relabel(Tensor[] data) -> (Tensor, Tensor[])", &Relabel)
         .op("ogs::relabel_single(Tensor data) -> (Tensor, Tensor)", &relabel_single)
         .op("ogs::relabel_with_cache(Tensor[] data, Tensor key_tensor, Tensor value_tensor) -> Tensor[]", &relabel_with_cache)
         .op("ogs::relabel_with_cache_single(Tensor data, Tensor key_tensor, Tensor value_tensor) -> Tensor", &relabel_with_cache_single)

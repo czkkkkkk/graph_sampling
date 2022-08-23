@@ -13,7 +13,7 @@ std::pair<torch::Tensor, torch::Tensor> CSCColumnwiseSlicingCUDA(
 
 torch::Tensor TensorUniqueCUDA(torch::Tensor input);
 
-std::tuple<torch::Tensor, torch::Tensor> relabelCUDA(torch::Tensor col_ids, torch::Tensor indices);
+std::tuple<torch::Tensor, torch::Tensor> RelabelCUDA(torch::Tensor col_ids, torch::Tensor indices);
 
 
 

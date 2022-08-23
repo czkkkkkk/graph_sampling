@@ -286,14 +286,14 @@ torch::Tensor TensorUniqueCUDA(torch::Tensor node_ids) {
 }
 
 
-std::tuple<torch::Tensor, torch::Tensor> relabelCUDA(torch::Tensor col_ids, torch::Tensor indices){
+std::tuple<torch::Tensor, torch::Tensor> RelabelCUDA(torch::Tensor col_ids, torch::Tensor indices){
   std::vector<torch::Tensor> data;
   std::vector<torch::Tensor> ret;
   
   torch::Tensor unique_tensor;
   data.push_back(col_ids);
   data.push_back(indices);
-  std::tie(unique_tensor,ret) = relabel(data);
+  std::tie(unique_tensor,ret) = Relabel(data);
   torch::Tensor relabeled_indices= ret[1];
   return  std::make_tuple(unique_tensor, relabeled_indices); 
 }
