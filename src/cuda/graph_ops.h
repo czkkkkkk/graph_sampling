@@ -13,9 +13,8 @@ std::pair<torch::Tensor, torch::Tensor> CSCColumnwiseSlicingCUDA(
 
 torch::Tensor TensorUniqueCUDA(torch::Tensor input);
 
-std::tuple<torch::Tensor, torch::Tensor> RelabelCUDA(torch::Tensor col_ids, torch::Tensor indices);
-
-
+std::tuple<torch::Tensor, torch::Tensor> RelabelCUDA(torch::Tensor col_ids,
+                                                     torch::Tensor indices);
 
 std::pair<torch::Tensor, torch::Tensor> CSCColumnwiseSamplingCUDA(
     torch::Tensor indptr, torch::Tensor indices, int64_t fanout, bool replace);
@@ -24,8 +23,7 @@ std::pair<torch::Tensor, torch::Tensor>
 CSCColumnwiseFusedSlicingAndSamplingCUDA(torch::Tensor indptr,
                                          torch::Tensor indices,
                                          torch::Tensor column_ids,
-                                         int64_t fanout,
-                                         bool replace);
+                                         int64_t fanout, bool replace);
 
 }  // namespace impl
 }  // namespace gs

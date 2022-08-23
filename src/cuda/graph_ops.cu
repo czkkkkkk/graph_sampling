@@ -3,10 +3,10 @@
 #include <c10/cuda/CUDACachingAllocator.h>
 #include <curand_kernel.h>
 
+#include <nvToolsExt.h>
 #include <thrust/device_ptr.h>
 #include <thrust/remove.h>
 #include <cub/cub.cuh>
-#include <nvToolsExt.h> 
 
 namespace gs {
 namespace impl {
@@ -141,9 +141,9 @@ __global__ void _SampleSubIndicesKernel(IdType* sub_indices, IdType* indptr,
     int64_t tid = threadIdx.x;
     while (tid < fanout) {
       // Sequential Sampling
-      //const int64_t edge = tid % degree;
+      // const int64_t edge = tid % degree;
       // Random Sampling
-       const int64_t edge = curand(&rng) % degree;
+      const int64_t edge = curand(&rng) % degree;
       sub_indices[out_start + tid] = indices[in_start + edge];
       tid += blockDim.x;
     }
@@ -206,10 +206,9 @@ torch::Tensor GetSampledSubIndptrFused(torch::Tensor indptr,
 }
 
 template <typename IdType>
-__global__ void _SampleSubIndicesKernelFusedWithReplace(IdType* sub_indices,
-                                             IdType* indptr, IdType* indices,
-                                             IdType* sub_indptr,
-                                             IdType* column_ids, int64_t size) {
+__global__ void _SampleSubIndicesKernelFusedWithReplace(
+    IdType* sub_indices, IdType* indptr, IdType* indices, IdType* sub_indptr,
+    IdType* column_ids, int64_t size) {
   int64_t row = blockIdx.x * blockDim.y + threadIdx.y;
   const uint64_t random_seed = 7777777;
   curandState rng;
@@ -223,9 +222,9 @@ __global__ void _SampleSubIndicesKernelFusedWithReplace(IdType* sub_indices,
     int64_t tid = threadIdx.x;
     while (tid < fanout) {
       // Sequential Sampling
-      //const int64_t edge = tid % degree;
+      // const int64_t edge = tid % degree;
       // Random Sampling
-       const int64_t edge = curand(&rng) % degree;
+      const int64_t edge = curand(&rng) % degree;
       sub_indices[out_start + tid] = indices[in_start + edge];
       tid += blockDim.x;
     }
@@ -237,8 +236,8 @@ template <typename IdType>
 torch::Tensor SampleSubIndicesFused(torch::Tensor indptr, torch::Tensor indices,
                                     torch::Tensor sub_indptr,
                                     torch::Tensor column_ids, bool replace) {
-  //nvtxRangePush(__FUNCTION__);
-  //nvtxMark("==SampleSubIndicesFused==");
+  // nvtxRangePush(__FUNCTION__);
+  // nvtxMark("==SampleSubIndicesFused==");
   int64_t size = sub_indptr.numel() - 1;
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
@@ -255,7 +254,7 @@ torch::Tensor SampleSubIndicesFused(torch::Tensor indptr, torch::Tensor indices,
   } else {
     std::cerr << "Not implemented warning";
   }
-  //nvtxRangePop();
+  // nvtxRangePop();
   return sub_indices;
 }
 
@@ -271,7 +270,6 @@ CSCColumnwiseFusedSlicingAndSamplingCUDA(torch::Tensor indptr,
                                                     column_ids, replace);
   return {sub_indptr, sub_indices};
 }
-
 
 }  // namespace impl
 }  // namespace gs
