@@ -41,16 +41,20 @@ class HeteroGraph : public torch::CustomClassHolder {
    * each edge type
    *
    */
-  void Load(
-      const std::vector<std::pair<std::string, int64_t>>& node_types,
+  void LoadFromHomo(
+      const std::vector<std::string>& node_types,
       const std::vector<std::tuple<std::string, std::string, std::string>>&
           edge_types,
       const std::vector<c10::intrusive_ptr<Graph>>& edge_relations);
-  
+
   c10::intrusive_ptr<Graph> GetHomoGraph(const std::string& edge_type) const {
     int64_t edge_id = edge_type_mapping_.at(edge_type);
     return hetero_edges_.at(edge_id).homo_graph;
   }
+
+  // TODO
+  torch::Tensor MetapathRandomWalk(torch::Tensor seeds,
+                                   const std::vector<std::string>& metapath);
 
  private:
   int64_t n_node_types_, n_edge_types_;
