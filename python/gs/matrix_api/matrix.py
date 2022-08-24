@@ -1,16 +1,32 @@
 import torch
 from torch.fx import Proxy
+import dgl
+from dgl import DGLHeteroGraph
 
 class Matrix(object):
     def __init__(self, graph: torch.classes.gs_classes.Graph):
         # Graph bind to a C++ object
         self._graph = graph
 
-    def load_dgl_graph(self):
-        pass
+    def load_dgl_graph(self, g):
+        # import csc
+        if not isinstance(g, DGLHeteroGraph):
+            raise ValueError
+        reverse_g = dgl.reverse(g)
+        reverse_g = reverse_g.formats(['csr'])
+        csc = reverse_g.adj(scipy_fmt='csr')
+        csc_indptr = torch.tensor(csc.indptr).long().cuda()
+        csc_indices = torch.tensor(csc.indices).long().cuda()
+        self._graph.load_csc(csc_indptr, csc_indices)
 
     def columnwise_slicing(self, t):
         return Matrix(self._graph.columnwise_slicing(t))
+
+    def columnwise_sampling(self, fanout, replace=True):
+        return Matrix(self._graph.columnwise_sampling(fanout, replace))
+        
+    def all_indices(self) -> torch.Tensor:
+        return self._graph.all_indices()
 
     def __getitem__(self, data):
         ret = self._graph

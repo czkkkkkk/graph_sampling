@@ -2,6 +2,8 @@ from typing import List
 import gs
 import torch
 import load_graph
+import time
+import numpy as np
 
 
 def graphsage(A: gs.Matrix, seeds: torch.Tensor, fanouts: List):
@@ -15,23 +17,14 @@ def graphsage(A: gs.Matrix, seeds: torch.Tensor, fanouts: List):
     output_node = seeds
     return input_node, output_node, ret
 
-
 dataset = load_graph.load_reddit()
 dgl_graph = dataset[0]
 m = gs.Matrix(gs.Graph(False))
 m.load_dgl_graph(dgl_graph)
 print("Check load successfully:", m._graph._CAPI_metadata(), '\n')
-
 seeds = torch.arange(0, 5000).long().cuda()
+
 compiled_func = gs.jit.compile(func=graphsage, args=(m, seeds, [25, 15]))
-print(compiled_func.gm)
-input_node, output_node, matrixs = compiled_func(m, seeds, [25, 15])
-print("ret input_node:", input_node.numel(), input_node, '\n')
-print("ret output_node:", output_node.numel(), output_node, '\n')
-for g in matrixs:
-    print(g._graph._CAPI_metadata())
-
-
 from gs.jit.passes import dce
 
 def slicing_and_sampling_fuse(gm):
@@ -50,14 +43,22 @@ def slicing_and_sampling_fuse(gm):
     gm.graph.lint()
     gm.recompile()
     return gm
-
-
 compiled_func.gm = dce(slicing_and_sampling_fuse(compiled_func.gm))
-print(compiled_func.gm)
 
-
-input_node, output_node, matrixs = compiled_func(m, seeds, [25, 15])
-print("ret input_node:", input_node.numel(), input_node, '\n')
-print("ret output_node:", output_node.numel(), output_node, '\n')
-for g in matrixs:
-    print(g._graph._CAPI_metadata())
+def bench(func, args):
+    time_list = []
+    for i in range(100):
+        #print(i)
+        torch.cuda.synchronize()
+        begin = time.time()
+        
+        ret = func(*args)
+        
+        torch.cuda.synchronize()
+        end = time.time()
+        
+        time_list.append(end - begin)
+        
+    print("fused graphsage sampling AVG:", np.mean(time_list[10:])*1000, " ms.")
+    
+bench(compiled_func, args=(m,seeds,[25,15],))
