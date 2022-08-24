@@ -10,7 +10,8 @@ void Graph::LoadCSC(torch::Tensor indptr, torch::Tensor indices) {
   csc_->indices = indices;
 }
 
-void Graph::LoadCSCWithColIds(torch::Tensor column_ids, torch::Tensor indptr, torch::Tensor indices) {
+void Graph::LoadCSCWithColIds(torch::Tensor column_ids, torch::Tensor indptr,
+                              torch::Tensor indices) {
   csc_ = std::make_shared<CSC>();
   csc_->col_ids = column_ids;
   csc_->indptr = indptr;
@@ -47,22 +48,22 @@ torch::Tensor Graph::RowIndices() { return torch::Tensor(); }
 /**
  * @brief Returns the set of all nodes of the graph. Nodes in return tensor are
  * sorted in the order of their first occurrence in {col_ids, indices}.
- * For example, 
- *    if graph.csc_.col_ids = [0, 2, 4, 2] and graph.csc_.indices = [4, 2, 1], 
+ * For example,
+ *    if graph.csc_.col_ids = [0, 2, 4, 2] and graph.csc_.indices = [4, 2, 1],
  *    graph.AllIndices() will be [0, 2, 4, 1]
  *
  * @return torch::Tensor
  */
 torch::Tensor Graph::AllIndices() {
-  if(is_subgraph_){
-  torch::Tensor cat = torch::cat({csc_->col_ids, csc_->indices});
-  return TensorUnique(cat);
-  }
-  else{
-  int64_t size = csc_->indptr.numel();
-  //torch::Tensor nodeids = torch::arange(size).to(torch::kCUDA);
-  torch::Tensor cat = torch::cat({ csc_->indptr.slice(0, 0, size-1),csc_->indices});
-  return TensorUnique(cat);
+  if (is_subgraph_) {
+    torch::Tensor cat = torch::cat({csc_->col_ids, csc_->indices});
+    return TensorUnique(cat);
+  } else {
+    int64_t size = csc_->indptr.numel();
+    // torch::Tensor nodeids = torch::arange(size).to(torch::kCUDA);
+    torch::Tensor cat =
+        torch::cat({csc_->indptr.slice(0, 0, size - 1), csc_->indices});
+    return TensorUnique(cat);
   }
 }
 
@@ -74,19 +75,19 @@ torch::Tensor Graph::AllIndices() {
  * relabeled graph.
  * For example,
  *    if graph.csc_.col_ids = [0, 2, 4, 2], graph.csc_.indptr = [0, 0, 1, 1, 3]
- *    and graph.csc_.indices = [4, 2, 1], 
+ *    and graph.csc_.indices = [4, 2, 1],
  *    graph.relabel will return {[0, 2, 4, 1], [0, 0, 1, 1, 3], [2, 1, 3]}
  *
  * @return std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
  */
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> Graph::Relabel(){
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> Graph::Relabel() {
   return GraphRelabel(csc_->col_ids, csc_->indptr, csc_->indices);
 }
 
 void Graph::Print() const {
   std::stringstream ss;
-  if(is_subgraph_){ 
-     ss << "col ids: "    << csc_->col_ids << "\n";
+  if (is_subgraph_) {
+    ss << "col ids: " << csc_->col_ids << "\n";
   }
   ss << "# Nodes: " << csc_->indptr.size(0) - 1
      << " # Edges: " << csc_->indices.size(0) << "\n";
@@ -104,4 +105,3 @@ std::vector<torch::Tensor> Graph::MetaData() {
 }
 
 }  // namespace gs
-

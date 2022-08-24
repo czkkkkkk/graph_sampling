@@ -1,6 +1,7 @@
 import torch.fx as fx
 from typing import List, Tuple
 
+
 def flatten(iter):
     ret = []
     for i in iter:
@@ -34,6 +35,7 @@ def dce(gm: fx.GraphModule) -> fx.GraphModule:
     gm.graph.lint()
     gm.recompile()
     return gm
+
 
 def cse(gm: fx.GraphModule) -> fx.GraphModule:
     nodes_list = gm.graph.nodes
