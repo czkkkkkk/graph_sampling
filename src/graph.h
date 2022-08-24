@@ -26,7 +26,7 @@ class Graph : public torch::CustomClassHolder {
   void Print() const;
 
  private:
-  bool is_subgraph_; //used for subgraoh, stores node id in global graph
+  bool is_subgraph_; //used for subgrah, stores node id in global graph
   std::shared_ptr<CSC> csc_;
 };
 
