@@ -1,12 +1,8 @@
 #include "graph_ops.h"
 
-#include <c10/cuda/CUDACachingAllocator.h>
 #include <curand_kernel.h>
-
 #include <nvToolsExt.h>
-#include <thrust/device_ptr.h>
-#include <thrust/remove.h>
-#include <cub/cub.cuh>
+#include "cuda_common.h"
 
 namespace gs {
 namespace impl {

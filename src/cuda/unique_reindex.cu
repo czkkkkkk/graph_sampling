@@ -1,11 +1,6 @@
 #include "atomic.h"
+#include "cuda_common.h"
 #include "graph_ops.h"
-
-#include <thrust/device_ptr.h>
-#include <thrust/remove.h>
-#include <cub/cub.cuh>
-
-#include <c10/cuda/CUDACachingAllocator.h>
 
 namespace gs {
 namespace impl {
