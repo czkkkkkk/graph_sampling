@@ -1,33 +1,12 @@
 #include "graph_ops.h"
 
-#include <c10/cuda/CUDACachingAllocator.h>
 #include <curand_kernel.h>
-
 #include <nvToolsExt.h>
-#include <thrust/device_ptr.h>
-#include <thrust/remove.h>
-#include <cub/cub.cuh>
+#include "cuda_common.h"
+#include "utils.h"
 
 namespace gs {
 namespace impl {
-
-inline void* DeviceCacheAlloc(size_t temp_storage_bytes) {
-  c10::Allocator* cuda_allocator = c10::cuda::CUDACachingAllocator::get();
-  c10::DataPtr _temp_data = cuda_allocator->allocate(temp_storage_bytes);
-  return _temp_data.get();
-}
-
-template <typename IdType>
-inline void cub_exclusiveSum(IdType* arrays, const IdType array_length) {
-  void* d_temp_storage = NULL;
-  size_t temp_storage_bytes = 0;
-  cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
-                                arrays, array_length);
-
-  d_temp_storage = DeviceCacheAlloc(temp_storage_bytes);
-  cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
-                                arrays, array_length);
-}
 
 template <typename IdType>
 torch::Tensor GetSubIndptr(torch::Tensor indptr, torch::Tensor column_ids) {

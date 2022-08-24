@@ -15,10 +15,12 @@ def get_actions(args):
     static_args_count = 0
     for arg_offset, arg in enumerate(args):
         if isinstance(arg, Matrix):
-            actions.append((GRAPH_ARG, graph_args_count, arg_offset, CONVERT_2_MATRIX))
+            actions.append(
+                (GRAPH_ARG, graph_args_count, arg_offset, CONVERT_2_MATRIX))
             graph_args_count += 1
         elif isinstance(arg, List):
-            actions.append((STATIC_ARG, static_args_count, arg_offset, STATIS_LIST))
+            actions.append(
+                (STATIC_ARG, static_args_count, arg_offset, STATIS_LIST))
             static_args_count += 1
         else:
             actions.append(None)

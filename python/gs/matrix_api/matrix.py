@@ -3,7 +3,9 @@ from torch.fx import Proxy
 import dgl
 from dgl import DGLHeteroGraph
 
+
 class Matrix(object):
+
     def __init__(self, graph: torch.classes.gs_classes.Graph):
         # Graph bind to a C++ object
         self._graph = graph
@@ -24,7 +26,7 @@ class Matrix(object):
 
     def columnwise_sampling(self, fanout, replace=True):
         return Matrix(self._graph.columnwise_sampling(fanout, replace))
-        
+
     def all_indices(self) -> torch.Tensor:
         return self._graph.all_indices()
 
@@ -39,5 +41,3 @@ class Matrix(object):
             ret = ret.columnwise_slicing(c_slice)
 
         return Matrix(ret)
-
-

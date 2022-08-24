@@ -1,5 +1,2 @@
-
-
-
 def optimize(ir):
     pass

@@ -25,7 +25,8 @@ def load_ogbn_products():
     g, labels = data[0]
     feat = g.ndata['feat']
     labels = labels[:, 0]
-    n_classes = len(torch.unique(labels[torch.logical_not(torch.isnan(labels))]))
+    n_classes = len(
+        torch.unique(labels[torch.logical_not(torch.isnan(labels))]))
     g.ndata.clear()
     g = dgl.remove_self_loop(g)
     g = dgl.add_self_loop(g)

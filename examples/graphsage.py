@@ -31,8 +31,8 @@ print("ret output_node:", output_node.numel(), output_node, '\n')
 for g in matrixs:
     print(g._graph._CAPI_metadata())
 
-
 from gs.jit.passes import dce
+
 
 def slicing_and_sampling_fuse(gm):
     """
@@ -45,7 +45,11 @@ def slicing_and_sampling_fuse(gm):
                 continue
             with gm.graph.inserting_after(node):
                 new_node = gm.graph.call_method(
-                    'fused_columnwise_slicing_sampling', args=(*node.args[0].args, *node.args[1:], ))
+                    'fused_columnwise_slicing_sampling',
+                    args=(
+                        *node.args[0].args,
+                        *node.args[1:],
+                    ))
                 node.replace_all_uses_with(new_node)
     gm.graph.lint()
     gm.recompile()
@@ -54,7 +58,6 @@ def slicing_and_sampling_fuse(gm):
 
 compiled_func.gm = dce(slicing_and_sampling_fuse(compiled_func.gm))
 print(compiled_func.gm)
-
 
 input_node, output_node, matrixs = compiled_func(m, seeds, [25, 15])
 print("ret input_node:", input_node.numel(), input_node, '\n')

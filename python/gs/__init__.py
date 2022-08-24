@@ -7,4 +7,5 @@ torch.classes.load_library(so_path)
 
 from .matrix_api import Matrix
 from .jit import GSTracer, gs_symbolic_trace, compile
+
 Graph = torch.classes.gs_classes.Graph
