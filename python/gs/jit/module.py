@@ -1,23 +1,26 @@
 from typing import List
 from .trace import gs_symbolic_trace
 from ..matrix_api import Matrix
+from .passes import dce, cse
 
 CONVERT_2_MATRIX = "Convert2Matrix"
 STATIS_LIST = "StatisList"
-GRAPH_ARG = 1
-STATIC_ARG = 2
+GRAPH_ARG = "GRAPH_ARG"
+STATIC_ARG = "STATIC_ARG"
 
 
 def get_actions(args):
     actions = []
     graph_args_count = 0
     static_args_count = 0
-    for arg in args:
+    for arg_offset, arg in enumerate(args):
         if isinstance(arg, Matrix):
-            actions.append((GRAPH_ARG, graph_args_count, CONVERT_2_MATRIX))
+            actions.append(
+                (GRAPH_ARG, graph_args_count, arg_offset, CONVERT_2_MATRIX))
             graph_args_count += 1
         elif isinstance(arg, List):
-            actions.append((STATIC_ARG, static_args_count, STATIS_LIST))
+            actions.append(
+                (STATIC_ARG, static_args_count, arg_offset, STATIS_LIST))
             static_args_count += 1
         else:
             actions.append(None)
@@ -41,10 +44,10 @@ def split_actions(actions):
 
 def generate_graph_args(args, graph_actions):
     graph_args = []
-    for index, action in enumerate(graph_actions):
-        a = action[2]
+    for action in graph_actions:
+        _, _, arg_offset, a = action
         if a == CONVERT_2_MATRIX:
-            graph_args.append(args[index]._graph)
+            graph_args.append(args[arg_offset]._graph)
         else:
             raise ValueError
     return graph_args
@@ -52,10 +55,10 @@ def generate_graph_args(args, graph_actions):
 
 def generate_static_args(args, static_actions):
     static_args = []
-    for index, action in enumerate(static_actions):
-        a = action[2]
+    for action in static_actions:
+        _, _, arg_offset, a = action
         if a == STATIS_LIST:
-            static_args.append(args[index])
+            static_args.append(args[arg_offset])
         else:
             raise ValueError
     return static_args
@@ -67,7 +70,7 @@ def generate_new_args(args, graph_args, static_args, actions):
         if action is None:
             new_args.append(args[index])
         else:
-            _, offset, a = action
+            _, offset, _, a = action
             if a == CONVERT_2_MATRIX:
                 new_args.append(Matrix(graph_args[offset]))
             elif a == STATIS_LIST:
@@ -118,6 +121,8 @@ class compile:
 
         # compiled to torch.fx IR
         gm = gs_symbolic_trace(inner_wrapper)
+        gm = cse(gm)
+        gm = dce(gm)
         self.gm = gm
 
     def __call__(self, *args):

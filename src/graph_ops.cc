@@ -12,10 +12,27 @@ std::shared_ptr<CSC> CSCColumnwiseSlicing(std::shared_ptr<CSC> csc,
     torch::Tensor sub_indptr, sub_indices;
     std::tie(sub_indptr, sub_indices) =
         impl::CSCColumnwiseSlicingCUDA(csc->indptr, csc->indices, column_ids);
-    return std::make_shared<CSC>(CSC{sub_indptr, sub_indices});
+    return std::make_shared<CSC>(CSC{column_ids, sub_indptr, sub_indices});
   } else {
     std::cerr << "Not implemented warning";
   }
+}
+
+torch::Tensor TensorUnique(torch::Tensor node_ids) {
+  if (node_ids.device().type() == torch::kCUDA) {
+    return impl::TensorUniqueCUDA(node_ids);
+  } else {
+    std::cerr << "Not implemented warning";
+    return torch::Tensor();
+  }
+}
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphRelabel(
+    torch::Tensor col_ids, torch::Tensor indptr, torch::Tensor indices) {
+  torch::Tensor frontier, relabeled_indices, relabeled_indptr;
+  std::tie(frontier, relabeled_indices) = impl::RelabelCUDA(col_ids, indices);
+  relabeled_indptr = indptr.clone();
+  return std::make_tuple(frontier, relabeled_indptr, relabeled_indices);
 }
 
 std::shared_ptr<CSC> CSCColumnwiseSampling(std::shared_ptr<CSC> csc,
@@ -24,7 +41,7 @@ std::shared_ptr<CSC> CSCColumnwiseSampling(std::shared_ptr<CSC> csc,
     torch::Tensor sub_indptr, sub_indices;
     std::tie(sub_indptr, sub_indices) = impl::CSCColumnwiseSamplingCUDA(
         csc->indptr, csc->indices, fanout, replace);
-    return std::make_shared<CSC>(CSC{sub_indptr, sub_indices});
+    return std::make_shared<CSC>(CSC{csc->col_ids, sub_indptr, sub_indices});
   } else {
     std::cerr << "Not implemented warning";
   }
@@ -38,7 +55,7 @@ std::shared_ptr<CSC> CSCColumnwiseFusedSlicingAndSampling(
     std::tie(sub_indptr, sub_indices) =
         impl::CSCColumnwiseFusedSlicingAndSamplingCUDA(
             csc->indptr, csc->indices, column_ids, fanout, replace);
-    return std::make_shared<CSC>(CSC{sub_indptr, sub_indices});
+    return std::make_shared<CSC>(CSC{column_ids, sub_indptr, sub_indices});
   } else {
     std::cerr << "Not implemented warning";
   }

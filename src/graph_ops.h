@@ -10,6 +10,11 @@ namespace gs {
 std::shared_ptr<CSC> CSCColumnwiseSlicing(std::shared_ptr<CSC> csc,
                                           torch::Tensor column_ids);
 
+torch::Tensor TensorUnique(torch::Tensor node_ids);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphRelabel(
+    torch::Tensor col_ids, torch::Tensor indptr, torch::Tensor indices);
+
 std::shared_ptr<CSC> CSCColumnwiseSampling(std::shared_ptr<CSC> csc,
                                            int64_t fanout, bool replace);
 

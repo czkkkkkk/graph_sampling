@@ -6,7 +6,9 @@
 namespace gs {
 
 struct CSC {
-  torch::Tensor indptr, indices;
+  torch::Tensor col_ids;
+  torch::Tensor indptr;
+  torch::Tensor indices;
 };
 
 }  // namespace gs

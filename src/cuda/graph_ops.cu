@@ -1,36 +1,16 @@
 #include "graph_ops.h"
 
-#include <c10/cuda/CUDACachingAllocator.h>
 #include <curand_kernel.h>
-
-#include <thrust/device_ptr.h>
-#include <thrust/remove.h>
-#include <cub/cub.cuh>
+#include <nvToolsExt.h>
+#include "cuda_common.h"
+#include "utils.h"
 
 namespace gs {
 namespace impl {
 
-inline void* DeviceCacheAlloc(size_t temp_storage_bytes) {
-  c10::Allocator* cuda_allocator = c10::cuda::CUDACachingAllocator::get();
-  c10::DataPtr _temp_data = cuda_allocator->allocate(temp_storage_bytes);
-  return _temp_data.get();
-}
-
-template <typename IdType>
-inline void cub_exclusiveSum(IdType* arrays, const IdType array_length) {
-  void* d_temp_storage = NULL;
-  size_t temp_storage_bytes = 0;
-  cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
-                                arrays, array_length);
-
-  d_temp_storage = DeviceCacheAlloc(temp_storage_bytes);
-  cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
-                                arrays, array_length);
-}
-
 template <typename IdType>
 torch::Tensor GetSubIndptr(torch::Tensor indptr, torch::Tensor column_ids) {
-  int64_t size = column_ids.size(0);
+  int64_t size = column_ids.numel();
   auto new_indptr = torch::zeros(size + 1, indptr.options());
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(new_indptr.data_ptr<IdType>()));
@@ -73,7 +53,7 @@ template <typename IdType>
 torch::Tensor GetSubIndices(torch::Tensor indptr, torch::Tensor indices,
                             torch::Tensor sub_indptr,
                             torch::Tensor column_ids) {
-  int64_t size = column_ids.size(0);
+  int64_t size = column_ids.numel();
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
   int n_edges = item_prefix[size];  // cpu
@@ -100,7 +80,7 @@ std::pair<torch::Tensor, torch::Tensor> CSCColumnwiseSlicingCUDA(
 template <typename IdType>
 torch::Tensor GetSampledSubIndptr(torch::Tensor indptr, int64_t fanout,
                                   bool replace) {
-  int64_t size = indptr.size(0);
+  int64_t size = indptr.numel();
   auto new_indptr = torch::zeros(size, indptr.options());
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(new_indptr.data_ptr<IdType>()));
@@ -140,9 +120,9 @@ __global__ void _SampleSubIndicesKernel(IdType* sub_indices, IdType* indptr,
     int64_t tid = threadIdx.x;
     while (tid < fanout) {
       // Sequential Sampling
-      const int64_t edge = tid % degree;
+      // const int64_t edge = tid % degree;
       // Random Sampling
-      // const int64_t edge = curand(&rng) % degree;
+      const int64_t edge = curand(&rng) % degree;
       sub_indices[out_start + tid] = indices[in_start + edge];
       tid += blockDim.x;
     }
@@ -153,7 +133,7 @@ __global__ void _SampleSubIndicesKernel(IdType* sub_indices, IdType* indptr,
 template <typename IdType>
 torch::Tensor SampleSubIndices(torch::Tensor indptr, torch::Tensor indices,
                                torch::Tensor sub_indptr) {
-  int64_t size = sub_indptr.size(0) - 1;
+  int64_t size = sub_indptr.numel() - 1;
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
   int n_edges = item_prefix[size];  // cpu
@@ -179,7 +159,7 @@ template <typename IdType>
 torch::Tensor GetSampledSubIndptrFused(torch::Tensor indptr,
                                        torch::Tensor column_ids, int64_t fanout,
                                        bool replace) {
-  int64_t size = column_ids.size(0);
+  int64_t size = column_ids.numel();
   auto sub_indptr = torch::empty(size + 1, indptr.options());
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
@@ -205,10 +185,9 @@ torch::Tensor GetSampledSubIndptrFused(torch::Tensor indptr,
 }
 
 template <typename IdType>
-__global__ void _SampleSubIndicesKernelFusedWithReplace(IdType* sub_indices,
-                                             IdType* indptr, IdType* indices,
-                                             IdType* sub_indptr,
-                                             IdType* column_ids, int64_t size) {
+__global__ void _SampleSubIndicesKernelFusedWithReplace(
+    IdType* sub_indices, IdType* indptr, IdType* indices, IdType* sub_indptr,
+    IdType* column_ids, int64_t size) {
   int64_t row = blockIdx.x * blockDim.y + threadIdx.y;
   const uint64_t random_seed = 7777777;
   curandState rng;
@@ -222,9 +201,9 @@ __global__ void _SampleSubIndicesKernelFusedWithReplace(IdType* sub_indices,
     int64_t tid = threadIdx.x;
     while (tid < fanout) {
       // Sequential Sampling
-      const int64_t edge = tid % degree;
+      // const int64_t edge = tid % degree;
       // Random Sampling
-      // const int64_t edge = curand(&rng) % degree;
+      const int64_t edge = curand(&rng) % degree;
       sub_indices[out_start + tid] = indices[in_start + edge];
       tid += blockDim.x;
     }
@@ -236,7 +215,9 @@ template <typename IdType>
 torch::Tensor SampleSubIndicesFused(torch::Tensor indptr, torch::Tensor indices,
                                     torch::Tensor sub_indptr,
                                     torch::Tensor column_ids, bool replace) {
-  int64_t size = sub_indptr.size(0) - 1;
+  // nvtxRangePush(__FUNCTION__);
+  // nvtxMark("==SampleSubIndicesFused==");
+  int64_t size = sub_indptr.numel() - 1;
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
   int n_edges = item_prefix[size];  // cpu
@@ -252,6 +233,7 @@ torch::Tensor SampleSubIndicesFused(torch::Tensor indptr, torch::Tensor indices,
   } else {
     std::cerr << "Not implemented warning";
   }
+  // nvtxRangePop();
   return sub_indices;
 }
 
