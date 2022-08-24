@@ -1,5 +1,5 @@
-#ifndef GS_CUDA_GS_COMMON_H_
-#define GS_CUDA_GS_COMMON_H_
+#ifndef GS_CUDA_CUDA_COMMON_H_
+#define GS_CUDA_CUDA_COMMON_H_
 
 #include <c10/cuda/CUDACachingAllocator.h>
 #include <cuda.h>
