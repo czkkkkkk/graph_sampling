@@ -1,6 +1,8 @@
 #ifndef GS_GRAPH_H_
 #define GS_GRAPH_H_
 
+#include "./logging.h"
+
 #include <torch/custom_class.h>
 #include <torch/script.h>
 

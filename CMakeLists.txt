@@ -17,6 +17,13 @@ list(GET TORCH_PREFIX_VER 1 TORCH_VER)
 message(STATUS "Configuring for PyTorch ${TORCH_VER}")
 set(Torch_DIR "${TORCH_PREFIX}/Torch")
 find_package(Torch REQUIRED)
+list(APPEND GS_EXTERNAL_LIB ${TORCH_LIBRARIES})
+
+# GLOG
+SET(WITH_GFLAGS OFF)
+SET(WITH_GTEST OFF)
+add_subdirectory(third_party/glog)
+list(APPEND GS_EXTERNAL_LIB glog::glog)
 
 file(GLOB GS_SRC
   src/*.cc
@@ -24,7 +31,7 @@ file(GLOB GS_SRC
 )
 
 add_library(gs SHARED ${GS_SRC})
-target_link_libraries(gs "${TORCH_LIBRARIES}")
+target_link_libraries(gs ${GS_EXTERNAL_LIB})
 set_target_properties(gs PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 set_target_properties(gs PROPERTIES CUDA_STANDARD 14)
 set_target_properties(gs PROPERTIES POSITION_INDEPENDENT_CODE ON)
