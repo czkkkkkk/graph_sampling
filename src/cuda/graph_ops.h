@@ -5,6 +5,8 @@
 #include <cuda_runtime.h>
 #include <torch/torch.h>
 
+#define BLOCK_SIZE 128
+
 namespace gs {
 namespace impl {
 
