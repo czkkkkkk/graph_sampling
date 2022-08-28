@@ -45,8 +45,7 @@ def bench(func, args):
 
         time_list.append(end - begin)
 
-    print("dgl graphsage sampling AVG:",
-          np.mean(time_list[10:]) * 1000, " ms.")
+    print("fastgcn sampling AVG:", np.mean(time_list[10:]) * 1000, " ms.")
 
 
 bench(compiled_func, args=(m, seeds, [2000, 2000]))
