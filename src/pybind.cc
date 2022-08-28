@@ -2,6 +2,7 @@
 #include <torch/script.h>
 
 #include "./graph.h"
+#include "./tensor_ops.h"
 
 using namespace gs;
 
@@ -20,5 +21,7 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("relabel", &Graph::Relabel)
       .def("_CAPI_metadata", &Graph::MetaData);
 }
+
+TORCH_LIBRARY(gs_ops, m) { m.def("list_sampling", &ListSampling); }
 
 namespace gs {}
