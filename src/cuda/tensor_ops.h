@@ -8,7 +8,7 @@
 namespace gs {
 namespace impl {
 
-std::tuple<torch::Tensor, torch::Tensor> ListSampling(torch::Tensor data,
+std::tuple<torch::Tensor, torch::Tensor> ListSamplingCUDA(torch::Tensor data,
                                                       int64_t num_picks,
                                                       bool replace);
 

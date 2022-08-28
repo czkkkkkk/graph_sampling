@@ -5,6 +5,6 @@ namespace gs {
 std::tuple<torch::Tensor, torch::Tensor> ListSampling(torch::Tensor data,
                                                       int64_t num_picks,
                                                       bool replace) {
-  return impl::ListSampling(data, num_picks, replace);
+  return impl::ListSamplingCUDA(data, num_picks, replace);
 }
 }  // namespace gs
