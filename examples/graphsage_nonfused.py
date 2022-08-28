@@ -31,23 +31,17 @@ compiled_func = gs.jit.compile(func=graphsage, args=(m, seeds, [25, 15]))
 def bench(func, args):
     time_list = []
     for i in range(100):
-        #   print(i)
+     #   print(i)
         torch.cuda.synchronize()
         begin = time.time()
-
+        
         ret = func(*args)
-
+        
         torch.cuda.synchronize()
         end = time.time()
-
+        
         time_list.append(end - begin)
-
-    print("nonfused graphsage sampling AVG:",
-          np.mean(time_list[10:]) * 1000, " ms.")
-
-
-bench(compiled_func, args=(
-    m,
-    seeds,
-    [25, 15],
-))
+        
+    print("nonfused graphsage sampling AVG:", np.mean(time_list[10:])*1000, " ms.")
+    
+bench(compiled_func, args=(m,seeds,[25,15],))
