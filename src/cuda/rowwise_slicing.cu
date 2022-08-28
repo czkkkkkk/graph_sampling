@@ -145,7 +145,7 @@ std::pair<torch::Tensor, torch::Tensor> _CSCRowwiseSlicing(
   int num_row_ids = row_ids.numel();
 
   // construct NodeQueryHashMap
-  int dir_size = UpPower(num_row_ids);
+  int dir_size = UpPower(num_row_ids) * 2;
   torch::Tensor key_buffer = torch::full(dir_size, -1, indptr.options());
   torch::Tensor value_buffer = torch::full(
       dir_size, false,
