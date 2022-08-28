@@ -10,6 +10,7 @@ TORCH_LIBRARY(gs_classes, m) {
   m.class_<Graph>("Graph")
       .def(torch::init<bool>())
       .def("columnwise_slicing", &Graph::ColumnwiseSlicing)
+      .def("rowwise_slicing", &Graph::RowwiseSlicing)
       .def("columnwise_sampling", &Graph::ColumnwiseSampling)
       .def("fused_columnwise_slicing_sampling",
            &Graph::ColumnwiseFusedSlicingAndSampling)

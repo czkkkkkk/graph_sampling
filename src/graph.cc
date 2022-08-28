@@ -28,6 +28,12 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_ids) {
   return ret;
 }
 
+c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_ids) {
+  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(true)));
+  ret->SetCSC(CSCRowwiseSlicing(csc_, row_ids));
+  return ret;
+}
+
 c10::intrusive_ptr<Graph> Graph::ColumnwiseSampling(int64_t fanout,
                                                     bool replace) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(true)));
