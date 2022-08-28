@@ -57,7 +57,7 @@ std::tuple<torch::Tensor, torch::Tensor> _ListSampling(torch::Tensor data,
 
     uint64_t random_seed = 7777;
     using it = thrust::counting_iterator<IdType>;
-    thrust::for_each(it(0), it(num_items),
+    thrust::for_each(it(num_picks), it(num_items),
                      [out_index = index.data_ptr<int64_t>(), num_picks,
                       random_seed] __device__(IdType idx) mutable {
                        if (idx < num_picks) {
