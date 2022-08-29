@@ -38,10 +38,8 @@ __global__ void _GetSubIndicesKernel(IdType* out_indices, IdType* indptr,
     int64_t in_start = indptr[column_ids[row]];
     int64_t out_start = sub_indptr[row];
     int64_t n_edges = sub_indptr[row + 1] - sub_indptr[row];
-    int64_t tid = threadIdx.x;
-    while (tid < n_edges) {
-      out_indices[out_start + tid] = indices[in_start + tid];
-      tid += blockDim.x;
+    for (int idx = threadIdx.x; idx < n_edges; idx += blockDim.x) {
+      out_indices[out_start + idx] = indices[in_start + idx];
     }
     row += gridDim.x * blockDim.y;
   }
@@ -57,7 +55,7 @@ torch::Tensor GetSubIndices(torch::Tensor indptr, torch::Tensor indices,
   int n_edges = item_prefix[size];  // cpu
   auto sub_indices = torch::zeros(n_edges, indices.options());
 
-  dim3 block(32, 8);
+  dim3 block(32, 16);
   dim3 grid((size + block.x - 1) / block.x);
   _GetSubIndicesKernel<int64_t><<<grid, block>>>(
       sub_indices.data_ptr<int64_t>(), indptr.data_ptr<int64_t>(),

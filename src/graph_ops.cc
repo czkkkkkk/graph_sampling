@@ -14,7 +14,8 @@ std::shared_ptr<CSC> CSCColumnwiseSlicing(std::shared_ptr<CSC> csc,
         impl::CSCColumnwiseSlicingCUDA(csc->indptr, csc->indices, column_ids);
     return std::make_shared<CSC>(CSC{column_ids, sub_indptr, sub_indices});
   } else {
-    std::cerr << "Not implemented warning";
+    std::cerr << "Not implemented warning\n";
+    return std::make_shared<CSC>(CSC{});
   }
 }
 
@@ -22,7 +23,7 @@ torch::Tensor TensorUnique(torch::Tensor node_ids) {
   if (node_ids.device().type() == torch::kCUDA) {
     return impl::TensorUniqueCUDA(node_ids);
   } else {
-    std::cerr << "Not implemented warning";
+    std::cerr << "Not implemented warning\n";
     return torch::Tensor();
   }
 }
@@ -43,7 +44,8 @@ std::shared_ptr<CSC> CSCColumnwiseSampling(std::shared_ptr<CSC> csc,
         csc->indptr, csc->indices, fanout, replace);
     return std::make_shared<CSC>(CSC{csc->col_ids, sub_indptr, sub_indices});
   } else {
-    std::cerr << "Not implemented warning";
+    std::cerr << "Not implemented warning\n";
+    return std::make_shared<CSC>(CSC{});
   }
 }
 
@@ -57,7 +59,8 @@ std::shared_ptr<CSC> CSCColumnwiseFusedSlicingAndSampling(
             csc->indptr, csc->indices, column_ids, fanout, replace);
     return std::make_shared<CSC>(CSC{column_ids, sub_indptr, sub_indices});
   } else {
-    std::cerr << "Not implemented warning";
+    std::cerr << "Not implemented warning\n";
+    return std::make_shared<CSC>(CSC{});
   }
 }
 
