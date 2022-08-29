@@ -121,7 +121,7 @@ class compile:
 
         # compiled to torch.fx IR
         gm = gs_symbolic_trace(inner_wrapper)
-        gm = cse(gm)
+        #gm = cse(gm)
         gm = dce(gm)
         self.gm = gm
 
