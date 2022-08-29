@@ -1,6 +1,8 @@
 from gs import Graph, HeteroGraph, Matrix, HeteroMatrix
 import gs
 import torch
+import os
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 
 # g2 = dgl.heterograph({
@@ -25,10 +27,10 @@ heteroM = HeteroMatrix(hg)
 
 heteroM.load_from_homo(node_types, edge_types, graphs)
 
-seeds = torch.LongTensor([2, 1]).to('cuda:0')
-#print("random walk non_fused:")
-#nodes = heteroM.metapath_random_walk(seeds, ['view', 'follow', 'follow'])
-# print(nodes)
+seeds = torch.LongTensor([2, 1, 0]).to('cuda:0')
+print("random walk non_fused:")
+nodes = heteroM.metapath_random_walk(seeds, ['view', 'follow', 'follow'])
+print(nodes)
 
 print("random walk fused:")
 other_nodes = heteroM.metapath_random_walk_fused(

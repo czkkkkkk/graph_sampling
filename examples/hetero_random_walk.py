@@ -2,15 +2,16 @@ from typing import List
 import gs
 import torch
 
-def HeteroRandomWalk(HA: gs.HeteroMatrix, seeds: torch.Tensor, meta_path: List):
-    input_node = seeds
-    ret = []
-    for etype in meta_path:
+
+def HeteroRandomWalk(HA: gs.HeteroMatrix, seeds: torch.Tensor, metapath: List):
+    ret = [seeds, ]
+    for etype in metapath:
         A = HA.get_homo_matrix(etype)
-        subA = A.columnwise_sampling(1, True)
-        seeds = subA.row_indices()
+        subA = A.fused_columnwise_slicing_sampling(seeds, 1, True)
+        seeds = subA.row_indices(False)
         ret.append(seeds)
     return torch.stack(ret)
 
+
 def HeteroRandomWalkFused(HA: gs.HeteroMatrix, seeds: torch.Tensor, metapath: List):
-    return HA.metapath_random_walk(seeds, seeds, metapath)
+    return HA.metapath_random_walk(seeds, metapath)

@@ -43,11 +43,11 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
   return ret;
 }
 
-torch::Tensor Graph::RowIndices() {
-  if (this->csc_->indices.size(0) == 1) {
-    return this->csc_->indices.clone();
+torch::Tensor Graph::RowIndices(bool unique) {
+  if (unique) {
+    return TensorUnique(this->csc_->indices);
   }
-  return TensorUnique(this->csc_->indices);
+  return this->csc_->indices;
 }
 
 /**

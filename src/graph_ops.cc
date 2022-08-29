@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include "cuda/graph_ops.h"
+#include "cuda/heterograph_ops.h"
 
 namespace gs {
 
@@ -52,10 +53,17 @@ std::shared_ptr<CSC> CSCColumnwiseFusedSlicingAndSampling(
     bool replace) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices;
-    std::tie(sub_indptr, sub_indices) =
-        impl::CSCColumnwiseFusedSlicingAndSamplingCUDA(
-            csc->indptr, csc->indices, column_ids, fanout, replace);
-    return std::make_shared<CSC>(CSC{column_ids, sub_indptr, sub_indices});
+    if (fanout == 1 && replace) {
+      std::tie(sub_indptr, sub_indices) =
+          impl::CSCColumnwiseSamplingOneKeepDimCUDA(csc->indptr, csc->indices,
+                                                    column_ids);
+      return std::make_shared<CSC>(CSC{column_ids, sub_indptr, sub_indices});
+    } else {
+      std::tie(sub_indptr, sub_indices) =
+          impl::CSCColumnwiseFusedSlicingAndSamplingCUDA(
+              csc->indptr, csc->indices, column_ids, fanout, replace);
+      return std::make_shared<CSC>(CSC{column_ids, sub_indptr, sub_indices});
+    }
   } else {
     std::cerr << "Not implemented warning";
   }

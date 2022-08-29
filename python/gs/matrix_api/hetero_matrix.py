@@ -15,7 +15,13 @@ class HeteroMatrix(object):
         return Matrix(self._hetero_graph.get_homo_graph(etype))
 
     def metapath_random_walk(self, seeds, metapath):
-        return self._hetero_graph.metapath_random_walk(seeds, metapath)
+        ret = [seeds, ]
+        for etype in metapath:
+            A = self.get_homo_matrix(etype)
+            subA = A.fused_columnwise_slicing_sampling(seeds, 1, True)
+            seeds = subA.row_indices(unique=False)
+            ret.append(seeds)
+        return torch.stack(ret).transpose(0,1)
 
     def metapath_random_walk_fused(self, seeds, metapath):
         return self._hetero_graph.metapath_random_walk_fused(seeds, metapath)

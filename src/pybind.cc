@@ -24,9 +24,7 @@ TORCH_LIBRARY(gs_classes, m) {
       .def(torch::init<>())
       .def("load_from_homo", &HeteroGraph::LoadFromHomo)
       .def("get_homo_graph", &HeteroGraph::GetHomoGraph)
-      .def("metapath_random_walk", &HeteroGraph::MetapathRandomWalk)
       .def("metapath_random_walk_fused", &HeteroGraph::MetapathRandomWalkFused);
 }
-
 
 namespace gs {}

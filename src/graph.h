@@ -20,7 +20,7 @@ class Graph : public torch::CustomClassHolder {
   c10::intrusive_ptr<Graph> ColumnwiseSampling(int64_t fanout, bool replace);
   c10::intrusive_ptr<Graph> ColumnwiseFusedSlicingAndSampling(
       torch::Tensor column_ids, int64_t fanout, bool replace);
-  torch::Tensor RowIndices();
+  torch::Tensor RowIndices(bool unique);
   torch::Tensor AllIndices();
   std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> Relabel();
   std::vector<torch::Tensor> MetaData();

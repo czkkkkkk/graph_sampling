@@ -30,6 +30,9 @@ class Matrix(object):
     def all_indices(self) -> torch.Tensor:
         return self._graph.all_indices()
 
+    def row_indices(self, unique: bool = True) -> torch.Tensor:
+        return self._graph.row_indices(unique)
+
     def __getitem__(self, data):
         ret = self._graph
         r_slice = data[0]
@@ -41,3 +44,6 @@ class Matrix(object):
             ret = ret.columnwise_slicing(c_slice)
 
         return Matrix(ret)
+
+    def fused_columnwise_slicing_sampling(self, seeds, fanouts, raplace):
+        return Matrix(self._graph.fused_columnwise_slicing_sampling(seeds, fanouts, raplace))

@@ -2,6 +2,7 @@
 
 #include "./hetero_graph.h"
 #include "cuda/graph_ops.h"
+#include "cuda/heterograph_ops.h"
 
 namespace gs {
 
@@ -29,6 +30,8 @@ void HeteroGraph::LoadFromHomo(
     NodeInfo nodeInfo = {i, 0, {}};
     this->hetero_nodes_.insert(std::make_pair(i, nodeInfo));
   }
+  thrust::host_vector<int64_t*> all_indices_host(this->n_edge_types_);
+  thrust::host_vector<int64_t*> all_indptr_host(this->n_edge_types_);
   for (int64_t i = 0; i < this->n_edge_types_; i++) {
     edge_type_mapping_.insert(std::make_pair(std::get<1>(edge_types.at(i)), i));
     auto graph = edge_relations.at(i).get();
@@ -39,7 +42,12 @@ void HeteroGraph::LoadFromHomo(
         edge_relations.at(i),
         {}};
     hetero_edges_.insert(std::make_pair(i, edge_relation));
+
+    all_indices_host[i] = graph->GetCSC()->indices.data_ptr<int64_t>();
+    all_indptr_host[i] = graph->GetCSC()->indptr.data_ptr<int64_t>();
   }
+  this->all_indices = all_indices_host;
+  this->all_indptr = all_indptr_host;
 }
 
 c10::intrusive_ptr<Graph> HeteroGraph::GetHomoGraph(
@@ -48,64 +56,18 @@ c10::intrusive_ptr<Graph> HeteroGraph::GetHomoGraph(
   return hetero_edges_.at(edge_id).homo_graph;
 }
 
-torch::Tensor HeteroGraph::MetapathRandomWalk(
-    torch::Tensor seeds, const std::vector<std::string>& metapath) {
-  std::vector<torch::Tensor> ret;
-  ret.push_back(seeds);
-  for (std::string path : metapath) {
-    c10::intrusive_ptr<Graph> homo_graph = this->GetHomoGraph(path);
-    auto subA =
-        homo_graph->ColumnwiseSlicing(seeds)->ColumnwiseSampling(1, true);
-    torch::Tensor indptr = subA->GetCSC()->indptr;
-    torch::Tensor indices = subA->GetCSC()->indices;
-    seeds = subA->RowIndices();
-    ret.push_back(seeds);
-  }
-  return torch::stack(ret);
-}
 torch::Tensor HeteroGraph::MetapathRandomWalkFused(
     torch::Tensor seeds, const std::vector<std::string>& metapath) {
   int64_t size = metapath.size();
   std::vector<int64_t> metapath_mapped(size);
-  torch::Tensor homo_indptr_tensor, homo_indice_tensor;
-  std::vector<int64_t> indptr_offset(this->n_edge_types_ + 1);
-  std::vector<int64_t> indice_offset(this->n_edge_types_ + 1);
-  indptr_offset[0] = 0;
-  indice_offset[0] = 0;
-  std::cout << __FILE__ << __LINE__ << std::endl;
-  for (size_t i = 0; i < this->n_edge_types_; i++) {
-    c10::intrusive_ptr<Graph> homograph = hetero_edges_.at(i).homo_graph;
-    std::shared_ptr<CSC> csc = homograph->GetCSC();
-    if (i == 0) {
-      homo_indptr_tensor = csc->indptr.clone();
-      homo_indice_tensor = csc->indices.clone();
-    } else {
-      homo_indptr_tensor = torch::cat({homo_indptr_tensor, csc->indptr});
-      homo_indice_tensor = torch::cat({homo_indice_tensor, csc->indices});
-    }
-    indptr_offset[i + 1] = indptr_offset[i] + csc->indptr.numel();
-    indice_offset[i + 1] = indice_offset[i] + csc->indices.numel();
-  }
-  std::cout << __FILE__ << __LINE__ << std::endl;
-
   for (size_t i = 0; i < size; i++) {
     metapath_mapped[i] = edge_type_mapping_[metapath[i]];
   }
-
   auto opts = torch::TensorOptions().dtype(torch::kInt64).device(torch::kCPU);
-  std::cout << "options:" << opts << std::endl;
   torch::Tensor metapath_tensor =
       torch::from_blob(metapath_mapped.data(), size, opts).to(torch::kCUDA);
-  torch::Tensor homo_indptr_offset =
-      torch::from_blob(indptr_offset.data(), indptr_offset.size(), opts)
-          .to(torch::kCUDA);
-  torch::Tensor homo_indice_offset =
-      torch::from_blob(indice_offset.data(), indice_offset.size(), opts)
-          .to(torch::kCUDA);
-  std::cout << __FILE__ << __LINE__ << std::endl;
   torch::Tensor paths = impl::MetapathRandomWalkFusedCUDA(
-      seeds, metapath_tensor, homo_indptr_tensor, homo_indice_tensor,
-      homo_indptr_offset, homo_indice_offset);
-  return paths.reshape({seeds.numel(), -1});
+      seeds, metapath_tensor, this->all_indices, this->all_indptr);
+  return paths;
 }
 }  // namespace gs

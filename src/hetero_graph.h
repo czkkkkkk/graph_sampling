@@ -1,10 +1,11 @@
 #ifndef GS_HETERO_GRAP_H_
 #define GS_HETERO_GRAP_H_
 
+#include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
 #include <torch/custom_class.h>
 #include <torch/script.h>
 #include <string>
-
 #include "./graph.h"
 
 namespace gs {
@@ -49,10 +50,6 @@ class HeteroGraph : public torch::CustomClassHolder {
 
   c10::intrusive_ptr<Graph> GetHomoGraph(const std::string& edge_type) const;
 
-  // TODO
-  torch::Tensor MetapathRandomWalk(torch::Tensor seeds,
-                                   const std::vector<std::string>& metapath);
-
   torch::Tensor MetapathRandomWalkFused(
       torch::Tensor seeds, const std::vector<std::string>& metapath);
 
@@ -61,6 +58,7 @@ class HeteroGraph : public torch::CustomClassHolder {
   std::map<std::string, int64_t> node_type_mapping_, edge_type_mapping_;
   std::map<int64_t, EdgeRelation> hetero_edges_;
   std::map<int64_t, NodeInfo> hetero_nodes_;
+  thrust::device_vector<int64_t*> all_indices, all_indptr;
 };
 
 }  // namespace gs
