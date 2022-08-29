@@ -20,14 +20,13 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("all_indices", &Graph::AllIndices)
       .def("relabel", &Graph::Relabel)
       .def("_CAPI_metadata", &Graph::MetaData);
-}
-
-TORCH_LIBRARY(gs_classes, m) {
   m.class_<HeteroGraph>("HeteroGraph")
       .def(torch::init<>())
       .def("load_from_homo", &HeteroGraph::LoadFromHomo)
       .def("get_homo_graph", &HeteroGraph::GetHomoGraph)
-      .def("metapath_random_walk", &HeteroGraph::MetapathRandomWalk);
+      .def("metapath_random_walk", &HeteroGraph::MetapathRandomWalk)
+      .def("metapath_random_walk_fused", &HeteroGraph::MetapathRandomWalkFused);
 }
+
 
 namespace gs {}

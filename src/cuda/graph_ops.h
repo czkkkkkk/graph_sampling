@@ -8,6 +8,12 @@
 namespace gs {
 namespace impl {
 
+template<typename IdType>
+  struct GraphKernelData {
+    const IdType *in_ptr;
+    const IdType *in_cols;
+  };
+
 std::pair<torch::Tensor, torch::Tensor> CSCColumnwiseSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids);
 
@@ -24,6 +30,14 @@ CSCColumnwiseFusedSlicingAndSamplingCUDA(torch::Tensor indptr,
                                          torch::Tensor indices,
                                          torch::Tensor column_ids,
                                          int64_t fanout, bool replace);
+
+torch::Tensor MetapathRandomWalkFusedCUDA(torch::Tensor seeds,
+  torch::Tensor metapath,
+  torch::Tensor homo_indptr_tensor,
+  torch::Tensor homo_indice_tensor, 
+  torch::Tensor homo_indptr_offset_tensor,
+  torch::Tensor homo_indices_offset_tensor);
+
 
 }  // namespace impl
 }  // namespace gs

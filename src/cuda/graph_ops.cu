@@ -1,5 +1,4 @@
 #include "graph_ops.h"
-
 #include <curand_kernel.h>
 #include <nvToolsExt.h>
 #include "cuda_common.h"
@@ -7,6 +6,8 @@
 
 namespace gs {
 namespace impl {
+
+
 
 template <typename IdType>
 torch::Tensor GetSubIndptr(torch::Tensor indptr, torch::Tensor column_ids) {
@@ -243,12 +244,86 @@ CSCColumnwiseFusedSlicingAndSamplingCUDA(torch::Tensor indptr,
                                          torch::Tensor indices,
                                          torch::Tensor column_ids,
                                          int64_t fanout, bool replace) {
-  auto sub_indptr =
-      GetSampledSubIndptrFused<int64_t>(indptr, column_ids, fanout, replace);
+  auto sub_indptr = GetSampledSubIndptrFused<int64_t>(indptr, column_ids, fanout, replace);
   auto sub_indices = SampleSubIndicesFused<int64_t>(indptr, indices, sub_indptr,
                                                     column_ids, replace);
   return {sub_indptr, sub_indices};
 }
 
+template<int BLOCK_SIZE, int TILE_SIZE>
+__global__ void _RandomWalkKernel(
+    const int64_t* seed_data, const int64_t num_seeds,
+    const int64_t* metapath_data, const uint64_t max_num_steps,
+    int64_t* homo_indptr,
+    int64_t* homo_indice, 
+    int64_t* homo_indptr_offsets,
+    int64_t* homo_indices_offsets,
+    int64_t *out_traces_data) {
+  int64_t idx = blockIdx.x * TILE_SIZE + threadIdx.x;
+  int64_t last_idx = min(static_cast<int64_t>(blockIdx.x + 1) * TILE_SIZE, num_seeds);
+  int64_t trace_length = (max_num_steps + 1);
+  curandState rng;
+  uint64_t rand_seed = 7777777;
+  curand_init(rand_seed + idx, 0, 0, &rng);
+
+  while (idx < last_idx) {  
+    int64_t curr = seed_data[idx];
+    int64_t *traces_data_ptr = &out_traces_data[idx * trace_length];
+    *(traces_data_ptr++) = curr;
+    int64_t step_idx;
+    for (step_idx = 0; step_idx < max_num_steps; ++step_idx) {
+      int64_t metapath_id = metapath_data[step_idx];
+      int64_t indptr_offset = homo_indptr_offsets[metapath_id];
+      int64_t indices_offset = homo_indices_offsets[metapath_id]; 
+      const int64_t in_row_start = homo_indptr[indptr_offset+curr];
+      const int64_t deg = homo_indptr[indptr_offset+ curr + 1] - homo_indptr[indptr_offset+curr];
+      if (deg == 0) {  // the degree is zero
+        break;
+      }
+      const int64_t num = curand(&rng) % deg;
+      int64_t pick = homo_indice[indices_offset + in_row_start + num];
+      *traces_data_ptr = pick;
+      ++traces_data_ptr; 
+      curr = pick;
+    }
+    for (; step_idx < max_num_steps; ++step_idx) {
+      *(traces_data_ptr++) = -1;
+    }
+    idx += BLOCK_SIZE;
+  }
+}
+//not implemented
+torch::Tensor MetapathRandomWalkFusedCUDA(torch::Tensor seeds,
+  torch::Tensor metapath,
+  torch::Tensor homo_indptr_tensor,
+  torch::Tensor homo_indice_tensor, 
+  torch::Tensor homo_indptr_offset_tensor,
+  torch::Tensor homo_indices_offset_tensor){
+    const int64_t *seed_data = seeds.data_ptr<int64_t>(); 
+    const int64_t num_seeds = seeds.numel();
+    const int64_t* metapath_data = metapath.data_ptr<int64_t>(); 
+    const uint64_t max_num_steps = metapath.numel();
+    int64_t* homo_indptr = homo_indptr_tensor.data_ptr<int64_t>();
+    int64_t* homo_indice = homo_indice_tensor.data_ptr<int64_t>();
+    int64_t* homo_indptr_offsets = homo_indptr_offset_tensor.data_ptr<int64_t>();
+    int64_t* homo_indices_offsets = homo_indices_offset_tensor.data_ptr<int64_t>();
+    int64_t outsize = num_seeds*(max_num_steps+1);
+    torch::Tensor out_traces_tensor = torch::full({outsize,},-1, seeds.options()).to(torch::kCUDA);
+    int64_t *out_traces_data = out_traces_tensor.data_ptr<int64_t>();
+    constexpr int BLOCK_SIZE = 256;
+    constexpr int TILE_SIZE = BLOCK_SIZE * 4;
+    dim3 block(256);
+    dim3 grid((num_seeds + TILE_SIZE - 1) / TILE_SIZE);
+    std::cout<<__FILE__<<__LINE__<<std::endl;
+    _RandomWalkKernel<BLOCK_SIZE ,TILE_SIZE><<<grid,block>>>(seed_data,num_seeds,
+      metapath_data,max_num_steps,
+      homo_indptr,
+      homo_indice,
+      homo_indptr_offsets,
+      homo_indices_offsets,
+      out_traces_data);
+      std::cout<<__FILE__<<__LINE__<<std::endl;
+  return out_traces_tensor;
+    }
 }  // namespace impl
 }  // namespace gs

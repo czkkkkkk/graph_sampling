@@ -43,7 +43,12 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
   return ret;
 }
 
-torch::Tensor Graph::RowIndices() { return torch::Tensor(); }
+torch::Tensor Graph::RowIndices() {
+  if (this->csc_->indices.size(0) == 1) {
+    return this->csc_->indices.clone();
+  }
+  return TensorUnique(this->csc_->indices);
+}
 
 /**
  * @brief Returns the set of all nodes of the graph. Nodes in return tensor are
