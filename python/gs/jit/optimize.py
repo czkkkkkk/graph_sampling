@@ -94,3 +94,26 @@ def merge_relabel_and_all_indices(gm: fx.GraphModule) -> fx.GraphModule:
     # remove dead code
     gm = dce(gm)
     return gm
+
+
+def fuse_slicing_and_sampling(gm):
+    """
+    Fuses columnwise_slicing and columnwise_sampling
+    """
+    for node in gm.graph.nodes:
+        if node.target == 'columnwise_sampling' and node.args[
+                0].target == 'columnwise_slicing':
+            if len(node.args[0].users) > 1:
+                continue
+            with gm.graph.inserting_after(node):
+                new_node = gm.graph.call_method(
+                    'fused_columnwise_slicing_sampling',
+                    args=(
+                        *node.args[0].args,
+                        *node.args[1:],
+                    ))
+                node.replace_all_uses_with(new_node)
+
+    # remove dead code
+    gm = dce(gm)
+    return gm
