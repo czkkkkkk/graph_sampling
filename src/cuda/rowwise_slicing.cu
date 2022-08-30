@@ -106,7 +106,7 @@ __global__ void _CSCRowwiseSlicinigQueryKernel(
 
   IdType out_row = blockIdx.x * TILE_SIZE + threadIdx.y;
   IdType last_row =
-      MIN(static_cast<IdType>(blockDim.x + 1) * TILE_SIZE, num_items);
+      MIN(static_cast<IdType>(blockIdx.x + 1) * TILE_SIZE, num_items);
 
   int warp_id = threadIdx.y;
   int laneid = threadIdx.x;
