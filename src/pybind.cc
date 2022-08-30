@@ -23,6 +23,9 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_metadata", &Graph::MetaData);
 }
 
-TORCH_LIBRARY(gs_ops, m) { m.def("list_sampling", &ListSampling); }
+TORCH_LIBRARY(gs_ops, m) {
+  m.def("list_sampling", &ListSampling);
+  m.def("list_sampling_with_probs", &ListSamplingProbs);
+}
 
 namespace gs {}

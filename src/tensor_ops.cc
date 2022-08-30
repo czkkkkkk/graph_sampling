@@ -7,4 +7,12 @@ std::tuple<torch::Tensor, torch::Tensor> ListSampling(torch::Tensor data,
                                                       bool replace) {
   return impl::ListSamplingCUDA(data, num_picks, replace);
 }
+
+std::tuple<torch::Tensor, torch::Tensor> ListSamplingProbs(torch::Tensor data,
+                                                           torch::Tensor probs,
+                                                           int64_t num_picks,
+                                                           bool replace) {
+  return impl::ListSamplingProbsCUDA(data, probs, num_picks, replace);
+}
+
 }  // namespace gs

@@ -9,8 +9,11 @@ namespace gs {
 namespace impl {
 
 std::tuple<torch::Tensor, torch::Tensor> ListSamplingCUDA(torch::Tensor data,
-                                                      int64_t num_picks,
-                                                      bool replace);
+                                                          int64_t num_picks,
+                                                          bool replace);
+
+std::tuple<torch::Tensor, torch::Tensor> ListSamplingProbsCUDA(
+    torch::Tensor data, torch::Tensor probs, int64_t num_picks, bool replace);
 
 }  // namespace impl
 }  // namespace gs
