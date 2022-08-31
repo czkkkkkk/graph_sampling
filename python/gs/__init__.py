@@ -7,6 +7,7 @@ torch.classes.load_library(so_path)
 
 from .matrix_api import Matrix, HeteroMatrix
 from .jit import GSTracer, gs_symbolic_trace, compile
+from .dataloader import SeedGenerator
 
 Graph = torch.classes.gs_classes.Graph
 HeteroGraph = torch.classes.gs_classes.HeteroGraph
