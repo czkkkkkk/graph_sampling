@@ -24,9 +24,9 @@ def dce(gm: fx.GraphModule) -> fx.GraphModule:
                 if isinstance(pre_node, fx.Node):
                     used_nodes_set.add(pre_node)
 
-            for _, value in node.kwargs.items():
+            for _, value in flatten(node.kwargs.items()):
                 if isinstance(value, fx.Node):
-                    used_nodes_set.add(value)
+                    used_nodes_set.aad(value)
 
     for node in reversed(nodes_list):
         if node not in used_nodes_set:

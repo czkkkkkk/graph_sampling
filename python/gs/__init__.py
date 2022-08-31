@@ -1,4 +1,3 @@
-import imp
 import torch
 import os
 
@@ -8,6 +7,5 @@ torch.classes.load_library(so_path)
 
 from .matrix_api import Matrix
 from .jit import GSTracer, gs_symbolic_trace, compile
-from .dataloader import SeedGenerator
 
 Graph = torch.classes.gs_classes.Graph

@@ -1,9 +1,7 @@
 import torch
 from torch.fx import Proxy
 import dgl
-from dgl import DGLHeteroGraph, create_block
-
-torch.fx.wrap('create_block')
+from dgl import DGLHeteroGraph
 
 
 class Matrix(object):
@@ -22,12 +20,6 @@ class Matrix(object):
         csc_indptr = torch.tensor(csc.indptr).long().cuda()
         csc_indices = torch.tensor(csc.indices).long().cuda()
         self._graph.load_csc(csc_indptr, csc_indices)
-
-    def to_dgl_block(self):
-        unique_tensor, csc_indptr, csc_indices = self._graph.relabel()
-        return create_block(('csc', (csc_indptr, csc_indices, [])),
-                            num_src_nodes=unique_tensor.numel(),
-                            num_dst_nodes=csc_indptr.numel() - 1)
 
     def columnwise_slicing(self, t):
         return Matrix(self._graph.columnwise_slicing(t))
