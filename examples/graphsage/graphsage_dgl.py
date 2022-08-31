@@ -9,18 +9,15 @@ import numpy as np
 
 device = torch.device('cuda:%d' % 0)
 
-# dataset = load_graph.load_reddit()
-dataset = load_graph.load_custom_reddit(
-    "/home/ubuntu/NextDoorEval/NextDoor/input/reddit.data")
+dataset = load_graph.load_reddit()
 dgl_graph = dataset[0]
 g = dgl_graph.long()
 g = g.formats(['csc'])
 g = g.to("cuda")
-# seeds = torch.arange(0, 5000).long().cuda()
-seeds = dgl_graph.nodes().cuda()
+seeds = torch.arange(0, 5000).long().cuda()
 
 
-def graphsage_baseline(g: dgl.DGLGraph, seeds, fan_out):
+def graphsage_baseline(g, seeds, fan_out):
     output_nodes = seeds
     seed_nodes = seeds
     blocks = []
@@ -31,6 +28,7 @@ def graphsage_baseline(g: dgl.DGLGraph, seeds, fan_out):
         block.edata['_ID'] = eid
         seed_nodes = block.srcdata['_ID']
         blocks.insert(0, block)
+
     return seed_nodes, output_nodes, blocks
 
 
@@ -39,19 +37,19 @@ def graphsage_baseline(g: dgl.DGLGraph, seeds, fan_out):
 
 def bench(func, args):
     time_list = []
-    for i in range(10):
-        # torch.cuda.synchronize()
-        # begin = time.time()
+    for i in range(100):
+        torch.cuda.synchronize()
+        begin = time.time()
 
         ret = func(*args)
 
-        # torch.cuda.synchronize()
-        # end = time.time()
+        torch.cuda.synchronize()
+        end = time.time()
 
-        # time_list.append(end - begin)
+        time_list.append(end - begin)
 
     print("dgl graphsage sampling AVG:",
-          np.mean(time_list[3:]), " s.")
+          np.mean(time_list[10:]) * 1000, " ms.")
 
 
 bench(graphsage_baseline, args=(

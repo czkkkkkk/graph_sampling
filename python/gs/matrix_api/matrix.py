@@ -1,7 +1,9 @@
 import torch
 from torch.fx import Proxy
 import dgl
-from dgl import DGLHeteroGraph
+from dgl import DGLHeteroGraph, create_block
+
+torch.fx.wrap('create_block')
 
 
 class Matrix(object):
@@ -21,11 +23,20 @@ class Matrix(object):
         csc_indices = torch.tensor(csc.indices).long().cuda()
         self._graph.load_csc(csc_indptr, csc_indices)
 
+    def to_dgl_block(self):
+        unique_tensor, csc_indptr, csc_indices = self._graph.relabel()
+        return create_block(('csc', (csc_indptr, csc_indices, [])),
+                            num_src_nodes=unique_tensor.numel(),
+                            num_dst_nodes=csc_indptr.numel() - 1)
+
     def columnwise_slicing(self, t):
         return Matrix(self._graph.columnwise_slicing(t))
 
     def columnwise_sampling(self, fanout, replace=True):
         return Matrix(self._graph.columnwise_sampling(fanout, replace))
+
+    def row_indices(self) -> torch.Tensor:
+        return self._graph.row_indices()
 
     def all_indices(self) -> torch.Tensor:
         return self._graph.all_indices()
@@ -34,10 +45,11 @@ class Matrix(object):
         ret = self._graph
         r_slice = data[0]
         c_slice = data[1]
-        if isinstance(r_slice, Proxy) or isinstance(r_slice, torch.Tensor):
-            ret = ret.columnwise_slicing(r_slice)
 
         if isinstance(c_slice, Proxy) or isinstance(c_slice, torch.Tensor):
             ret = ret.columnwise_slicing(c_slice)
+
+        if isinstance(r_slice, Proxy) or isinstance(r_slice, torch.Tensor):
+            ret = ret.rowwise_slicing(r_slice)
 
         return Matrix(ret)
