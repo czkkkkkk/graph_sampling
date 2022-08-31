@@ -17,36 +17,17 @@ from dgl import DGLHeteroGraph, create_block
 
 device = torch.device('cuda')
 time_list = []
-batch_time = 0
 
 
 def graphsage_sampler(A: gs.Matrix, seeds: torch.Tensor, fanouts: list):
-    global batch_time
-    # torch.cuda.nvtx.range_push('graphsage sampler func')
     output_nodes = seeds
     ret = []
     for fanout in fanouts:
-        # torch.cuda.nvtx.range_push('fused slicing_sampling')
-        torch.cuda.synchronize()
-        start = time.time()
-        # subA = gs.Matrix(A._graph.fused_columnwise_slicing_sampling(
-        #     seeds, fanout, True))
-        # torch.cuda.nvtx.range_pop()
         subA = A[:, seeds]
         subA = subA.columnwise_sampling(fanout, True)
-        torch.cuda.synchronize()
-        batch_time += time.time() - start
-        # torch.cuda.nvtx.range_push('relabel')
-        unique_tensor, csc_indptr, csc_indices = subA._graph.relabel()
-        seeds = unique_tensor
-        # torch.cuda.nvtx.range_pop()
-        # torch.cuda.nvtx.range_push('to dgl block')
-        ret.insert(0, create_block(('csc', (csc_indptr, csc_indices, [])),
-                                   num_src_nodes=unique_tensor.numel(),
-                                   num_dst_nodes=csc_indptr.numel() - 1))
-        # torch.cuda.nvtx.range_pop()
+        seeds = subA.all_indices()
+        ret.insert(0, subA.to_dgl_block())
     input_nodes = seeds
-    # torch.cuda.nvtx.range_pop()
     return input_nodes, output_nodes, ret
 
 
@@ -152,10 +133,9 @@ def train(g, dataset, feat_device):
     m = gs.Matrix(gs.Graph(False))
     m.load_dgl_graph(g)
     print("Check load successfully:", m._graph._CAPI_metadata(), '\n')
-    # compiled_func = gs.jit.compile(
-    #     func=graphsage_sampler, args=(m, torch.Tensor(), [25, 10]))
-    # compiled_func.gm = dce(slicing_and_sampling_fuse(compiled_func.gm))
-    compiled_func = graphsage_sampler
+    compiled_func = gs.jit.compile(
+        func=graphsage_sampler, args=(m, torch.Tensor(), [25, 10]))
+    compiled_func.gm = dce(slicing_and_sampling_fuse(compiled_func.gm))
     train_seedloader = SeedGenerator(
         train_idx, batch_size=1024, shuffle=True, drop_last=False)
     val_seedloader = SeedGenerator(
@@ -166,8 +146,8 @@ def train(g, dataset, feat_device):
     n_epoch = 10
 
     for epoch in range(n_epoch):
-        # torch.cuda.synchronize()
-        # start = time.time()
+        torch.cuda.synchronize()
+        start = time.time()
         model.train()
         total_loss = 0
         for it, seeds in enumerate(train_seedloader):
@@ -185,12 +165,8 @@ def train(g, dataset, feat_device):
                        val_seedloader, features, labels)
         print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
               .format(epoch, total_loss / (it+1), acc.item()))
-        # torch.cuda.synchronize()
-        # time_list.append(time.time() - start)
-        global batch_time
-        time_list.append(batch_time)
-        batch_time = 0
-        print(torch.cuda.max_memory_reserved() / (1024 * 1024 * 1024), 'GB')
+        torch.cuda.synchronize()
+        time_list.append(time.time() - start)
 
     print('Average epoch time:', np.mean(time_list[3:]))
 
@@ -209,7 +185,7 @@ if __name__ == '__main__':
     feat_device = args.fmode
     # load and preprocess dataset
     print('Loading data')
-    g, features, labels, n_classes, splitted_idx = load_custom_reddit()
+    g, features, labels, n_classes, splitted_idx = load_reddit()
     g = g.to('cuda')
     train_mask, val_mask, test_mask = splitted_idx['train'], splitted_idx['val'], splitted_idx['test']
     train_idx = train_mask.to(device)
