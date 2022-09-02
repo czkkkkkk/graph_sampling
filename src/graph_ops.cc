@@ -1,7 +1,5 @@
 #include "./graph_ops.h"
 
-#include <iostream>
-
 #include "cuda/graph_ops.h"
 
 namespace gs {
