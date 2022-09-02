@@ -9,11 +9,6 @@ import os
 import numpy as np
 
 
-libgraphPath = '/home/ubuntu/gs-experiments/nextdoor-dgl/libgraph.so'
-libgraph = CDLL(libgraphPath)
-libgraph.loadgraph.argtypes = [c_char_p]
-
-
 def load_reddit():
     data = RedditDataset(self_loop=True)
     g = data[0]
@@ -43,6 +38,9 @@ def load_ogbn_products():
 
 
 def load_custom_reddit():
+    libgraphPath = '/home/ubuntu/gs-experiments/graphsage/libgraph.so'
+    libgraph = CDLL(libgraphPath)
+    libgraph.loadgraph.argtypes = [c_char_p]
     filename = "/home/ubuntu/NextDoorEval/NextDoor/input/reddit.data"
     if not os.path.exists(filename):
         raise Exception("'%s' do not exist" % (filename))

@@ -4,6 +4,7 @@
 #include <nvToolsExt.h>
 #include "atomic.h"
 #include "cuda_common.h"
+#include "sampling_utils.h"
 #include "utils.h"
 
 namespace gs {
