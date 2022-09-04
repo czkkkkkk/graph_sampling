@@ -11,7 +11,7 @@ import numpy as np
 import time
 import tqdm
 import argparse
-from load_graph import load_custom_reddit, load_reddit
+from load_graph import load_reddit
 from dgl import DGLHeteroGraph, create_block
 
 
