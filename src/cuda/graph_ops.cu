@@ -73,5 +73,11 @@ std::pair<torch::Tensor, torch::Tensor> CSCColumnwiseSlicingCUDA(
   return {sub_indptr, sub_indices};
 }
 
+std::pair<torch::Tensor, torch::Tensor> NormalizeCUDA(torch::Tensor indptr,
+                                                      torch::Tensor indices) {
+  int64_t size = indptr.numel() - 1;
+  // auto ind_sum = 
+}
+
 }  // namespace impl
 }  // namespace gs

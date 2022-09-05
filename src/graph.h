@@ -1,8 +1,6 @@
 #ifndef GS_GRAPH_H_
 #define GS_GRAPH_H_
 
-#include "./logging.h"
-
 #include <torch/custom_class.h>
 #include <torch/script.h>
 
@@ -22,6 +20,7 @@ class Graph : public torch::CustomClassHolder {
   c10::intrusive_ptr<Graph> ColumnwiseSampling(int64_t fanout, bool replace);
   c10::intrusive_ptr<Graph> ColumnwiseFusedSlicingAndSampling(
       torch::Tensor column_ids, int64_t fanout, bool replace);
+  c10::intrusive_ptr<Graph> Normalize(int axis);
   torch::Tensor RowIndices();
   torch::Tensor AllIndices();
   std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> Relabel();

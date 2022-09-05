@@ -25,6 +25,9 @@ CSCColumnwiseFusedSlicingAndSamplingCUDA(torch::Tensor indptr,
                                          torch::Tensor column_ids,
                                          int64_t fanout, bool replace);
 
+std::pair<torch::Tensor, torch::Tensor> NormalizeCUDA(torch::Tensor indptr,
+                                                      torch::Tensor indices);
+
 }  // namespace impl
 }  // namespace gs
 

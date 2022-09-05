@@ -34,6 +34,18 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphRelabel(
   return std::make_tuple(frontier, relabeled_indptr, relabeled_indices);
 }
 
+std::shared_ptr<CSC> GraphNormalize(std::shared_ptr<CSC> csc) {
+  if (csc->indptr.device().type() == torch::kCUDA) {
+    torch::Tensor sub_indptr, sub_indices;
+    // std::tie(sub_indptr, sub_indices) = impl::NormalizeCUDA(
+    //     csc->indptr, csc->indices, fanout, replace);
+    return std::make_shared<CSC>(CSC{csc->col_ids, sub_indptr, sub_indices});
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return std::make_shared<CSC>(CSC{});
+  }
+}
+
 std::shared_ptr<CSC> CSCColumnwiseSampling(std::shared_ptr<CSC> csc,
                                            int64_t fanout, bool replace) {
   if (csc->indptr.device().type() == torch::kCUDA) {

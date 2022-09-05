@@ -11,7 +11,7 @@ void Graph::LoadCSC(torch::Tensor indptr, torch::Tensor indices) {
   csc_->indptr = indptr;
   csc_->indices = indices;
   LOG(INFO) << "Loaded CSC with " << indptr.size(0) - 1 << " nodes and "
-               << indices.size(0) << " edges";
+            << indices.size(0) << " edges";
 }
 
 void Graph::LoadCSCWithColIds(torch::Tensor column_ids, torch::Tensor indptr,
@@ -44,6 +44,17 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(true)));
   ret->SetCSC(
       CSCColumnwiseFusedSlicingAndSampling(csc_, column_ids, fanout, replace));
+  return ret;
+}
+
+c10::intrusive_ptr<Graph> Graph::Normalize(int axis) {
+  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(true)));
+  assertm(axis == 0 || axis == 1, "axis should be 0 or 1");
+  if (axis == 0) {
+    ret->SetCSC(GraphNormalize(csc_));
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+  }
   return ret;
 }
 
