@@ -14,6 +14,7 @@ std::shared_ptr<CSC> CSCColumnwiseSlicing(std::shared_ptr<CSC> csc,
     return std::make_shared<CSC>(CSC{column_ids, sub_indptr, sub_indices});
   } else {
     LOG(FATAL) << "Not implemented warning";
+    return std::make_shared<CSC>(CSC{});
   }
 }
 
@@ -22,6 +23,7 @@ torch::Tensor TensorUnique(torch::Tensor node_ids) {
     return impl::TensorUniqueCUDA(node_ids);
   } else {
     LOG(FATAL) << "Not implemented warning";
+    return torch::Tensor();
   }
 }
 
@@ -42,6 +44,7 @@ std::shared_ptr<CSC> CSCColumnwiseSampling(std::shared_ptr<CSC> csc,
     return std::make_shared<CSC>(CSC{csc->col_ids, sub_indptr, sub_indices});
   } else {
     LOG(FATAL) << "Not implemented warning";
+    return std::make_shared<CSC>(CSC{});
   }
 }
 
@@ -63,6 +66,7 @@ std::shared_ptr<CSC> CSCColumnwiseFusedSlicingAndSampling(
     }
   } else {
     LOG(FATAL) << "Not implemented warning";
+    return std::make_shared<CSC>(CSC{});
   }
 }
 

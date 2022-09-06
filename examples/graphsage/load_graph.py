@@ -2,7 +2,6 @@ import dgl
 import torch
 from dgl.data import RedditDataset
 from ogb.nodeproppred import DglNodePropPredDataset
-import scipy.sparse as sp
 
 
 def load_reddit():
