@@ -24,7 +24,15 @@ void Graph::LoadCSCWithColIds(torch::Tensor column_ids, torch::Tensor indptr,
 
 std::shared_ptr<CSC> Graph::GetCSC() { return csc_; }
 
+std::shared_ptr<CSR> Graph::GetCSR() { return csr_; }
+
+std::shared_ptr<COO> Graph::GetCOO() { return coo_; }
+
 void Graph::SetCSC(std::shared_ptr<CSC> csc) { csc_ = csc; }
+
+void Graph::SetCSR(std::shared_ptr<CSR> csr) { csr_ = csr; }
+
+void Graph::SetCOO(std::shared_ptr<COO> coo) { coo_ = coo; }
 
 c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_ids) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(true)));
@@ -47,16 +55,21 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
   return ret;
 }
 
-c10::intrusive_ptr<Graph> Graph::Normalize(int axis) {
-  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(true)));
-  assertm(axis == 0 || axis == 1, "axis should be 0 or 1");
-  if (axis == 0) {
-    ret->SetCSC(GraphNormalize(csc_));
-  } else {
-    LOG(FATAL) << "Not implemented warning";
-  }
-  return ret;
+void Graph::CSC2CSR() {
+  SetCOO(GraphCSC2COO(csc_));
+  SetCSR(GraphCOO2CSR(coo_));
 }
+
+// c10::intrusive_ptr<Graph> Graph::Normalize(int axis) {
+//   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new
+//   Graph(true))); assertm(axis == 0 || axis == 1, "axis should be 0 or 1"); if
+//   (axis == 0) {
+//     ret->SetCSC(GraphNormalize(csc_));
+//   } else {
+//     LOG(FATAL) << "Not implemented warning";
+//   }
+//   return ret;
+// }
 
 torch::Tensor Graph::RowIndices() { return torch::Tensor(); }
 

@@ -22,7 +22,9 @@ std::shared_ptr<CSC> CSCColumnwiseFusedSlicingAndSampling(
     std::shared_ptr<CSC> csc, torch::Tensor column_ids, int64_t fanout,
     bool replace);
 
-std::shared_ptr<CSC> GraphNormalize(std::shared_ptr<CSC> csc);
+std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc);
+
+std::shared_ptr<CSR> GraphCOO2CSR(std::shared_ptr<COO> coo);
 
 }  // namespace gs
 

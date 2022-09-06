@@ -12,7 +12,17 @@ struct CSC {
   torch::Tensor col_ids;
   torch::Tensor indptr;
   torch::Tensor indices;
-  torch::Tensor data;
+};
+
+struct CSR {
+  torch::Tensor row_ids;
+  torch::Tensor indptr;
+  torch::Tensor indices;
+};
+
+struct COO {
+  torch::Tensor row;
+  torch::Tensor col;
 };
 
 }  // namespace gs

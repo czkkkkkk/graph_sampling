@@ -4,6 +4,30 @@
 
 namespace gs {
 
+std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc) {
+  if (csc->indptr.device().type() == torch::kCUDA) {
+    torch::Tensor row, col;
+    std::tie(row, col) =
+        impl::GraphCSC2COOCUDA(csc->indptr, csc->indices, csc->col_ids);
+    return std::make_shared<COO>(COO{row, col});
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return std::make_shared<COO>(COO{});
+  }
+}
+
+std::shared_ptr<CSR> GraphCOO2CSR(std::shared_ptr<COO> coo) {
+  if (coo->row.device().type() == torch::kCUDA) {
+    torch::Tensor row_ids, indptr, indices;
+    std::tie(row_ids, indptr, indices) =
+        impl::GraphCOO2CSRCUDA(coo->row, coo->col);
+    return std::make_shared<CSR>(CSR{row_ids, indptr, indices});
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return std::make_shared<CSR>(CSR{});
+  }
+}
+
 std::shared_ptr<CSC> CSCColumnwiseSlicing(std::shared_ptr<CSC> csc,
                                           torch::Tensor column_ids) {
   if (csc->indptr.device().type() == torch::kCUDA) {
@@ -32,18 +56,6 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphRelabel(
   std::tie(frontier, relabeled_indices) = impl::RelabelCUDA(col_ids, indices);
   relabeled_indptr = indptr.clone();
   return std::make_tuple(frontier, relabeled_indptr, relabeled_indices);
-}
-
-std::shared_ptr<CSC> GraphNormalize(std::shared_ptr<CSC> csc) {
-  if (csc->indptr.device().type() == torch::kCUDA) {
-    torch::Tensor sub_indptr, sub_indices;
-    // std::tie(sub_indptr, sub_indices) = impl::NormalizeCUDA(
-    //     csc->indptr, csc->indices, fanout, replace);
-    return std::make_shared<CSC>(CSC{csc->col_ids, sub_indptr, sub_indices});
-  } else {
-    LOG(FATAL) << "Not implemented warning";
-    return std::make_shared<CSC>(CSC{});
-  }
 }
 
 std::shared_ptr<CSC> CSCColumnwiseSampling(std::shared_ptr<CSC> csc,
