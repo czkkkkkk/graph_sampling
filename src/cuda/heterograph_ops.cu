@@ -47,16 +47,16 @@ std::pair<torch::Tensor, torch::Tensor> CSCColumnwiseSamplingOneKeepDimCUDA(
   return {sub_indptr, sub_indices};
 }
 
-template <int BLOCK_SIZE, int TILE_SIZE>
+template <int BLOCK_SIZE>
 __global__ void _RandomWalkKernel(const int64_t* seed_data,
                                   const int64_t num_seeds,
                                   const int64_t* metapath_data,
                                   const uint64_t max_num_steps,
                                   int64_t** all_indices, int64_t** all_indptr,
                                   int64_t* out_traces_data) {
-  int64_t idx = blockIdx.x * TILE_SIZE + threadIdx.x;
+  int64_t idx = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   int64_t last_idx =
-      min(static_cast<int64_t>(blockIdx.x + 1) * TILE_SIZE, num_seeds);
+      min(static_cast<int64_t>(blockIdx.x + 1) * BLOCK_SIZE, num_seeds);
   int64_t trace_length = (max_num_steps + 1);
   curandState rng;
   uint64_t rand_seed = 7777777;
@@ -101,12 +101,11 @@ torch::Tensor MetapathRandomWalkFusedCUDA(
 
   int64_t* out_traces_data = out_traces_tensor.data_ptr<int64_t>();
   constexpr int BLOCK_SIZE = 256;
-  constexpr int TILE_SIZE = BLOCK_SIZE * 4;
-  dim3 block(256);
-  dim3 grid((num_seeds + TILE_SIZE - 1) / TILE_SIZE);
+  dim3 block(BLOCK_SIZE);
+  dim3 grid((num_seeds + BLOCK_SIZE - 1) / BLOCK_SIZE);
   int64_t** all_indices_ptr = thrust::raw_pointer_cast(all_indices.data());
   int64_t** all_indptr_ptr = thrust::raw_pointer_cast(all_indptr.data());
-  _RandomWalkKernel<BLOCK_SIZE, TILE_SIZE><<<grid, block>>>(
+  _RandomWalkKernel<BLOCK_SIZE><<<grid, block>>>(
       seeds.data_ptr<int64_t>(), num_seeds, metapath_data, max_num_steps,
       all_indices_ptr, all_indptr_ptr, out_traces_data);
   return out_traces_tensor.reshape({seeds.numel(), -1});

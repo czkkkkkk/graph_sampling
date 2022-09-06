@@ -1,13 +1,10 @@
-#include "graph_ops.h"
-#include <curand_kernel.h>
 #include <nvToolsExt.h>
 #include "cuda_common.h"
+#include "graph_ops.h"
 #include "utils.h"
 
 namespace gs {
 namespace impl {
-
-
 
 template <typename IdType>
 torch::Tensor GetSubIndptr(torch::Tensor indptr, torch::Tensor column_ids) {

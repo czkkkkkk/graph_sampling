@@ -1,8 +1,6 @@
 #ifndef GS_CUDA_HETEROGRAPH_OPS_H_
 #define GS_CUDA_HETEROGRAPH_OPS_H_
 
-#include <cuda.h>
-#include <cuda_runtime.h>
 #include <thrust/device_vector.h>
 #include <torch/torch.h>
 
