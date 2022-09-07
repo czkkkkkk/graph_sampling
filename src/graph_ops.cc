@@ -17,6 +17,18 @@ std::shared_ptr<CSC> CSCColumnwiseSlicing(std::shared_ptr<CSC> csc,
   }
 }
 
+std::shared_ptr<CSC> CSCRowwiseSlicing(std::shared_ptr<CSC> csc,
+                                       torch::Tensor row_ids) {
+  if (csc->indptr.device().type() == torch::kCUDA) {
+    torch::Tensor sub_indptr, sub_indices;
+    std::tie(sub_indptr, sub_indices) =
+        impl::CSCRowwiseSlicingCUDA(csc->indptr, csc->indices, row_ids);
+    return std::make_shared<CSC>(CSC{csc->col_ids, sub_indptr, sub_indices});
+  } else {
+    std::cerr << "Not implemented warning";
+  }
+}
+
 torch::Tensor TensorUnique(torch::Tensor node_ids) {
   if (node_ids.device().type() == torch::kCUDA) {
     return impl::TensorUniqueCUDA(node_ids);
