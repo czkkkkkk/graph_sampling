@@ -40,6 +40,12 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_ids) {
   return ret;
 }
 
+c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_ids) {
+  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(true)));
+  ret->SetCSC(CSCRowwiseSlicing(csc_, row_ids));
+  return ret;
+}
+
 c10::intrusive_ptr<Graph> Graph::ColumnwiseSampling(int64_t fanout,
                                                     bool replace) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(true)));
@@ -71,7 +77,7 @@ void Graph::CSC2CSR() {
 //   return ret;
 // }
 
-torch::Tensor Graph::RowIndices() { return torch::Tensor(); }
+torch::Tensor Graph::RowIndices() { return TensorUnique(csc_->indices); }
 
 /**
  * @brief Returns the set of all nodes of the graph. Nodes in return tensor are
@@ -89,8 +95,8 @@ torch::Tensor Graph::AllIndices() {
   } else {
     int64_t size = csc_->indptr.numel();
     // torch::Tensor nodeids = torch::arange(size).to(torch::kCUDA);
-    torch::Tensor cat =
-        torch::cat({csc_->indptr.slice(0, 0, size - 1), csc_->indices});
+    torch::Tensor cat = torch::cat(
+        {torch::arange(size - 1, csc_->indptr.options()), csc_->indices});
     return TensorUnique(cat);
   }
 }

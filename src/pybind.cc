@@ -2,6 +2,7 @@
 #include <torch/script.h>
 
 #include "./graph.h"
+#include "./tensor_ops.h"
 
 using namespace gs;
 
@@ -9,6 +10,7 @@ TORCH_LIBRARY(gs_classes, m) {
   m.class_<Graph>("Graph")
       .def(torch::init<bool>())
       .def("columnwise_slicing", &Graph::ColumnwiseSlicing)
+      .def("rowwise_slicing", &Graph::RowwiseSlicing)
       .def("columnwise_sampling", &Graph::ColumnwiseSampling)
       .def("fused_columnwise_slicing_sampling",
            &Graph::ColumnwiseFusedSlicingAndSampling)
@@ -19,6 +21,11 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("all_indices", &Graph::AllIndices)
       .def("relabel", &Graph::Relabel)
       .def("_CAPI_metadata", &Graph::MetaData);
+}
+
+TORCH_LIBRARY(gs_ops, m) {
+  m.def("list_sampling", &ListSampling);
+  m.def("list_sampling_with_probs", &ListSamplingProbs);
 }
 
 namespace gs {}

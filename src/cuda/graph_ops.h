@@ -11,6 +11,9 @@ namespace impl {
 std::pair<torch::Tensor, torch::Tensor> CSCColumnwiseSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids);
 
+std::pair<torch::Tensor, torch::Tensor> CSCRowwiseSlicingCUDA(
+    torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids);
+
 torch::Tensor TensorUniqueCUDA(torch::Tensor input);
 
 std::tuple<torch::Tensor, torch::Tensor> RelabelCUDA(torch::Tensor col_ids,
