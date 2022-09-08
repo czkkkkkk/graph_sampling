@@ -38,23 +38,21 @@ void cub_exclusiveSum(IdType* arrays, const IdType array_length) {
                                 arrays, array_length);
 }
 
-template <typename IdType, typename DType>
-void cub_sortPairs(IdType* input_key, DType* input_value, IdType* output_key,
-                   DType* output_value, int num_items) {
+template <typename KeyType, typename ValueType>
+void cub_sortPairs(cub::DoubleBuffer<KeyType> d_keys,
+                   cub::DoubleBuffer<ValueType> d_values, int32_t num_items) {
   void* d_temp_storage = NULL;
   size_t temp_storage_bytes = 0;
 
-  cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, input_key,
-                                  output_key, input_value, output_value,
-                                  num_items);
+  cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, d_keys,
+                                  d_values, num_items);
 
   c10::Allocator* cuda_allocator = c10::cuda::CUDACachingAllocator::get();
   c10::DataPtr _temp_data = cuda_allocator->allocate(temp_storage_bytes);
   d_temp_storage = _temp_data.get();
 
-  cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, input_key,
-                                  output_key, input_value, output_value,
-                                  num_items);
+  cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, d_keys,
+                                  d_values, num_items);
 }
 
 template <typename IdType>

@@ -91,11 +91,12 @@ inline std::vector<torch::Tensor> coo_sort(torch::Tensor coo_key,
   }
   output_value = torch::zeros_like(input_value);
 
-  DATA_TYPE_SWITCH(input_value.dtype(), DType, {
-    cub_sortPairs<IdType, DType>(input_key.data_ptr<IdType>(),
-                                 input_value.data_ptr<DType>(),
-                                 output_key.data_ptr<IdType>(),
-                                 output_value.data_ptr<DType>(), num_items);
+  DATA_TYPE_SWITCH(input_value.dtype(), VType, {
+    cub::DoubleBuffer<IdType> d_keys(input_key.data_ptr<IdType>(),
+                                     output_key.data_ptr<IdType>());
+    cub::DoubleBuffer<VType> d_values(input_value.data_ptr<VType>(),
+                                      output_value.data_ptr<VType>());
+    cub_sortPairs<IdType, VType>(d_keys, d_values, num_items);
   });
 
   if (need_index) {
