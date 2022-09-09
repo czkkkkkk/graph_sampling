@@ -1,6 +1,6 @@
-#include <nvToolsExt.h>
-#include "cuda_common.h"
 #include "graph_ops.h"
+
+#include "cuda_common.h"
 #include "utils.h"
 
 namespace gs {
