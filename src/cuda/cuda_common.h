@@ -9,4 +9,7 @@
 #include <torch/torch.h>
 #include <cub/cub.cuh>
 
+#define WARP_SIZE 32
+#define MIN(x, y) ((x < y) ? x : y)
+
 #endif
