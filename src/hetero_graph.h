@@ -10,6 +10,10 @@
 
 namespace gs {
 
+struct HeteroGraphInternalCache {
+  thrust::device_vector<int64_t*> all_indices, all_indptr;
+};
+
 struct NodeInfo {
   int64_t node_type;
   int64_t n_nodes;
@@ -58,7 +62,7 @@ class HeteroGraph : public torch::CustomClassHolder {
   std::map<std::string, int64_t> node_type_mapping_, edge_type_mapping_;
   std::map<int64_t, EdgeRelation> hetero_edges_;
   std::map<int64_t, NodeInfo> hetero_nodes_;
-  thrust::device_vector<int64_t*> all_indices, all_indptr;
+  HeteroGraphInternalCache hg_cache_;
 };
 
 }  // namespace gs
