@@ -1,20 +1,29 @@
+from gs.jit.passes import dce
 from typing import List
 import gs
 import torch
-import load_graph
+import examples.load_graph as load_graph
 import time
 import numpy as np
 
 
 def graphsage(A: gs.Matrix, seeds: torch.Tensor, fanouts: List):
+    torch.cuda.nvtx.range_push('matrix sampler')
     input_node = seeds
     ret = []
     for fanout in fanouts:
+        torch.cuda.nvtx.range_push('colwise slicing')
         subA = A[:, seeds]
+        torch.cuda.nvtx.range_pop()
+        torch.cuda.nvtx.range_push('colwise sampling')
         subA = subA.columnwise_sampling(fanout, True)
+        torch.cuda.nvtx.range_pop()
+        torch.cuda.nvtx.range_push('all indices')
         seeds = subA.all_indices()
+        torch.cuda.nvtx.range_pop()
         ret.append(subA)  # [todo] maybe bug before subA.row_indices
     output_node = seeds
+    torch.cuda.nvtx.range_pop()
     return input_node, output_node, ret
 
 
@@ -26,7 +35,6 @@ print("Check load successfully:", m._graph._CAPI_metadata(), '\n')
 seeds = torch.arange(0, 5000).long().cuda()
 
 compiled_func = gs.jit.compile(func=graphsage, args=(m, seeds, [25, 15]))
-from gs.jit.passes import dce
 
 
 def slicing_and_sampling_fuse(gm):
@@ -57,7 +65,7 @@ compiled_func.gm = dce(slicing_and_sampling_fuse(compiled_func.gm))
 def bench(func, args):
     time_list = []
     for i in range(100):
-        #print(i)
+        # print(i)
         torch.cuda.synchronize()
         begin = time.time()
 
@@ -72,7 +80,7 @@ def bench(func, args):
           np.mean(time_list[10:]) * 1000, " ms.")
 
 
-bench(compiled_func, args=(
+bench(graphsage, args=(
     m,
     seeds,
     [25, 15],

@@ -9,17 +9,22 @@ using namespace gs;
 TORCH_LIBRARY(gs_classes, m) {
   m.class_<Graph>("Graph")
       .def(torch::init<bool>())
-      .def("columnwise_slicing", &Graph::ColumnwiseSlicing)
-      .def("rowwise_slicing", &Graph::RowwiseSlicing)
-      .def("columnwise_sampling", &Graph::ColumnwiseSampling)
-      .def("fused_columnwise_slicing_sampling",
+      .def("_CAPI_set_data", &Graph::SetData)
+      .def("_CAPI_columnwise_slicing", &Graph::ColumnwiseSlicing)
+      .def("_CAPI_rowwise_slicing", &Graph::RowwiseSlicing)
+      .def("_CAPI_columnwise_sampling", &Graph::ColumnwiseSampling)
+      .def("_CAPI_fused_columnwise_slicing_sampling",
            &Graph::ColumnwiseFusedSlicingAndSampling)
-      .def("load_csc", &Graph::LoadCSC)
-      .def("load_csc_with_col_ids", &Graph::LoadCSCWithColIds)
-      .def("row_indices", &Graph::RowIndices)
-      .def("print", &Graph::Print)
-      .def("all_indices", &Graph::AllIndices)
-      .def("relabel", &Graph::Relabel)
+      .def("_CAPI_load_csc", &Graph::LoadCSC)
+      .def("_CAPI_load_csc_with_col_ids", &Graph::LoadCSCWithColIds)
+      .def("_CAPI_row_indices", &Graph::RowIndices)
+      .def("_CAPI_print", &Graph::Print)
+      .def("_CAPI_all_indices", &Graph::AllIndices)
+      .def("_CAPI_relabel", &Graph::Relabel)
+      .def("_CAPI_sum", &Graph::Sum)
+      .def("_CAPI_l2norm", &Graph::L2Norm)
+      .def("_CAPI_divide", &Graph::Divide)
+      .def("_CAPI_normalize", &Graph::Normalize)
       .def("_CAPI_metadata", &Graph::MetaData);
 }
 

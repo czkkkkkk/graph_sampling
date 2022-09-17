@@ -15,24 +15,24 @@ device = torch.device('cuda')
 time_list = []
 
 
-def fastgcn_sampler(A: gs.Matrix, seeds: torch.Tensor, probs: torch.Tensor, fanouts: list):
-    output_nodes = seeds
+def ladies_sampler(A: gs.Matrix, seeds: torch.Tensor, fanouts: list):
+    input_node = seeds
     ret = []
+    D_in = A.sum(axis=0)
+    D_out = A.sum(axis=1)
+    P = A.divide(D_out.sqrt(), axis=1).divide(D_in.sqrt(), axis=0)
     for fanout in fanouts:
-        subA = A[:, seeds]
-        row_indices = subA.row_indices()
-
-        # selected, _ = torch.ops.gs_ops.list_sampling(row_indices,
-        #                                              fanout, False)
-
+        U = P[:, seeds]
+        prob = U.l2norm(axis=1)
         selected, _ = torch.ops.gs_ops.list_sampling_with_probs(
-            row_indices, probs[row_indices], fanout, False)
+            U.row_indices(unique=True), prob, fanout, False)
+        nodes = torch.cat((seeds, selected)).unique()  # add self-loop
+        subU = U[nodes, :].divide(prob[nodes], axis=1).normalize(axis=1)
+        seeds = subU.all_indices(unique=True)
+        ret.insert(0, subU.to_dgl_block())
+    output_node = seeds
+    return input_node, output_node, ret
 
-        subA = subA[selected, :]
-        seeds = subA.all_indices()
-        ret.insert(0, subA.to_dgl_block())
-    input_nodes = seeds
-    return input_nodes, output_nodes, ret
 
 
 def evaluate(model, matrix, compiled_func, seedloader, features, labels, probs, fanouts):
@@ -69,7 +69,7 @@ def train(g, dataset, feat_device):
     print("Check load successfully:", m._graph._CAPI_metadata(), '\n')
     fanouts = [2000, 2000]
     compiled_func = gs.jit.compile(
-        func=fastgcn_sampler, args=(m, torch.Tensor(), torch.Tensor(), fanouts))
+        func=ladies_sampler, args=(m, torch.Tensor(), torch.Tensor(), fanouts))
     compiled_func.gm = dce(compiled_func.gm)
     train_seedloader = SeedGenerator(
         train_idx, batch_size=1024, shuffle=True, drop_last=False)

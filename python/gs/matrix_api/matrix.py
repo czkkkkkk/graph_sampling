@@ -12,6 +12,9 @@ class Matrix(object):
         # Graph bind to a C++ object
         self._graph = graph
 
+    def set_data(self, data):
+        self._graph._CAPI_set_data(data)
+
     def load_dgl_graph(self, g):
         # import csc
         if not isinstance(g, DGLHeteroGraph):
@@ -21,25 +24,37 @@ class Matrix(object):
         csc = reverse_g.adj(scipy_fmt='csr')
         csc_indptr = torch.tensor(csc.indptr).long().cuda()
         csc_indices = torch.tensor(csc.indices).long().cuda()
-        self._graph.load_csc(csc_indptr, csc_indices)
+        self._graph._CAPI_load_csc(csc_indptr, csc_indices)
 
     def to_dgl_block(self):
-        unique_tensor, csc_indptr, csc_indices = self._graph.relabel()
-        return create_block(('csc', (csc_indptr, csc_indices, [])),
+        unique_tensor, indptr, indices, format = self._graph._CAPI_relabel()
+        return create_block((format, (indptr, indices, [])),
                             num_src_nodes=unique_tensor.numel(),
-                            num_dst_nodes=csc_indptr.numel() - 1)
+                            num_dst_nodes=indptr.numel() - 1)
 
     def columnwise_slicing(self, t):
-        return Matrix(self._graph.columnwise_slicing(t))
+        return Matrix(self._graph._CAPI_columnwise_slicing(t))
 
     def columnwise_sampling(self, fanout, replace=True):
-        return Matrix(self._graph.columnwise_sampling(fanout, replace))
+        return Matrix(self._graph._CAPI_columnwise_sampling(fanout, replace))
 
-    def row_indices(self) -> torch.Tensor:
-        return self._graph.row_indices()
+    def sum(self, axis) -> torch.Tensor:
+        return self._graph._CAPI_sum(axis)
 
-    def all_indices(self) -> torch.Tensor:
-        return self._graph.all_indices()
+    def l2norm(self, axis) -> torch.Tensor:
+        return self._graph._CAPI_l2norm(axis)
+
+    def divide(self, divisor, axis):
+        return Matrix(self._graph._CAPI_divide(divisor, axis))
+
+    def normalize(self, axis):
+        return Matrix(self._graph._CAPI_normalize(axis))
+
+    def row_indices(self, unique=True) -> torch.Tensor:
+        return self._graph._CAPI_row_indices(unique)
+
+    def all_indices(self, unique=True) -> torch.Tensor:
+        return self._graph._CAPI_all_indices(unique)
 
     def __getitem__(self, data):
         ret = self._graph
@@ -47,9 +62,9 @@ class Matrix(object):
         c_slice = data[1]
 
         if isinstance(c_slice, Proxy) or isinstance(c_slice, torch.Tensor):
-            ret = ret.columnwise_slicing(c_slice)
+            ret = ret._CAPI_columnwise_slicing(c_slice)
 
         if isinstance(r_slice, Proxy) or isinstance(r_slice, torch.Tensor):
-            ret = ret.rowwise_slicing(r_slice)
+            ret = ret._CAPI_rowwise_slicing(r_slice)
 
         return Matrix(ret)

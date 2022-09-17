@@ -87,6 +87,31 @@ void cub_sortPairsDescending(cub::DoubleBuffer<KeyType> d_keys,
                                             d_keys, d_values, num_items);
 }
 
+/*!
+ * \brief Given a sorted array and a value this function returns the index
+ * of the first element which compares greater than value.
+ *
+ * This function assumes 0-based index
+ * @param A: ascending sorted array
+ * @param n: size of the A
+ * @param x: value to search in A
+ * @return index, i, of the first element st. A[i]>x. If x>=A[n-1] returns n.
+ * if x<A[0] then it returns 0.
+ */
+template <typename IdType>
+__device__ IdType _UpperBound(const IdType* A, int64_t n, IdType x) {
+  IdType l = 0, r = n, m = 0;
+  while (l < r) {
+    m = l + (r - l) / 2;
+    if (A[m] <= x) {
+      l = m + 1;
+    } else {
+      r = m;
+    }
+  }
+  return l;
+}
+
 }  // namespace impl
 }  // namespace gs
 

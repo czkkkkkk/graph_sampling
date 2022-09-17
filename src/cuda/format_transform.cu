@@ -7,68 +7,41 @@ namespace gs {
 namespace impl {
 
 /*!
- * \brief Given a sorted array and a value this function returns the index
- * of the first element which compares greater than value.
+ * @brief Repeat elements.
  *
- * This function assumes 0-based index
- * @param A: ascending sorted array
- * @param n: size of the A
- * @param x: value to search in A
- * @return index, i, of the first element st. A[i]>x. If x>=A[n-1] returns n.
- * if x<A[0] then it returns 0.
- */
-template <typename IdType>
-__device__ IdType _UpperBound(const IdType* A, int64_t n, IdType x) {
-  IdType l = 0, r = n, m = 0;
-  while (l < r) {
-    m = l + (r - l) / 2;
-    if (x >= A[m]) {
-      l = m + 1;
-    } else {
-      r = m;
-    }
-  }
-  return l;
-}
-
-/*!
- * \brief Repeat elements
- * \param val Value to repeat
- * \param repeats Number of repeats for each value
- * \param pos The position of the output buffer to write the value.
- * \param out Output buffer.
- * \param length Number of values
+ * @param pos: The position of the output buffer to write the value.
+ * @param out: Output buffer.
+ * @param n_col: Length of positions
+ * @param length: Number of values
  *
  * For example:
- * val = [3, 0, 1]
- * repeats = [1, 0, 2]
- * pos = [0, 1, 1]  # write to output buffer position 0, 1, 1
+ * pos = [0, 1, 3, 4]
+ * (implicit) val = [0, 1, 2]
  * then,
- * out = [3, 1, 1]
+ * out = [0, 1, 1, 2]
  */
-template <typename IdType, typename DType>
-__global__ void _RepeatKernel(const DType* val, const IdType* pos, DType* out,
-                              int64_t n_col, int64_t length) {
+template <typename IdType>
+__global__ void _RepeatKernel(const IdType* pos, IdType* out, int64_t n_col,
+                              int64_t length) {
   IdType tx = static_cast<IdType>(blockIdx.x) * blockDim.x + threadIdx.x;
   const int stride_x = gridDim.x * blockDim.x;
   while (tx < length) {
     IdType i = _UpperBound(pos, n_col, tx) - 1;
-    out[tx] = val[i];
+    out[tx] = i;
     tx += stride_x;
   }
 }
 
 std::pair<torch::Tensor, torch::Tensor> GraphCSC2COOCUDA(
-    torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids) {
+    torch::Tensor indptr, torch::Tensor indices) {
   auto coo_size = indices.numel();
-  auto col = torch::zeros(coo_size, column_ids.options());
+  auto col = torch::zeros(coo_size, indptr.options());
 
   dim3 block(128);
   dim3 grid((coo_size + block.x - 1) / block.x);
-  _RepeatKernel<int64_t, int64_t><<<grid, block>>>(
-      column_ids.data_ptr<int64_t>(), indptr.data_ptr<int64_t>(),
-      col.data_ptr<int64_t>(), indptr.numel(), coo_size);
-
+  _RepeatKernel<int64_t><<<grid, block>>>(indptr.data_ptr<int64_t>(),
+                                          col.data_ptr<int64_t>(),
+                                          indptr.numel(), coo_size);
   return {indices, col};
 }
 
@@ -117,53 +90,53 @@ inline std::vector<torch::Tensor> coo_sort(torch::Tensor coo_key,
  *
  * For example:
  * hay = [0, 0, 1, 2, 2]
- * needle = [0, 1, 2, 3]
+ * (implicit) needle = [0, 1, 2, 3]
  * then,
  * out = [2, 3, 5, 5]
+ *
+ * hay = [0, 0, 1, 3, 3]
+ * (implicit) needle = [0, 1, 2, 3]
+ * then,
+ * out = [2, 3, 3, 5]
  */
 template <typename IdType>
 __global__ void _SortedSearchKernelUpperBound(const IdType* hay,
                                               int64_t hay_size,
-                                              const IdType* needles,
                                               int64_t num_needles,
                                               IdType* pos) {
-  int tx = blockIdx.x * blockDim.x + threadIdx.x;
+  IdType tx = static_cast<IdType>(blockIdx.x) * blockDim.x + threadIdx.x;
   const int stride_x = gridDim.x * blockDim.x;
   while (tx < num_needles) {
-    const IdType ele = needles[tx];
-    // binary search
-    IdType lo = 0, hi = hay_size;
-    while (lo < hi) {
-      IdType mid = (lo + hi) >> 1;
-      if (hay[mid] <= ele) {
-        lo = mid + 1;
-      } else {
-        hi = mid;
-      }
-    }
-    pos[tx] = lo;
+    pos[tx] = _UpperBound(hay, hay_size, tx);
     tx += stride_x;
   }
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphCOO2CSRCUDA(
-    torch::Tensor row, torch::Tensor col) {
-  torch::Tensor sort_row, sort_col;
-  auto sort_results = coo_sort<int64_t>(row, col, false);
+std::tuple<torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>> GraphCOO2CSRCUDA(
+    torch::Tensor row, torch::Tensor col, torch::optional<torch::Tensor> e_ids,
+    int64_t num_rows) {
+  torch::Tensor sort_row, sort_col, sort_index;
+  torch::optional<torch::Tensor> out_e_ids;
+  auto sort_results = coo_sort<int64_t>(row, col, true);
   sort_row = sort_results[0];
   sort_col = sort_results[1];
+  sort_index = sort_results[2];
 
-  auto row_ids = TensorUniqueCUDA(sort_row);
-  auto row_size = row_ids.numel();
-  auto indptr = torch::zeros(row_size + 1, row_ids.options());
+  if (e_ids.has_value()) {
+    out_e_ids = torch::make_optional(e_ids.value().index({sort_index}));
+  } else {
+    out_e_ids = torch::nullopt;
+  }
+
+  auto row_size = num_rows;
+  auto indptr = torch::zeros(row_size + 1, sort_row.options());
 
   dim3 block(128);
   dim3 grid((row_size + block.x - 1) / block.x);
-  _SortedSearchKernelUpperBound<int64_t><<<grid, block>>>(
-      sort_row.data_ptr<int64_t>(), sort_row.numel(),
-      row_ids.data_ptr<int64_t>(), row_size, indptr.data_ptr<int64_t>() + 1);
-
-  return std::make_tuple(row_ids, indptr, sort_col);
+  _SortedSearchKernelUpperBound<int64_t>
+      <<<grid, block>>>(sort_row.data_ptr<int64_t>(), sort_row.numel(),
+                        row_size, indptr.data_ptr<int64_t>() + 1);
+  return std::make_tuple(indptr, sort_col, out_e_ids);
 }
 
 }  // namespace impl

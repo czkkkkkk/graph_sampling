@@ -2,17 +2,13 @@ import gs
 from gs.jit.passes import dce
 from gs import SeedGenerator
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import torchmetrics.functional as MF
-import dgl.nn as dglnn
-from dgl.dataloading import DataLoader, MultiLayerFullNeighborSampler
 import numpy as np
 import time
-import tqdm
 import argparse
-from load_graph import load_reddit
-from dgl import DGLHeteroGraph, create_block
+from ..load_graph import load_reddit
+from ..model import SAGE
 
 
 device = torch.device('cuda')
@@ -36,13 +32,13 @@ def slicing_and_sampling_fuse(gm):
     Fuses columnwise_slicing and columnwise_sampling
     """
     for node in gm.graph.nodes:
-        if node.target == 'columnwise_sampling' and node.args[
-                0].target == 'columnwise_slicing':
+        if node.target == '_CAPI_columnwise_sampling' and node.args[
+                0].target == '_CAPI_columnwise_slicing':
             if len(node.args[0].users) > 1:
                 continue
             with gm.graph.inserting_after(node):
                 new_node = gm.graph.call_method(
-                    'fused_columnwise_slicing_sampling',
+                    '_CAPI_fused_columnwise_slicing_sampling',
                     args=(
                         *node.args[0].args,
                         *node.args[1:],
@@ -51,54 +47,6 @@ def slicing_and_sampling_fuse(gm):
     gm.graph.lint()
     gm.recompile()
     return gm
-
-
-class SAGE(nn.Module):
-    def __init__(self, in_size, hid_size, out_size, feat_device):
-        super().__init__()
-        self.layers = nn.ModuleList()
-        # three-layer GraphSAGE-mean
-        self.layers.append(dglnn.SAGEConv(in_size, hid_size, 'mean'))
-        self.layers.append(dglnn.SAGEConv(hid_size, out_size, 'mean'))
-        self.dropout = nn.Dropout(0.5)
-        self.hid_size = hid_size
-        self.out_size = out_size
-        self.feat_device = feat_device
-
-    def forward(self, blocks, x):
-        h = x.to('cuda') if self.feat_device == 'cpu' else x
-        for l, (layer, block) in enumerate(zip(self.layers, blocks)):
-            h = layer(block, h)
-            if l != len(self.layers) - 1:
-                h = F.relu(h)
-                h = self.dropout(h)
-        return h
-
-    def inference(self, g, device, batch_size, feat):
-        """Conduct layer-wise inference to get all the node embeddings."""
-        sampler = MultiLayerFullNeighborSampler(1)
-        dataloader = DataLoader(
-            g, torch.arange(g.num_nodes()).to(g.device), sampler, device=device,
-            batch_size=batch_size, shuffle=False, drop_last=False,
-            num_workers=0)
-        buffer_device = torch.device('cpu')
-        pin_memory = (buffer_device != device)
-
-        for l, layer in enumerate(self.layers):
-            y = torch.empty(
-                g.num_nodes(), self.hid_size if l != len(self.layers) - 1 else self.out_size,
-                device=buffer_device, pin_memory=pin_memory)
-            feat = feat.to(device)
-            for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
-                x = feat[input_nodes]
-                h = layer(blocks[0], x)  # len(blocks) = 1
-                if l != len(self.layers) - 1:
-                    h = F.relu(h)
-                    h = self.dropout(h)
-                # by design, our output nodes are contiguous
-                y[output_nodes[0]:output_nodes[-1]+1] = h.to(buffer_device)
-            feat = y
-        return y
 
 
 def evaluate(model, matrix, compiled_func, seedloader, features, labels):

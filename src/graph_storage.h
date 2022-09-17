@@ -9,20 +9,21 @@
 namespace gs {
 
 struct CSC {
-  torch::Tensor col_ids;
   torch::Tensor indptr;
   torch::Tensor indices;
+  torch::optional<torch::Tensor> e_ids;
 };
 
 struct CSR {
-  torch::Tensor row_ids;
   torch::Tensor indptr;
   torch::Tensor indices;
+  torch::optional<torch::Tensor> e_ids;
 };
 
 struct COO {
   torch::Tensor row;
   torch::Tensor col;
+  torch::optional<torch::Tensor> e_ids;
 };
 
 }  // namespace gs
