@@ -9,21 +9,20 @@
 namespace gs {
 namespace impl {
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColumnwiseSlicingCUDA(
-    torch::Tensor indptr, torch::Tensor indices, torch::Tensor e_ids,
-    torch::Tensor column_ids);
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+CSCColumnwiseSlicingCUDA(torch::Tensor indptr, torch::Tensor indices,
+                         torch::Tensor column_ids);
 
 std::pair<torch::Tensor, torch::Tensor> CSCRowwiseSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColumnwiseSamplingCUDA(
-    torch::Tensor indptr, torch::Tensor indices, torch::Tensor e_ids,
-    int64_t fanout, bool replace);
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+CSCColumnwiseSamplingCUDA(torch::Tensor indptr, torch::Tensor indices,
+                          int64_t fanout, bool replace);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
 CSCColumnwiseFusedSlicingAndSamplingCUDA(torch::Tensor indptr,
                                          torch::Tensor indices,
-                                         torch::Tensor e_ids,
                                          torch::Tensor column_ids,
                                          int64_t fanout, bool replace);
 
@@ -47,9 +46,8 @@ torch::Tensor GraphNormalizeCUDA(torch::Tensor indptr, torch::Tensor e_ids,
 std::pair<torch::Tensor, torch::Tensor> GraphCSC2COOCUDA(torch::Tensor indptr,
                                                          torch::Tensor indices);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>> GraphCOO2CSRCUDA(
-    torch::Tensor row, torch::Tensor col, torch::optional<torch::Tensor> e_ids,
-    int64_t num_rows);
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphCOO2CSRCUDA(
+    torch::Tensor row, torch::Tensor col, int64_t num_rows);
 
 }  // namespace impl
 }  // namespace gs

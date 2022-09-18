@@ -112,21 +112,13 @@ __global__ void _SortedSearchKernelUpperBound(const IdType* hay,
   }
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>> GraphCOO2CSRCUDA(
-    torch::Tensor row, torch::Tensor col, torch::optional<torch::Tensor> e_ids,
-    int64_t num_rows) {
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphCOO2CSRCUDA(
+    torch::Tensor row, torch::Tensor col, int64_t num_rows) {
   torch::Tensor sort_row, sort_col, sort_index;
-  torch::optional<torch::Tensor> out_e_ids;
   auto sort_results = coo_sort<int64_t>(row, col, true);
   sort_row = sort_results[0];
   sort_col = sort_results[1];
   sort_index = sort_results[2];
-
-  if (e_ids.has_value()) {
-    out_e_ids = torch::make_optional(e_ids.value().index({sort_index}));
-  } else {
-    out_e_ids = torch::nullopt;
-  }
 
   auto row_size = num_rows;
   auto indptr = torch::zeros(row_size + 1, sort_row.options());
@@ -136,7 +128,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>> GraphCO
   _SortedSearchKernelUpperBound<int64_t>
       <<<grid, block>>>(sort_row.data_ptr<int64_t>(), sort_row.numel(),
                         row_size, indptr.data_ptr<int64_t>() + 1);
-  return std::make_tuple(indptr, sort_col, out_e_ids);
+  return std::make_tuple(indptr, sort_col, sort_index);
 }
 
 }  // namespace impl

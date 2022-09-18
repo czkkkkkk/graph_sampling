@@ -65,7 +65,7 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_index) {
                               : column_index;
   auto ret = c10::intrusive_ptr<Graph>(
       std::unique_ptr<Graph>(new Graph(true, col_ids, row_ids_, num_nodes_)));
-  ret->SetCSC(CSCColumnwiseSlicing(csc_, column_index));
+  ret->SetCSC(CSCColumnwiseSlicing(csc_, column_index, data_));
   if (data_.has_value()) {
     ret->SetData(data_.value());
   }
@@ -79,7 +79,7 @@ c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
   auto ret = c10::intrusive_ptr<Graph>(
       std::unique_ptr<Graph>(new Graph(true, col_ids_, row_ids, num_nodes_)));
   if (csr_ != nullptr) {
-    ret->SetCSR(CSRRowwiseSlicing(csr_, row_index));
+    ret->SetCSR(CSRRowwiseSlicing(csr_, row_index, data_));
   } else if (csc_ != nullptr) {
     ret->SetCSC(CSCRowwiseSlicing(csc_, row_index));
   } else {
@@ -94,7 +94,7 @@ c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
 c10::intrusive_ptr<Graph> Graph::ColumnwiseSampling(int64_t fanout,
                                                     bool replace) {
   torch::Tensor sampled_row_ids, unique_sorted_indices;
-  auto csc_ptr = CSCColumnwiseSampling(csc_, fanout, replace);
+  auto csc_ptr = CSCColumnwiseSampling(csc_, fanout, replace, data_);
   unique_sorted_indices = std::get<0>(torch::_unique(csc_ptr->indices));
   sampled_row_ids = (row_ids_.has_value())
                         ? row_ids_.value().index({unique_sorted_indices})
@@ -112,7 +112,7 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
     torch::Tensor column_index, int64_t fanout, bool replace) {
   torch::Tensor sampled_row_ids, unique_sorted_indices;
   auto csc_ptr =
-      CSCColumnwiseFusedSlicingAndSampling(csc_, column_index, fanout, replace);
+      CSCColumnwiseFusedSlicingAndSampling(csc_, column_index, fanout, replace, data_);
   torch::Tensor col_ids = (col_ids_.has_value())
                               ? col_ids_.value().index({column_index})
                               : column_index;

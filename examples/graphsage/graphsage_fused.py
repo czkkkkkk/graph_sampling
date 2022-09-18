@@ -8,22 +8,15 @@ import numpy as np
 
 
 def graphsage(A: gs.Matrix, seeds: torch.Tensor, fanouts: List):
-    torch.cuda.nvtx.range_push('matrix sampler')
     input_node = seeds
     ret = []
     for fanout in fanouts:
-        torch.cuda.nvtx.range_push('colwise slicing')
         subA = A[:, seeds]
-        torch.cuda.nvtx.range_pop()
-        torch.cuda.nvtx.range_push('colwise sampling')
         subA = subA.columnwise_sampling(fanout, True)
-        torch.cuda.nvtx.range_pop()
-        torch.cuda.nvtx.range_push('all indices')
+        # subA = gs.Matrix(A._graph._CAPI_fused_columnwise_slicing_sampling(seeds, fanout, True))
         seeds = subA.all_indices()
-        torch.cuda.nvtx.range_pop()
         ret.append(subA)  # [todo] maybe bug before subA.row_indices
     output_node = seeds
-    torch.cuda.nvtx.range_pop()
     return input_node, output_node, ret
 
 
@@ -42,13 +35,13 @@ def slicing_and_sampling_fuse(gm):
     Fuses columnwise_slicing and columnwise_sampling
     """
     for node in gm.graph.nodes:
-        if node.target == 'columnwise_sampling' and node.args[
-                0].target == 'columnwise_slicing':
+        if node.target == '_CAPI_columnwise_sampling' and node.args[
+                0].target == '_CAPI_columnwise_slicing':
             if len(node.args[0].users) > 1:
                 continue
             with gm.graph.inserting_after(node):
                 new_node = gm.graph.call_method(
-                    'fused_columnwise_slicing_sampling',
+                    '_CAPI_fused_columnwise_slicing_sampling',
                     args=(
                         *node.args[0].args,
                         *node.args[1:],
@@ -80,7 +73,7 @@ def bench(func, args):
           np.mean(time_list[10:]) * 1000, " ms.")
 
 
-bench(graphsage, args=(
+bench(compiled_func, args=(
     m,
     seeds,
     [25, 15],

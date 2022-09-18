@@ -31,7 +31,7 @@ m.load_dgl_graph(dgl_graph)
 print("Check load successfully:", m._graph._CAPI_metadata(), '\n')
 seeds = torch.arange(0, 1000).long().cuda()
 
-# compiled_func = gs.jit.compile(func=ladies, args=(m, seeds, [2000, 2000]))
+compiled_func = gs.jit.compile(func=ladies, args=(m, seeds, [2000, 2000]))
 
 
 def bench(func, args):
