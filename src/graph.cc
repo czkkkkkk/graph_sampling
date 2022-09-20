@@ -81,7 +81,7 @@ c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
   if (csr_ != nullptr) {
     ret->SetCSR(CSRRowwiseSlicing(csr_, row_index, data_));
   } else if (csc_ != nullptr) {
-    ret->SetCSC(CSCRowwiseSlicing(csc_, row_index));
+    ret->SetCSC(CSCRowwiseSlicing(csc_, row_index, data_));
   } else {
     LOG(FATAL) << "Error in RowwiseSlicing: no CSC nor CSR";
   }
@@ -111,8 +111,8 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSampling(int64_t fanout,
 c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
     torch::Tensor column_index, int64_t fanout, bool replace) {
   torch::Tensor sampled_row_ids, unique_sorted_indices;
-  auto csc_ptr =
-      CSCColumnwiseFusedSlicingAndSampling(csc_, column_index, fanout, replace, data_);
+  auto csc_ptr = CSCColumnwiseFusedSlicingAndSampling(csc_, column_index,
+                                                      fanout, replace, data_);
   torch::Tensor col_ids = (col_ids_.has_value())
                               ? col_ids_.value().index({column_index})
                               : column_index;
@@ -273,7 +273,8 @@ torch::Tensor Graph::AllIndices(bool unique) {
  *
  * @return std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
  */
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, std::string> Graph::Relabel() {
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, std::string>
+Graph::Relabel() {
   torch::Tensor frontier, relabeled_indices, relabeled_indptr;
   if (csc_ != nullptr) {
     torch::Tensor col_ids, row_indices;
@@ -287,7 +288,8 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, std::string> Graph::Rela
     } else {
       row_indices = csc_->indices;
     }
-    std::tie(frontier, relabeled_indices, relabeled_indptr) = GraphRelabel(col_ids, csc_->indptr, row_indices);
+    std::tie(frontier, relabeled_indices, relabeled_indptr) =
+        GraphRelabel(col_ids, csc_->indptr, row_indices);
     return {frontier, relabeled_indices, relabeled_indptr, "csc"};
   } else if (csr_ != nullptr) {
     torch::Tensor row_ids, col_indices;
@@ -301,7 +303,8 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, std::string> Graph::Rela
     } else {
       col_indices = csr_->indices;
     }
-    std::tie(frontier, relabeled_indices, relabeled_indptr) = GraphRelabel(row_ids, csr_->indptr, col_indices);
+    std::tie(frontier, relabeled_indices, relabeled_indptr) =
+        GraphRelabel(row_ids, csr_->indptr, col_indices);
     return {frontier, relabeled_indices, relabeled_indptr, "csr"};
   } else {
     LOG(FATAL) << "Error in relabel: no CSC nor CSR.";
@@ -342,17 +345,29 @@ void Graph::Print() const {
 
 std::vector<torch::Tensor> Graph::MetaData() {
   if (csc_ != nullptr) {
+    std::vector<torch::Tensor> ret_list;
     if (col_ids_.has_value()) {
-      return {col_ids_.value(), csc_->indptr, csc_->indices};
+      ret_list = {col_ids_.value(), csc_->indptr, csc_->indices};
     } else {
-      return {torch::Tensor(), csc_->indptr, csc_->indices};
+      ret_list = {torch::Tensor(), csc_->indptr, csc_->indices};
     }
+    if (csc_->e_ids.has_value()) {
+      ret_list.push_back(csc_->e_ids.value());
+    }
+    return ret_list;
+
   } else if (csr_ != nullptr) {
+    std::vector<torch::Tensor> ret_list;
     if (row_ids_.has_value()) {
-      return {col_ids_.value(), csc_->indptr, csc_->indices};
+      ret_list = {col_ids_.value(), csr_->indptr, csr_->indices};
     } else {
-      return {torch::Tensor(), csc_->indptr, csc_->indices};
+      ret_list = {torch::Tensor(), csr_->indptr, csr_->indices};
     }
+    if (csr_->e_ids.has_value()) {
+      ret_list.push_back(csr_->e_ids.value());
+    }
+    return ret_list;
+
   } else {
     LOG(FATAL) << "Error in MetaData: no CSC nor CSR.";
     return {coo_->row, coo_->col};

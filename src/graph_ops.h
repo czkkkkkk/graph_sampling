@@ -12,7 +12,8 @@ std::shared_ptr<CSC> CSCColumnwiseSlicing(std::shared_ptr<CSC> csc,
                                           torch::optional<torch::Tensor> data);
 
 std::shared_ptr<CSC> CSCRowwiseSlicing(std::shared_ptr<CSC> csc,
-                                       torch::Tensor row_ids);
+                                       torch::Tensor row_ids,
+                                       torch::optional<torch::Tensor> data);
 
 std::shared_ptr<CSR> CSRRowwiseSlicing(std::shared_ptr<CSR> csr,
                                        torch::Tensor row_ids,

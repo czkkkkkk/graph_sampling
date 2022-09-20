@@ -138,7 +138,7 @@ __global__ void _CSCRowwiseSlicinigQueryKernel(
 
 // todo(ping): maybe we need to return _idxs for the selected edge;
 template <typename IdType>
-std::pair<torch::Tensor, torch::Tensor> _CSCRowwiseSlicing(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _CSCRowwiseSlicing(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids) {
   int num_items = indptr.numel() - 1;
   int num_edge = indices.numel();
@@ -182,11 +182,14 @@ std::pair<torch::Tensor, torch::Tensor> _CSCRowwiseSlicing(
 
   // prefix sum to get out_indptr and out_indices_index
   cub_exclusiveSum<IdType>(out_indptr.data_ptr<IdType>(), num_items + 1);
+  torch::Tensor select_index = torch::nonzero(out_mask).reshape({
+      -1,
+  });
 
-  return {out_indptr, indices.index({out_mask})};
+  return {out_indptr, indices.index({select_index}), select_index};
 }
 
-std::pair<torch::Tensor, torch::Tensor> CSCRowwiseSlicingCUDA(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCRowwiseSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids) {
   return _CSCRowwiseSlicing<int64_t>(indptr, indices, row_ids);
 };

@@ -82,14 +82,22 @@ std::shared_ptr<CSC> CSCColumnwiseSlicing(std::shared_ptr<CSC> csc,
   }
 }
 
-// @todo slicing with e_ids
 std::shared_ptr<CSC> CSCRowwiseSlicing(std::shared_ptr<CSC> csc,
-                                       torch::Tensor row_ids) {
+                                       torch::Tensor row_ids,
+                                       torch::optional<torch::Tensor> data) {
   if (csc->indptr.device().type() == torch::kCUDA) {
-    torch::Tensor sub_indptr, sub_indices;
-    std::tie(sub_indptr, sub_indices) =
+    torch::Tensor sub_indptr, sub_indices, select_index;
+    torch::optional<torch::Tensor> sub_e_ids = torch::nullopt;
+    std::tie(sub_indptr, sub_indices, select_index) =
         impl::CSCRowwiseSlicingCUDA(csc->indptr, csc->indices, row_ids);
-    return std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt});
+    if (data.has_value()) {
+      if (csc->e_ids.has_value()) {
+        sub_e_ids = csc->e_ids.value().index({select_index});
+      } else {
+        sub_e_ids = select_index;
+      }
+    }
+    return std::make_shared<CSC>(CSC{sub_indptr, sub_indices, sub_e_ids});
   } else {
     std::cerr << "Not implemented warning";
     return std::make_shared<CSC>(CSC{});
