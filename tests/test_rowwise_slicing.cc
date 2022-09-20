@@ -16,5 +16,5 @@ TEST(RowwiseSlicing, test1)
     auto subA = A.RowwiseSlicing(row_ids);
     auto csc_ptr = subA->GetCSC();
     EXPECT_TRUE(csc_ptr->indptr.equal(torch::arange(21).to(torch::kCUDA) * 1));
-    EXPECT_TRUE(csc_ptr->indices.equal(row_ids));
+    EXPECT_TRUE(csc_ptr->indices.equal(torch::arange(20).to(torch::kCUDA)));
 }
