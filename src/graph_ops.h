@@ -29,8 +29,11 @@ std::shared_ptr<CSC> CSCColumnwiseFusedSlicingAndSampling(
 
 torch::Tensor TensorUnique(torch::Tensor node_ids);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphRelabel(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCorCSRGraphRelabel(
     torch::Tensor col_ids, torch::Tensor indptr, torch::Tensor indices);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COOGraphRelabel(
+    torch::Tensor coo_row, torch::Tensor coo_col);
 
 torch::Tensor GraphSum(torch::Tensor indptr, torch::Tensor e_ids,
                        torch::Tensor data);

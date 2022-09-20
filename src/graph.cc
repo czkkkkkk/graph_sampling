@@ -261,17 +261,11 @@ torch::Tensor Graph::AllIndices(bool unique) {
  * @todo Fix for CSC and CSR.
  * @todo Fix for new storage format.
  *
- * @brief Do relabel operation on graph.col_ids and graph.indices;
- * It will return {all_indices, new_csc_indptr, new_csc_indices}.
- * Specifically, all_indices = graph.AllIndices(); new_csc_indptr is the
- * csc_indptr of the relabeled graph; new_csc_indices is the csc_indices of the
- * relabeled graph.
- * For example,
- *    if graph.csc_.col_ids = [0, 2, 4, 2], graph.csc_.indptr = [0, 0, 1, 1, 3]
- *    and graph.csc_.indices = [4, 2, 1],
- *    graph.relabel will return {[0, 2, 4, 1], [0, 0, 1, 1, 3], [2, 1, 3]}
+ * @todo this relabel function is not for KGCN or TGAT where there are duplicate
+ * nodes in graph.col_ids_ or graph.row_ids_
  *
- * @return std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+ * @brief Do relabel operation for graph.
+ * In short, it remove isolated nodes in graph.
  */
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, std::string>
 Graph::Relabel() {
@@ -289,7 +283,7 @@ Graph::Relabel() {
       row_indices = csc_->indices;
     }
     std::tie(frontier, relabeled_indices, relabeled_indptr) =
-        GraphRelabel(col_ids, csc_->indptr, row_indices);
+        CSCorCSRGraphRelabel(col_ids, csc_->indptr, row_indices);
     return {frontier, relabeled_indices, relabeled_indptr, "csc"};
   } else if (csr_ != nullptr) {
     torch::Tensor row_ids, col_indices;
@@ -304,10 +298,26 @@ Graph::Relabel() {
       col_indices = csr_->indices;
     }
     std::tie(frontier, relabeled_indices, relabeled_indptr) =
-        GraphRelabel(row_ids, csr_->indptr, col_indices);
+        CSCorCSRGraphRelabel(row_ids, csr_->indptr, col_indices);
     return {frontier, relabeled_indices, relabeled_indptr, "csr"};
+  } else if (coo_ != nullptr) {
+    torch::Tensor relabel_coo_row, relabel_coo_col;
+    torch::Tensor coo_row, coo_col;
+    if (row_ids_.has_value()) {
+      coo_row = row_ids_.value().index({coo_->row});
+    } else {
+      coo_row = coo_->row;
+    }
+    if (col_ids_.has_value()) {
+      coo_col = col_ids_.value().index({coo_->col});
+    } else {
+      coo_col = coo_->col;
+    }
+    std::tie(frontier, relabel_coo_row, relabel_coo_col) =
+        COOGraphRelabel(coo_row, coo_col);
+    return {frontier, relabel_coo_row, relabel_coo_col, "coo"};
   } else {
-    LOG(FATAL) << "Error in relabel: no CSC nor CSR.";
+    LOG(FATAL) << "Error in relabel: no COO, no CSC nor CSR.";
     return {};
   }
 }

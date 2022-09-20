@@ -191,9 +191,10 @@ torch::Tensor TensorUniqueCUDA(torch::Tensor node_ids) {
   return ret_tensor;
 }
 
-std::tuple<torch::Tensor, torch::Tensor> RelabelCUDA(torch::Tensor col_ids,
-                                                     torch::Tensor indices) {
-  std::vector<torch::Tensor> data = {col_ids, indices};
+// this function return unique tensor for std::vector<torch::Tensor> data;
+// and return each tensor after being relabeled in data;
+std::tuple<torch::Tensor, std::vector<torch::Tensor>> RelabelCUDA(
+    std::vector<torch::Tensor> data) {
   std::vector<int64_t> split_sizes;
   for (auto d : data) {
     split_sizes.push_back(d.numel());
@@ -208,11 +209,10 @@ std::tuple<torch::Tensor, torch::Tensor> RelabelCUDA(torch::Tensor col_ids,
   reindex_tensor =
       Relabel<int64_t>(total_tensor, unique_result[1], unique_result[2]);
 
-  std::vector<torch::Tensor> ret =
+  std::vector<torch::Tensor> relabel_data =
       reindex_tensor.split_with_sizes(split_sizes, 0);
 
-  torch::Tensor relabeled_indices = ret[1];
-  return std::make_tuple(unique_tensor, relabeled_indices);
+  return std::make_tuple(unique_tensor, relabel_data);
 }
 }  // namespace impl
 }  // namespace gs

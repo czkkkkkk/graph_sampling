@@ -181,13 +181,27 @@ torch::Tensor TensorUnique(torch::Tensor node_ids) {
   }
 }
 
-// @todo Fix for new storage format
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphRelabel(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCorCSRGraphRelabel(
     torch::Tensor col_ids, torch::Tensor indptr, torch::Tensor indices) {
-  torch::Tensor frontier, relabeled_indices, relabeled_indptr;
-  std::tie(frontier, relabeled_indices) = impl::RelabelCUDA(col_ids, indices);
-  relabeled_indptr = indptr.clone();
-  return std::make_tuple(frontier, relabeled_indptr, relabeled_indices);
+  torch::Tensor frontier;
+  std::vector<torch::Tensor> relabel_result;
+  // len(relabel_result) == 2.
+  // relabel_result[0] is relabel result for col_ids;
+  // relabel_result[1] is relabel result for indices;
+  std::tie(frontier, relabel_result) = impl::RelabelCUDA({col_ids, indices});
+  torch::Tensor relabeled_indptr = indptr.clone();
+  return std::make_tuple(frontier, relabeled_indptr, relabel_result[1]);
+}
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COOGraphRelabel(
+    torch::Tensor coo_row, torch::Tensor coo_col) {
+  torch::Tensor frontier;
+  std::vector<torch::Tensor> relabel_result;
+  std::tie(frontier, relabel_result) = impl::RelabelCUDA({coo_row, coo_col});
+  // len(relabel_result) == 2.
+  // relabel_result[0] is relabel result for coo_row;
+  // relabel_result[1] is relabel result for coo_col;
+  return std::make_tuple(frontier, relabel_result[0], relabel_result[1]);
 }
 
 torch::Tensor GraphSum(torch::Tensor indptr, torch::Tensor e_ids,
