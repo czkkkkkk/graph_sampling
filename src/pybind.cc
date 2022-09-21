@@ -2,6 +2,7 @@
 #include <torch/script.h>
 
 #include "./graph.h"
+#include "./hetero_graph.h"
 #include "./tensor_ops.h"
 
 using namespace gs;
@@ -21,6 +22,11 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("all_indices", &Graph::AllIndices)
       .def("relabel", &Graph::Relabel)
       .def("_CAPI_metadata", &Graph::MetaData);
+  m.class_<HeteroGraph>("HeteroGraph")
+      .def(torch::init<>())
+      .def("load_from_homo", &HeteroGraph::LoadFromHomo)
+      .def("get_homo_graph", &HeteroGraph::GetHomoGraph)
+      .def("metapath_random_walk_fused", &HeteroGraph::MetapathRandomWalkFused);
 }
 
 TORCH_LIBRARY(gs_ops, m) {

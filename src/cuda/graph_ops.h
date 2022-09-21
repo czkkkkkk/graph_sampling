@@ -1,8 +1,6 @@
 #ifndef GS_CUDA_GRAPH_OPS_H_
 #define GS_CUDA_GRAPH_OPS_H_
 
-#include <cuda.h>
-#include <cuda_runtime.h>
 #include <torch/torch.h>
 
 namespace gs {
