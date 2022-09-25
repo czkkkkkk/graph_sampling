@@ -31,17 +31,17 @@ torch::Tensor TensorUniqueCUDA(torch::Tensor input);
 std::tuple<torch::Tensor, torch::Tensor> RelabelCUDA(torch::Tensor col_ids,
                                                      torch::Tensor indices);
 
-torch::Tensor GraphSumCUDA(torch::Tensor indptr, torch::Tensor e_ids,
-                           torch::Tensor data);
+torch::Tensor GraphSumCUDA(torch::Tensor indptr, torch::Tensor data);
 
-torch::Tensor GraphL2NormCUDA(torch::Tensor indptr, torch::Tensor e_ids,
-                              torch::Tensor data);
+torch::Tensor GraphL2NormCUDA(torch::Tensor indptr, torch::Tensor data);
 
-torch::Tensor GraphDivCUDA(torch::Tensor indptr, torch::Tensor e_ids,
-                           torch::Tensor data, torch::Tensor divisor);
+torch::Tensor GraphDivCUDA(torch::Tensor indptr, torch::Tensor data,
+                           torch::Tensor divisor);
 
-torch::Tensor GraphNormalizeCUDA(torch::Tensor indptr, torch::Tensor e_ids,
-                                 torch::Tensor data);
+torch::Tensor GraphDivCUDA_2index(torch::Tensor indptr, torch::Tensor data, torch::Tensor e_ids,
+                           torch::Tensor divisor);
+
+torch::Tensor GraphNormalizeCUDA(torch::Tensor indptr, torch::Tensor data);
 
 std::pair<torch::Tensor, torch::Tensor> GraphCSC2COOCUDA(torch::Tensor indptr,
                                                          torch::Tensor indices);

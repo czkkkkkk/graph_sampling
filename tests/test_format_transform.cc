@@ -20,7 +20,7 @@ TEST(CSC2CSR, test1)
     EXPECT_TRUE(coo_ptr->col.equal(col));
 
     auto csr_ptr = A.GetCSR();
-    EXPECT_EQ(A.GetNumNodes(), 100);
+    EXPECT_EQ(A.GetNumRows(), 100);
     EXPECT_TRUE(A.RowIndices(false).equal(indices));
     EXPECT_TRUE(A.AllIndices(false).equal(torch::cat({col_ids, indices})));
     EXPECT_TRUE(A.AllIndices(true).equal(indices));
@@ -45,7 +45,7 @@ TEST(CSR2CSC, test1)
     EXPECT_TRUE(coo_ptr->col.equal(col));
 
     auto csc_ptr = A.GetCSC();
-    EXPECT_EQ(A.GetNumNodes(), 100);
+    EXPECT_EQ(A.GetNumRows(), 100);
     EXPECT_TRUE(A.RowIndices(false).equal(indices));
     EXPECT_TRUE(A.AllIndices(false).equal(torch::cat({col_ids, indices})));
     EXPECT_TRUE(A.AllIndices(true).equal(indices));
