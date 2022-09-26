@@ -88,6 +88,107 @@ __global__ void _RandomWalkKernel(const int64_t* seed_data,
   }
 }
 
+template <int BLOCK_SIZE>
+__global__ void _RandomWalkKernel_v2(
+    const int64_t* seed_data, const int64_t num_seeds,
+    const int64_t* metapath_data, const uint64_t max_num_steps,
+    int64_t** all_indices, int64_t** all_indptr, int64_t* out_traces_data) {
+  int64_t tid = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+  int64_t last_idx =
+      min(static_cast<int64_t>(blockIdx.x + 1) * BLOCK_SIZE, num_seeds);
+  curandState rng;
+  uint64_t rand_seed = 7777777;
+  curand_init(rand_seed + tid, 0, 0, &rng);
+
+  // fisrt step
+  for (int idx = tid; idx < last_idx; idx += BLOCK_SIZE) {
+    int64_t curr = seed_data[idx];
+    out_traces_data[0 * num_seeds + idx] = curr;
+  }
+
+  // begin random walk
+  for (int step_idx = 0; step_idx < max_num_steps; step_idx++) {
+    for (int idx = tid; idx < last_idx; idx += BLOCK_SIZE) {
+      int64_t curr = out_traces_data[step_idx * num_seeds + idx];
+
+      int64_t pick = -1;
+      if (curr < 0) {
+        out_traces_data[(step_idx + 1) * num_seeds + idx] = pick;
+      } else {
+        int64_t metapath_id = metapath_data[step_idx];
+        int64_t* graph_indice = all_indices[metapath_id];
+        int64_t* graph_indptr = all_indptr[metapath_id];
+        const int64_t in_row_start = graph_indptr[curr];
+        const int64_t deg = graph_indptr[curr + 1] - graph_indptr[curr];
+
+        if (deg > 0) {
+          pick = graph_indice[in_row_start + curand(&rng) % deg];
+        }
+        out_traces_data[(step_idx + 1) * num_seeds + idx] = pick;
+      }
+    }
+  }
+}
+
+template <typename IdType, int BLOCK_SIZE>
+__global__ inline void RandomWalkForOneStep(const IdType* curr_nodes,
+                                            const IdType* indptr,
+                                            const IdType* indices,
+                                            IdType* out_traces,
+                                            int64_t num_items) {
+  int64_t tid = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+  int64_t last_idx =
+      min(static_cast<int64_t>(blockIdx.x + 1) * BLOCK_SIZE, num_items);
+  curandState rng;
+  uint64_t rand_seed = 7777777;
+  curand_init(rand_seed + tid, 0, 0, &rng);
+  for (int idx = tid; idx < last_idx; idx += BLOCK_SIZE) {
+    IdType curr = curr_nodes[idx];
+    IdType pick = -1;
+    if (curr < 0) {
+      out_traces[idx] = pick;
+    } else {
+      const IdType in_row_start = indptr[curr];
+      const IdType deg = indptr[curr + 1] - in_row_start;
+
+      if (deg > 0) {
+        pick = indices[in_row_start + curand(&rng) % deg];
+      }
+      out_traces[idx] = pick;
+    }
+  }
+}
+
+template <typename IdType, int BLOCK_SIZE>
+__global__ void _parallel_memcpy(IdType* dst, const IdType* src,
+                                 const int64_t num_items) {
+  int64_t tid = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+  int64_t last_idx =
+      min(static_cast<int64_t>(blockIdx.x + 1) * BLOCK_SIZE, num_items);
+  for (int idx = tid; idx < last_idx; idx += BLOCK_SIZE) {
+    dst[idx] = src[idx];
+  }
+}
+
+__global__ void _RandomWalkKernel_v3(
+    const int64_t* seed_data, const int64_t num_seeds,
+    const int64_t* metapath_data, const uint64_t max_num_steps,
+    int64_t** all_indices, int64_t** all_indptr, int64_t* out_traces_data) {
+  constexpr int BLOCK_SIZE = 256;
+  dim3 block(BLOCK_SIZE);
+  dim3 grid((num_seeds + BLOCK_SIZE - 1) / BLOCK_SIZE);
+
+  _parallel_memcpy<int64_t, BLOCK_SIZE>
+      <<<grid, block>>>(out_traces_data, seed_data, num_seeds);
+  for (int i = 0; i < max_num_steps; i++) {
+    RandomWalkForOneStep<int64_t, BLOCK_SIZE><<<grid, block>>>(
+        out_traces_data + i * num_seeds, all_indptr[metapath_data[i]],
+        all_indices[metapath_data[i]], out_traces_data + (i + 1) * num_seeds,
+        num_seeds);
+    // cudaDeviceSynchronize();
+  }
+}
+
 torch::Tensor MetapathRandomWalkFusedCUDA(
     torch::Tensor seeds, torch::Tensor metapath,
     thrust::device_vector<int64_t*>& all_indices,
@@ -100,14 +201,18 @@ torch::Tensor MetapathRandomWalkFusedCUDA(
   torch::Tensor out_traces_tensor = torch::empty(outsize, seeds.options());
 
   int64_t* out_traces_data = out_traces_tensor.data_ptr<int64_t>();
-  constexpr int BLOCK_SIZE = 256;
-  dim3 block(BLOCK_SIZE);
-  dim3 grid((num_seeds + BLOCK_SIZE - 1) / BLOCK_SIZE);
+  // constexpr int BLOCK_SIZE = 256;
+  // dim3 block(BLOCK_SIZE);
+  // dim3 grid((num_seeds + BLOCK_SIZE - 1) / BLOCK_SIZE);
   int64_t** all_indices_ptr = thrust::raw_pointer_cast(all_indices.data());
   int64_t** all_indptr_ptr = thrust::raw_pointer_cast(all_indptr.data());
-  _RandomWalkKernel<BLOCK_SIZE><<<grid, block>>>(
-      seeds.data_ptr<int64_t>(), num_seeds, metapath_data, max_num_steps,
-      all_indices_ptr, all_indptr_ptr, out_traces_data);
+
+  _RandomWalkKernel_v3<<<1, 1>>>(seeds.data_ptr<int64_t>(), num_seeds,
+                                 metapath_data, max_num_steps, all_indices_ptr,
+                                 all_indptr_ptr, out_traces_data);
+  //_RandomWalkKernel<BLOCK_SIZE><<<grid, block>>>(
+  //    seeds.data_ptr<int64_t>(), num_seeds, metapath_data, max_num_steps,
+  //    all_indices_ptr, all_indptr_ptr, out_traces_data);
   return out_traces_tensor.reshape({seeds.numel(), -1});
 }
 
