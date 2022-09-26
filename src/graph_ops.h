@@ -7,31 +7,30 @@
 
 namespace gs {
 
-std::shared_ptr<CSC> CSCColumnwiseSlicing(std::shared_ptr<CSC> csc,
-                                          torch::Tensor column_ids,
-                                          torch::optional<torch::Tensor> data);
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor column_ids);
 
 std::shared_ptr<CSC> CSCRowwiseSlicing(std::shared_ptr<CSC> csc,
                                        torch::Tensor row_ids);
 
-std::shared_ptr<CSR> CSRRowwiseSlicing(std::shared_ptr<CSR> csr,
-                                       torch::Tensor row_ids,
-                                       torch::optional<torch::Tensor> data);
+std::pair<std::shared_ptr<CSR>, torch::Tensor> CSRRowwiseSlicing(
+    std::shared_ptr<CSR> csr, torch::Tensor row_ids);
 
-std::shared_ptr<CSC> CSCColumnwiseSampling(std::shared_ptr<CSC> csc,
-                                           int64_t fanout, bool replace,
-                                           torch::optional<torch::Tensor> data);
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSampling(
+    std::shared_ptr<CSC> csc, int64_t fanout, bool replace);
 
-std::shared_ptr<CSC> CSCColumnwiseFusedSlicingAndSampling(
-    std::shared_ptr<CSC> csc, torch::Tensor column_ids, int64_t fanout,
-    bool replace, torch::optional<torch::Tensor> data);
+std::pair<std::shared_ptr<CSC>, torch::Tensor>
+CSCColumnwiseFusedSlicingAndSampling(std::shared_ptr<CSC> csc,
+                                     torch::Tensor column_ids, int64_t fanout,
+                                     bool replace);
 
 torch::Tensor TensorUnique(torch::Tensor node_ids);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphRelabel(
     torch::Tensor col_ids, torch::Tensor indptr, torch::Tensor indices);
 
-torch::Tensor GraphSum(torch::Tensor indptr, torch::Tensor data);
+torch::Tensor GraphSum(torch::Tensor indptr, torch::Tensor data,
+                       torch::optional<torch::Tensor> e_ids);
 
 torch::Tensor GraphDiv(torch::Tensor indptr, torch::Tensor data,
                        torch::Tensor divisor);

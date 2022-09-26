@@ -43,7 +43,6 @@ class Graph : public torch::CustomClassHolder {
   torch::Tensor Sum(int64_t axis);
   torch::Tensor L2Norm(int64_t axis);
   c10::intrusive_ptr<Graph> Divide(torch::Tensor divisor, int64_t axis);
-  c10::intrusive_ptr<Graph> Divide_2index(torch::Tensor divisor, int64_t axis);
   c10::intrusive_ptr<Graph> Normalize(int64_t axis);
   torch::Tensor RowIndices(bool unique);
   torch::Tensor AllIndices(bool unique);
@@ -64,7 +63,7 @@ class Graph : public torch::CustomClassHolder {
   torch::optional<torch::Tensor> col_ids_;  // column id in matrix
   torch::optional<torch::Tensor> row_ids_;  // row id in matrix
 
-  std::pair<torch::Tensor, torch::Tensor> PrepareDataForCompute(int64_t axis);
+  std::tuple<torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>> PrepareDataForCompute(int64_t axis);
 };
 
 }  // namespace gs

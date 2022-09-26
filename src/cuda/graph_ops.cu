@@ -68,7 +68,8 @@ __global__ void GroupNormL2(IdType* indptr, DType* data, DType* out_data,
   }
 }
 
-torch::Tensor GraphSumCUDA(torch::Tensor indptr, torch::Tensor data) {
+torch::Tensor GraphSumCUDA(torch::Tensor indptr, torch::Tensor data,
+                           torch::optional<torch::Tensor> e_ids) {
   auto size = indptr.numel() - 1;
   auto group_sum = torch::zeros(size, data.options());
   dim3 block(32, 16);
