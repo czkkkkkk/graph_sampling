@@ -29,18 +29,22 @@ torch::Tensor TensorUnique(torch::Tensor node_ids);
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphRelabel(
     torch::Tensor col_ids, torch::Tensor indptr, torch::Tensor indices);
 
-torch::Tensor GraphSum(torch::Tensor indptr, torch::Tensor data,
-                       torch::optional<torch::Tensor> e_ids);
+torch::Tensor GraphSum(torch::Tensor indptr,
+                       torch::optional<torch::Tensor> e_ids,
+                       torch::optional<torch::Tensor> data);
 
-torch::Tensor GraphDiv(torch::Tensor indptr, torch::Tensor data,
+torch::Tensor GraphDiv(torch::Tensor indptr,
+                       torch::optional<torch::Tensor> e_ids,
+                       torch::optional<torch::Tensor> data,
                        torch::Tensor divisor);
 
-torch::Tensor GraphDiv_2index(torch::Tensor indptr, torch::Tensor data,
-                              torch::Tensor e_ids, torch::Tensor divisor);
+torch::Tensor GraphL2Norm(torch::Tensor indptr,
+                          torch::optional<torch::Tensor> e_ids,
+                          torch::optional<torch::Tensor> data);
 
-torch::Tensor GraphL2Norm(torch::Tensor indptr, torch::Tensor data);
-
-torch::Tensor GraphNormalize(torch::Tensor indptr, torch::Tensor data);
+torch::Tensor GraphNormalize(torch::Tensor indptr,
+                             torch::optional<torch::Tensor> e_ids,
+                             torch::optional<torch::Tensor> data);
 
 std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc);
 

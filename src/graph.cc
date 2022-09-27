@@ -32,22 +32,7 @@ std::shared_ptr<CSR> Graph::GetCSR() { return csr_; }
 
 std::shared_ptr<COO> Graph::GetCOO() { return coo_; }
 
-torch::Tensor Graph::GetData() {
-  if (data_.has_value()) {
-    return data_.value();
-  } else {
-    torch::Tensor indices;
-    if (csc_ != nullptr) {
-      indices = csc_->indices;
-    } else if (csr_ != nullptr) {
-      indices = csr_->indices;
-    } else {
-      LOG(FATAL) << "Error in GetData: no CSC nor CSR";
-    }
-    return torch::ones(indices.numel(),
-                       torch::dtype(torch::kFloat32).device(torch::kCUDA));
-  }
-}
+torch::optional<torch::Tensor> Graph::GetData() { return data_; }
 
 int64_t Graph::GetNumCols() { return num_cols_; }
 
@@ -174,11 +159,12 @@ void Graph::CSR2CSC() {
   SetCSC(GraphCOO2CSC(coo_, num_cols));
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>> Graph::PrepareDataForCompute(
-    int64_t axis) {
+std::tuple<torch::Tensor, torch::optional<torch::Tensor>,
+           torch::optional<torch::Tensor>>
+Graph::PrepareDataForCompute(int64_t axis) {
   assertm(axis == 0 || axis == 1, "axis should be 0 or 1");
-  torch::Tensor indptr, data;
-  torch::optional<torch::Tensor> e_ids;
+  torch::Tensor indptr;
+  torch::optional<torch::Tensor> data, e_ids;
   data = GetData();
   if (axis == 0) {
     if (csc_ == nullptr) {
@@ -197,28 +183,30 @@ std::tuple<torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>> Graph::
 }
 
 torch::Tensor Graph::Sum(int64_t axis) {
-  torch::Tensor indptr, in_data, out_data;
-  torch::optional<torch::Tensor> e_ids;
+  torch::Tensor indptr, out_data;
+  torch::optional<torch::Tensor> in_data, e_ids;
   std::tie(indptr, in_data, e_ids) = PrepareDataForCompute(axis);
-  out_data = GraphSum(indptr, in_data, e_ids);
+  out_data = GraphSum(indptr, e_ids, in_data);
   return out_data;
 }
 
 torch::Tensor Graph::L2Norm(int64_t axis) {
-  torch::Tensor indptr, in_data, out_data;
-  std::tie(indptr, in_data) = PrepareDataForCompute(axis);
-  out_data = GraphL2Norm(indptr, in_data);
+  torch::Tensor indptr, out_data;
+  torch::optional<torch::Tensor> in_data, e_ids;
+  std::tie(indptr, in_data, e_ids) = PrepareDataForCompute(axis);
+  out_data = GraphL2Norm(indptr, e_ids, in_data);
   return out_data;
 }
 
 c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(is_subgraph_, col_ids_, row_ids_, num_cols_, num_rows_)));
-  torch::Tensor indptr, in_data, out_data;
-  std::tie(indptr, in_data) = PrepareDataForCompute(axis);
+  torch::Tensor indptr, out_data;
+  torch::optional<torch::Tensor> in_data, e_ids;
+  std::tie(indptr, in_data, e_ids) = PrepareDataForCompute(axis);
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);
-  out_data = GraphDiv(indptr, in_data, divisor);
+  out_data = GraphDiv(indptr, e_ids, in_data, divisor);
   ret->SetData(out_data);
   return ret;
 }
@@ -226,11 +214,12 @@ c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis) {
 c10::intrusive_ptr<Graph> Graph::Normalize(int64_t axis) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(is_subgraph_, col_ids_, row_ids_, num_cols_, num_rows_)));
-  torch::Tensor indptr, in_data, out_data;
-  std::tie(indptr, in_data) = PrepareDataForCompute(axis);
+  torch::Tensor indptr, out_data;
+  torch::optional<torch::Tensor> in_data, e_ids;
+  std::tie(indptr, in_data, e_ids) = PrepareDataForCompute(axis);
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);
-  out_data = GraphNormalize(indptr, in_data);
+  out_data = GraphNormalize(indptr, e_ids, in_data);
   ret->SetData(out_data);
   return ret;
 }

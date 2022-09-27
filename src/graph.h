@@ -32,7 +32,7 @@ class Graph : public torch::CustomClassHolder {
   std::shared_ptr<CSC> GetCSC();
   std::shared_ptr<CSR> GetCSR();
   std::shared_ptr<COO> GetCOO();
-  torch::Tensor GetData();
+  torch::optional<torch::Tensor> GetData();
   int64_t GetNumRows();
   int64_t GetNumCols();
   c10::intrusive_ptr<Graph> ColumnwiseSlicing(torch::Tensor column_index);
@@ -63,7 +63,9 @@ class Graph : public torch::CustomClassHolder {
   torch::optional<torch::Tensor> col_ids_;  // column id in matrix
   torch::optional<torch::Tensor> row_ids_;  // row id in matrix
 
-  std::tuple<torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>> PrepareDataForCompute(int64_t axis);
+  std::tuple<torch::Tensor, torch::optional<torch::Tensor>,
+             torch::optional<torch::Tensor>>
+  PrepareDataForCompute(int64_t axis);
 };
 
 }  // namespace gs
