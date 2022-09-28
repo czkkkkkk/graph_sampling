@@ -8,7 +8,7 @@ import numpy as np
 import time
 import argparse
 from ..load_graph import load_reddit
-from ..model import SAGE
+from ..model import ConvModel
 
 
 device = torch.device('cuda')
@@ -62,15 +62,17 @@ def layerwise_infer(graph, nid, model, batch_size, feat, label):
 
 def train(g, dataset, feat_device):
     features, labels, n_classes, train_idx, val_idx, test_idx = dataset
-    model = SAGE(features.shape[1], 256, n_classes, feat_device).to(device)
+    model = ConvModel(features.shape[1], 256,
+                      n_classes, feat_device).to(device)
     # create sampler & dataloader
     m = gs.Matrix(gs.Graph(False))
     m.load_dgl_graph(g)
     print("Check load successfully:", m._graph._CAPI_metadata(), '\n')
     fanouts = [2000, 2000]
-    compiled_func = gs.jit.compile(
-        func=fastgcn_sampler, args=(m, torch.Tensor(), torch.Tensor(), fanouts))
-    compiled_func.gm = dce(compiled_func.gm)
+    # compiled_func = gs.jit.compile(
+    #     func=fastgcn_sampler, args=(m, torch.Tensor(), torch.Tensor(), fanouts))
+    # compiled_func.gm = dce(compiled_func.gm)
+    compiled_func = fastgcn_sampler
     train_seedloader = SeedGenerator(
         train_idx, batch_size=1024, shuffle=True, drop_last=False)
     val_seedloader = SeedGenerator(

@@ -292,7 +292,7 @@ torch::Tensor Graph::AllIndices(bool unique) {
  *
  * @return std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
  */
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, std::string>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>, std::string>
 Graph::Relabel() {
   torch::Tensor frontier, relabeled_indices, relabeled_indptr;
   if (csc_ != nullptr) {
@@ -309,7 +309,7 @@ Graph::Relabel() {
     }
     std::tie(frontier, relabeled_indices, relabeled_indptr) =
         GraphRelabel(col_ids, csc_->indptr, row_indices);
-    return {frontier, relabeled_indices, relabeled_indptr, "csc"};
+    return {frontier, relabeled_indices, relabeled_indptr, csc_->e_ids, "csc"};
   } else if (csr_ != nullptr) {
     torch::Tensor row_ids, col_indices;
     if (row_ids_.has_value()) {
@@ -324,7 +324,7 @@ Graph::Relabel() {
     }
     std::tie(frontier, relabeled_indices, relabeled_indptr) =
         GraphRelabel(row_ids, csr_->indptr, col_indices);
-    return {frontier, relabeled_indices, relabeled_indptr, "csr"};
+    return {frontier, relabeled_indices, relabeled_indptr, csr_->e_ids, "csr"};
   } else {
     LOG(FATAL) << "Error in relabel: no CSC nor CSR.";
     return {};

@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import dgl
 import dgl.function as fn
 from dgl.dataloading import DataLoader, MultiLayerFullNeighborSampler
 import tqdm
@@ -28,35 +29,37 @@ class SAGEConv(nn.Module):
         with g.local_scope():
             g.srcdata['x'] = x
             g.dstdata['x'] = x[:g.number_of_dst_nodes()]
-            #g.edata['w'] = w
-            #g.update_all(fn.u_mul_e('x', 'w', 'm'), fn.sum('m', 'y'))
             g.update_all(fn.copy_u('x', 'm'), fn.mean('m', 'y'))
             h = torch.cat([g.dstdata['x'], g.dstdata['y']], 1)
             return self.W(h)
 
 
 class ConvModel(nn.Module):
-    def __init__(self, in_size, hid_size, out_size, feat_device, conv=GraphConv):
+    def __init__(self, in_size, hid_size, out_size, feat_device, conv=SAGEConv):
         super().__init__()
         self.layers = nn.ModuleList()
-        # three-layer GraphSAGE-mean
+        # three-layer Conv-mean
         self.layers.append(conv(in_size, hid_size))
         self.layers.append(conv(hid_size, out_size))
         self.dropout = nn.Dropout(0.5)
         self.hid_size = hid_size
         self.out_size = out_size
         self.feat_device = feat_device
+        self.conv = conv
 
     def forward(self, blocks, x):
         h = x.to('cuda') if self.feat_device == 'cpu' else x
         for l, (layer, block) in enumerate(zip(self.layers, blocks)):
-            h = layer(block, h)
+            if self.conv == GraphConv:
+                h = layer(block, h, block.edata['w'])
+            else:
+                h = layer(block, h, None)
             if l != len(self.layers) - 1:
                 h = F.relu(h)
                 h = self.dropout(h)
         return h
 
-    def inference(self, g, device, batch_size, feat):
+    def inference(self, g, device, batch_size, feat, w=None):
         """Conduct layer-wise inference to get all the node embeddings."""
         sampler = MultiLayerFullNeighborSampler(1)
         dataloader = DataLoader(
@@ -70,10 +73,11 @@ class ConvModel(nn.Module):
             y = torch.empty(
                 g.num_nodes(), self.hid_size if l != len(self.layers) - 1 else self.out_size,
                 device=buffer_device, pin_memory=pin_memory)
-            feat = feat.to(device)
             for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
-                x = feat[input_nodes]
-                h = layer(blocks[0], x)  # len(blocks) = 1
+                block = blocks[0].to(device)
+                x = feat[input_nodes].to(device)
+                w_block = None if w is None else w[block.edata[dgl.EID]].to(device)
+                h = layer(blocks[0], x, w_block)
                 if l != len(self.layers) - 1:
                     h = F.relu(h)
                     h = self.dropout(h)

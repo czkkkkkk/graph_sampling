@@ -15,7 +15,7 @@ class Matrix(object):
     def set_data(self, data):
         self._graph._CAPI_set_data(data)
 
-    def load_dgl_graph(self, g):
+    def load_dgl_graph(self, g, weight=None):
         # import csc
         if not isinstance(g, DGLHeteroGraph):
             raise ValueError
@@ -25,12 +25,20 @@ class Matrix(object):
         csc_indptr = torch.tensor(csc.indptr).long().cuda()
         csc_indices = torch.tensor(csc.indices).long().cuda()
         self._graph._CAPI_load_csc(csc_indptr, csc_indices)
+        if weight is not None:
+            self._graph._CAPI_set_data(g.edata[weight])
 
     def to_dgl_block(self):
-        unique_tensor, indptr, indices, format = self._graph._CAPI_relabel()
-        return create_block((format, (indptr, indices, [])),
-                            num_src_nodes=unique_tensor.numel(),
-                            num_dst_nodes=indptr.numel() - 1)
+        unique_tensor, indptr, indices, e_ids, format = self._graph._CAPI_relabel()
+        block = create_block((format, (indptr, indices, [])),
+                             num_src_nodes=unique_tensor.numel(),
+                             num_dst_nodes=indptr.numel() - 1)
+        data = self._graph._CAPI_get_data()
+        if data is not None:
+            if e_ids is not None:
+                data = data[e_ids]
+            block.edata['w'] = data
+        return block
 
     def columnwise_slicing(self, t):
         return Matrix(self._graph._CAPI_columnwise_slicing(t))

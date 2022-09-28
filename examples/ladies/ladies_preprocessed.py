@@ -12,7 +12,7 @@ def ladies(P: gs.Matrix, seeds: torch.Tensor, fanouts: list):
         U = P[:, seeds]
         prob = U.l2norm(axis=1)
         selected, _ = torch.ops.gs_ops.list_sampling_with_probs(
-            U.row_indices(unique=False), prob, fanout, False)
+            U.row_indices(unique=False), prob + 1, fanout, False)
         nodes = torch.cat((seeds, selected)).unique()  # add self-loop
         subU = U[nodes, :].divide(prob[nodes], axis=1).normalize(axis=1)
         seeds = subU.all_indices(unique=True)
