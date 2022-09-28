@@ -76,8 +76,8 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSlicing(
 std::shared_ptr<CSC> CSCRowwiseSlicing(std::shared_ptr<CSC> csc,
                                        torch::Tensor row_ids) {
   if (csc->indptr.device().type() == torch::kCUDA) {
-    torch::Tensor sub_indptr, sub_indices;
-    std::tie(sub_indptr, sub_indices) =
+    torch::Tensor sub_indptr, sub_indices, select_index;
+    std::tie(sub_indptr, sub_indices, select_index) =
         impl::CSCRowwiseSlicingCUDA(csc->indptr, csc->indices, row_ids);
     return std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt});
   } else {
