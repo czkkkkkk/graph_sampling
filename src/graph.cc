@@ -363,18 +363,23 @@ void Graph::Print() const {
 }
 
 std::vector<torch::Tensor> Graph::MetaData() {
+  torch::Tensor col_ids, row_ids, data;
+  col_ids = (col_ids_.has_value()) ? col_ids_.value() : torch::Tensor();
+  row_ids = (row_ids_.has_value()) ? row_ids_.value() : torch::Tensor();
   if (csc_ != nullptr) {
-    if (col_ids_.has_value()) {
-      return {col_ids_.value(), csc_->indptr, csc_->indices};
-    } else {
-      return {torch::Tensor(), csc_->indptr, csc_->indices};
-    }
+    data =
+        (data_.has_value())
+            ? data_.value()
+            : torch::ones(csc_->indices.numel(),
+                          torch::dtype(torch::kFloat32).device(torch::kCUDA));
+    return {col_ids, row_ids, data, csc_->indptr, csc_->indices};
   } else if (csr_ != nullptr) {
-    if (row_ids_.has_value()) {
-      return {col_ids_.value(), csc_->indptr, csc_->indices};
-    } else {
-      return {torch::Tensor(), csc_->indptr, csc_->indices};
-    }
+    data =
+        (data_.has_value())
+            ? data_.value()
+            : torch::ones(csr_->indices.numel(),
+                          torch::dtype(torch::kFloat32).device(torch::kCUDA));
+    return {col_ids, row_ids, data, csr_->indptr, csr_->indices};
   } else {
     LOG(FATAL) << "Error in MetaData: no CSC nor CSR.";
     return {coo_->row, coo_->col};

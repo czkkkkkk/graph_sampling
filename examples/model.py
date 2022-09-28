@@ -1,17 +1,47 @@
 import torch
 import torch.nn as nn
-import dgl.nn as dglnn
+import dgl.function as fn
 from dgl.dataloading import DataLoader, MultiLayerFullNeighborSampler
 import tqdm
 import torch.nn.functional as F
 
-class SAGE(nn.Module):
-    def __init__(self, in_size, hid_size, out_size, feat_device):
+
+class GraphConv(nn.Module):
+    def __init__(self, in_feats, n_classes):
+        super().__init__()
+        self.W = nn.Linear(in_feats, n_classes)
+
+    def forward(self, g, x, w):
+        with g.local_scope():
+            g.srcdata['x'] = self.W(x)
+            g.edata['w'] = w
+            g.update_all(fn.u_mul_e('x', 'w', 'm'), fn.sum('m', 'y'))
+            return g.dstdata['y']
+
+
+class SAGEConv(nn.Module):
+    def __init__(self, in_feats, n_classes):
+        super().__init__()
+        self.W = nn.Linear(in_feats * 2, n_classes)
+
+    def forward(self, g, x, w):
+        with g.local_scope():
+            g.srcdata['x'] = x
+            g.dstdata['x'] = x[:g.number_of_dst_nodes()]
+            #g.edata['w'] = w
+            #g.update_all(fn.u_mul_e('x', 'w', 'm'), fn.sum('m', 'y'))
+            g.update_all(fn.copy_u('x', 'm'), fn.mean('m', 'y'))
+            h = torch.cat([g.dstdata['x'], g.dstdata['y']], 1)
+            return self.W(h)
+
+
+class ConvModel(nn.Module):
+    def __init__(self, in_size, hid_size, out_size, feat_device, conv=GraphConv):
         super().__init__()
         self.layers = nn.ModuleList()
         # three-layer GraphSAGE-mean
-        self.layers.append(dglnn.SAGEConv(in_size, hid_size, 'mean'))
-        self.layers.append(dglnn.SAGEConv(hid_size, out_size, 'mean'))
+        self.layers.append(conv(in_size, hid_size))
+        self.layers.append(conv(hid_size, out_size))
         self.dropout = nn.Dropout(0.5)
         self.hid_size = hid_size
         self.out_size = out_size

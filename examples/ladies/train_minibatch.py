@@ -25,7 +25,7 @@ def ladies_sampler(A: gs.Matrix, seeds: torch.Tensor, fanouts: list):
         U = P[:, seeds]
         prob = U.l2norm(axis=1)
         selected, _ = torch.ops.gs_ops.list_sampling_with_probs(
-            U.row_indices(unique=True), prob, fanout, False)
+            U.row_indices(unique=False), prob, fanout, False)
         nodes = torch.cat((seeds, selected)).unique()  # add self-loop
         subU = U[nodes, :].divide(prob[nodes], axis=1).normalize(axis=1)
         seeds = subU.all_indices(unique=True)
@@ -34,14 +34,12 @@ def ladies_sampler(A: gs.Matrix, seeds: torch.Tensor, fanouts: list):
     return input_node, output_node, ret
 
 
-
-def evaluate(model, matrix, compiled_func, seedloader, features, labels, probs, fanouts):
+def evaluate(model, matrix, compiled_func, seedloader, features, labels, fanouts):
     model.eval()
     ys = []
     y_hats = []
     for it, seeds in enumerate(seedloader):
-        input_nodes, output_nodes, blocks = compiled_func(
-            matrix, seeds, probs, fanouts)
+        input_nodes, output_nodes, blocks = compiled_func(matrix, seeds, fanouts)
         with torch.no_grad():
             x = features[input_nodes]
             y = labels[output_nodes]
@@ -68,9 +66,10 @@ def train(g, dataset, feat_device):
     m.load_dgl_graph(g)
     print("Check load successfully:", m._graph._CAPI_metadata(), '\n')
     fanouts = [2000, 2000]
-    compiled_func = gs.jit.compile(
-        func=ladies_sampler, args=(m, torch.Tensor(), torch.Tensor(), fanouts))
-    compiled_func.gm = dce(compiled_func.gm)
+    # compiled_func = gs.jit.compile(
+    #     func=ladies_sampler, args=(m, torch.Tensor(), torch.Tensor(), fanouts))
+    # compiled_func.gm = dce(compiled_func.gm)
+    compiled_func = ladies_sampler
     train_seedloader = SeedGenerator(
         train_idx, batch_size=1024, shuffle=True, drop_last=False)
     val_seedloader = SeedGenerator(
@@ -80,8 +79,6 @@ def train(g, dataset, feat_device):
 
     n_epoch = 10
 
-    probs = g.out_degrees().float().cuda()
-
     for epoch in range(n_epoch):
         torch.cuda.synchronize()
         start = time.time()
@@ -89,8 +86,7 @@ def train(g, dataset, feat_device):
         model.train()
         total_loss = 0
         for it, seeds in enumerate(train_seedloader):
-            input_nodes, output_nodes, blocks = compiled_func(
-                m, seeds, probs, fanouts)
+            input_nodes, output_nodes, blocks = compiled_func(m, seeds, fanouts)
             x = features[input_nodes]
             y = labels[output_nodes]
             y_hat = model(blocks, x)
@@ -104,7 +100,7 @@ def train(g, dataset, feat_device):
         time_list.append(time.time() - start)
 
         acc = evaluate(model, m, compiled_func,
-                       val_seedloader, features, labels, probs, fanouts)
+                       val_seedloader, features, labels, fanouts)
         print("Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} "
               .format(epoch, total_loss / (it+1), acc.item()))
         print(torch.cuda.max_memory_reserved() / (1024 * 1024 * 1024), 'GB')
