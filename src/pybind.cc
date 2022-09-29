@@ -18,7 +18,6 @@ TORCH_LIBRARY(gs_classes, m) {
            &Graph::ColumnwiseFusedSlicingAndSampling)
       .def("_CAPI_load_csc", &Graph::LoadCSC)
       .def("_CAPI_load_csc_with_col_ids", &Graph::LoadCSCWithColIds)
-      .def("_CAPI_print", &Graph::Print)
       .def("_CAPI_all_valid_node", &Graph::AllValidNode)
       .def("_CAPI_get_rows", &Graph::GetRows)
       .def("_CAPI_get_cols", &Graph::GetCols)

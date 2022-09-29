@@ -56,8 +56,6 @@ class Graph : public torch::CustomClassHolder {
   Relabel();
   std::vector<torch::Tensor> MetaData();
 
-  void Print() const;
-
  private:
   bool is_subgraph_;
   int64_t num_cols_;  // total number of cols in a matrix
