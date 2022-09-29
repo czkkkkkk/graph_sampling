@@ -45,6 +45,10 @@ class Graph : public torch::CustomClassHolder {
   c10::intrusive_ptr<Graph> Divide(torch::Tensor divisor, int64_t axis);
   c10::intrusive_ptr<Graph> Normalize(int64_t axis);
   torch::Tensor AllValidNode();
+  torch::Tensor GetRows();
+  torch::Tensor GetCols();
+  torch::Tensor GetValidRows();
+  torch::Tensor GetValidCols();
   torch::Tensor GetCOORows(bool is_original);
   torch::Tensor GetCOOCols(bool is_original);
   std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,

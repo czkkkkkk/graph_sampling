@@ -313,6 +313,46 @@ Graph::Relabel() {
   }
 }
 
+torch::Tensor Graph::GetRows() {
+  if (row_ids_.has_value()) {
+    return row_ids_.value();
+  } else {
+    if (csr_ != nullptr) {
+      return torch::arange(num_rows_, csr_->indices.options());
+    } else {
+      return torch::arange(num_rows_, csc_->indices.options());
+    }
+  }
+}
+
+torch::Tensor Graph::GetCols() {
+  if (col_ids_.has_value()) {
+    return col_ids_.value();
+  } else {
+    if (csc_ != nullptr) {
+      return torch::arange(num_cols_, csc_->indices.options());
+    } else {
+      return torch::arange(num_cols_, csr_->indices.options());
+    }
+  }
+}
+
+torch::Tensor Graph::GetValidRows() {
+  if (row_ids_.has_value()) {
+    return row_ids_.value();
+  } else {
+    return TensorUnique(GetCOORows(true));
+  }
+}
+
+torch::Tensor Graph::GetValidCols() {
+  if (col_ids_.has_value()) {
+    return col_ids_.value();
+  } else {
+    return TensorUnique(GetCOOCols(true));
+  }
+}
+
 torch::Tensor Graph::GetCOORows(bool is_original) {
   torch::Tensor coo_rows;
   if (coo_ != nullptr) {

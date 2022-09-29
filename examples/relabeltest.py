@@ -14,3 +14,12 @@ for i in subA._CAPI_relabel():
 
 print(subA._CAPI_get_coo_rows(True))
 print(subA._CAPI_get_coo_cols(True))
+
+print(subA._CAPI_get_coo_rows(False))
+print(subA._CAPI_get_coo_cols(False))
+
+print(subA._CAPI_get_valid_rows())
+print(subA._CAPI_get_valid_cols())
+
+print(subA._CAPI_get_rows())
+print(subA._CAPI_get_cols())
