@@ -63,7 +63,7 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSlicing(
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     std::tie(sub_indptr, sub_indices, select_index) =
-        impl::CSCColumnwiseSlicingCUDA(csc->indptr, csc->indices, column_ids);
+        impl::OnIndptrSlicingCUDA(csc->indptr, csc->indices, column_ids);
     return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
             select_index};
   } else {
@@ -72,13 +72,14 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSlicing(
   }
 }
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCRowwiseSlicing(std::shared_ptr<CSC> csc,
-                                       torch::Tensor row_ids) {
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCRowwiseSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor row_ids) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     std::tie(sub_indptr, sub_indices, select_index) =
-        impl::CSCRowwiseSlicingCUDA(csc->indptr, csc->indices, row_ids);
-    return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}), select_index};
+        impl::OnIndicesSlicingCUDA(csc->indptr, csc->indices, row_ids);
+    return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
+            select_index};
   } else {
     std::cerr << "Not implemented warning";
     return {std::make_shared<CSC>(CSC{}), torch::Tensor()};
@@ -90,7 +91,7 @@ std::pair<std::shared_ptr<CSR>, torch::Tensor> CSRRowwiseSlicing(
   if (csr->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     std::tie(sub_indptr, sub_indices, select_index) =
-        impl::CSCColumnwiseSlicingCUDA(csr->indptr, csr->indices, row_ids);
+        impl::OnIndptrSlicingCUDA(csr->indptr, csr->indices, row_ids);
     return {std::make_shared<CSR>(CSR{sub_indptr, sub_indices, torch::nullopt}),
             select_index};
   } else {

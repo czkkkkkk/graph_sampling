@@ -97,7 +97,7 @@ struct NodeQueryHashmap {
 };
 
 template <typename IdType, int BLOCK_WARPS, int TILE_SIZE>
-__global__ void _CSCRowwiseSlicinigQueryKernel(
+__global__ void _OnIndicesSlicinigQueryKernel(
     const IdType *const in_indptr, const IdType *const in_indices,
     IdType *const key_buffer, IdType *const value_buffer, IdType *const out_deg,
     IdType *const out_indices, bool *const out_mask, const int num_items,
@@ -139,9 +139,8 @@ __global__ void _CSCRowwiseSlicinigQueryKernel(
   }
 }
 
-// todo(ping): maybe we need to return _idxs for the selected edge;
 template <typename IdType>
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _CSCRowwiseSlicing(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _OnIndicesSlicing(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids) {
   int num_items = indptr.numel() - 1;
   int num_edge = indices.numel();
@@ -175,12 +174,11 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _CSCRowwiseSlicing(
       torch::TensorOptions().dtype(torch::kBool).device(torch::kCUDA));
 
   // query hashmap to get mask
-  _CSCRowwiseSlicinigQueryKernel<IdType, BLOCK_WARP, TILE_SIZE>
-      <<<grid, block>>>(
-          indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
-          key_buffer.data_ptr<IdType>(), value_buffer.data_ptr<IdType>(),
-          out_indptr.data_ptr<IdType>(), out_indices.data_ptr<IdType>(),
-          out_mask.data_ptr<bool>(), num_items, dir_size);
+  _OnIndicesSlicinigQueryKernel<IdType, BLOCK_WARP, TILE_SIZE><<<grid, block>>>(
+      indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
+      key_buffer.data_ptr<IdType>(), value_buffer.data_ptr<IdType>(),
+      out_indptr.data_ptr<IdType>(), out_indices.data_ptr<IdType>(),
+      out_mask.data_ptr<bool>(), num_items, dir_size);
 
   // prefix sum to get out_indptr and out_indices_index
   cub_exclusiveSum<IdType>(out_indptr.data_ptr<IdType>(), num_items + 1);
@@ -191,9 +189,9 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _CSCRowwiseSlicing(
   return {out_indptr, out_indices.index({select_index}), select_index};
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCRowwiseSlicingCUDA(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndicesSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids) {
-  return _CSCRowwiseSlicing<int64_t>(indptr, indices, row_ids);
+  return _OnIndicesSlicing<int64_t>(indptr, indices, row_ids);
 };
 
 }  // namespace impl

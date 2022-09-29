@@ -392,37 +392,6 @@ torch::Tensor Graph::GetCOOCols(bool is_original) {
              : coo_cols;
 };
 
-void Graph::Print() const {
-  std::stringstream ss;
-  if (col_ids_.has_value()) {
-    ss << "col ids: " << col_ids_.value() << "\n";
-  }
-  if (row_ids_.has_value()) {
-    ss << "col ids: " << row_ids_.value() << "\n";
-  }
-  if (csc_ != nullptr) {
-    ss << "# Nodes: " << csc_->indptr.size(0) - 1
-       << " # Edges: " << csc_->indices.size(0) << "\n";
-    ss << "CSC indptr: "
-       << "\n"
-       << csc_->indptr << "\n";
-    ss << "CSC indices: "
-       << "\n"
-       << csc_->indices << "\n";
-  }
-  if (csr_ != nullptr) {
-    ss << "# Nodes: " << csr_->indptr.size(0) - 1
-       << " # Edges: " << csr_->indices.size(0) << "\n";
-    ss << "CSR indptr: "
-       << "\n"
-       << csr_->indptr << "\n";
-    ss << "CSR indices: "
-       << "\n"
-       << csr_->indices << "\n";
-  }
-  LOG(INFO) << ss.str();
-}
-
 std::vector<torch::Tensor> Graph::MetaData() {
   torch::Tensor col_ids, row_ids, data;
   col_ids = (col_ids_.has_value()) ? col_ids_.value() : torch::Tensor();

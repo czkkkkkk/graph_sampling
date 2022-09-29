@@ -69,9 +69,8 @@ std::pair<torch::Tensor, torch::Tensor> GetSubIndices(
 }
 
 // columwise slicing
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-CSCColumnwiseSlicingCUDA(torch::Tensor indptr, torch::Tensor indices,
-                         torch::Tensor column_ids) {
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndptrSlicingCUDA(
+    torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids) {
   torch::Tensor sub_indptr, sub_indices, select_index;
   sub_indptr = GetSubIndptr<int64_t>(indptr, column_ids);
   std::tie(sub_indices, select_index) =
