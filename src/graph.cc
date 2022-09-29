@@ -224,27 +224,6 @@ c10::intrusive_ptr<Graph> Graph::Normalize(int64_t axis) {
   return ret;
 }
 
-torch::Tensor Graph::RowIndices(bool unique) {
-  torch::Tensor row_indices;
-  if (row_ids_.has_value()) {
-    row_indices = row_ids_.value();
-    if (unique) {
-      row_indices = std::get<0>(torch::_unique(row_indices));
-    }
-  } else {
-    if (csr_ != nullptr) {
-      row_indices =
-          torch::arange(csr_->indptr.numel() - 1, csr_->indptr.options());
-    } else if (csc_ != nullptr) {
-      row_indices = std::get<0>(torch::_unique(csc_->indices));
-    } else {
-      LOG(FATAL) << "Error in RowIndices: no CSC nor CSR";
-      row_indices = torch::Tensor();
-    }
-  }
-  return row_indices;
-}
-
 torch::Tensor Graph::AllValidNode() {
   // for sampling, col_ids_ is necessary!
   if (!col_ids_.has_value()) {
@@ -333,6 +312,41 @@ Graph::Relabel() {
     LOG(ERROR) << "Error in Relabel!";
   }
 }
+
+torch::Tensor Graph::GetCOORows(bool is_original) {
+  torch::Tensor coo_rows;
+  if (coo_ != nullptr) {
+    coo_rows = coo_->row;
+  } else if (csc_ != nullptr and !csc_->e_ids.has_value()) {
+    coo_rows = csc_->indices;
+  } else if (csr_ != nullptr and !csr_->e_ids.has_value()) {
+    SetCOO(GraphCSR2COO(csr_));
+    coo_rows = coo_->row;
+  } else {
+    LOG(ERROR) << "Error in GetCOORows!";
+  }
+
+  return (is_original and row_ids_.has_value())
+             ? row_ids_.value().index({coo_rows})
+             : coo_rows;
+};
+
+torch::Tensor Graph::GetCOOCols(bool is_original) {
+  torch::Tensor coo_cols;
+  if (coo_ != nullptr) {
+    coo_cols = coo_->col;
+  } else if (csc_ != nullptr and !csc_->e_ids.has_value()) {
+    SetCOO(GraphCSC2COO(csc_));
+    coo_cols = coo_->col;
+  } else if (csr_ != nullptr and !csr_->e_ids.has_value()) {
+    coo_cols = csr_->indices;
+  } else {
+    LOG(ERROR) << "Error in GetCOOCols!";
+  }
+  return (is_original and col_ids_.has_value())
+             ? col_ids_.value().index({coo_cols})
+             : coo_cols;
+};
 
 void Graph::Print() const {
   std::stringstream ss;

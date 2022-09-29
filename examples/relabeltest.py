@@ -11,3 +11,6 @@ subA = A._CAPI_columnwise_slicing(column_ids)
 
 for i in subA._CAPI_relabel():
     print(i)
+
+print(subA._CAPI_get_coo_rows(True))
+print(subA._CAPI_get_coo_cols(True))
