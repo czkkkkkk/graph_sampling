@@ -15,7 +15,7 @@ TEST(GraphSum, test1)
     torch::Tensor expected = torch::ones(20, data_options) * 5;
     A.LoadCSC(indptr, indices);
 
-    auto result = A.Sum(0);
+    auto result = A.Sum(0, 1);
 
     EXPECT_EQ(result.numel(), expected.numel());
     EXPECT_TRUE(result.equal(expected));
@@ -33,13 +33,13 @@ TEST(GraphSum, test2)
     A.LoadCSC(indptr, indices);
     A.SetData(data.repeat({20}));
 
-    auto result = A.Sum(0);
+    auto result = A.Sum(0, 1);
 
     EXPECT_EQ(result.numel(), expected.numel());
     EXPECT_TRUE(result.equal(expected));
 }
 
-TEST(GraphL2Norm, test1)
+TEST(GraphSum, test3)
 {
     Graph A(false);
     auto options = torch::TensorOptions().dtype(torch::kInt64).device(torch::kCUDA);
@@ -49,13 +49,13 @@ TEST(GraphL2Norm, test1)
     torch::Tensor expected = torch::ones(20, data_options) * 5;
     A.LoadCSC(indptr, indices);
 
-    auto result = A.L2Norm(0);
+    auto result = A.Sum(0, 2);
 
     EXPECT_EQ(result.numel(), expected.numel());
     EXPECT_TRUE(result.equal(expected));
 }
 
-TEST(GraphL2Norm, test2)
+TEST(GraphSum, test4)
 {
     Graph A(false);
     auto options = torch::TensorOptions().dtype(torch::kInt64).device(torch::kCUDA);
@@ -67,7 +67,7 @@ TEST(GraphL2Norm, test2)
     A.LoadCSC(indptr, indices);
     A.SetData(data.repeat({20}));
 
-    auto result = A.L2Norm(0);
+    auto result = A.Sum(0, 2);
 
     EXPECT_EQ(result.numel(), expected.numel());
     EXPECT_TRUE(result.equal(expected));

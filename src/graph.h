@@ -40,7 +40,7 @@ class Graph : public torch::CustomClassHolder {
   c10::intrusive_ptr<Graph> ColumnwiseSampling(int64_t fanout, bool replace);
   c10::intrusive_ptr<Graph> ColumnwiseFusedSlicingAndSampling(
       torch::Tensor column_index, int64_t fanout, bool replace);
-  torch::Tensor Sum(int64_t axis);
+  torch::Tensor Sum(int64_t axis, int64_t powk);
   torch::Tensor L2Norm(int64_t axis);
   c10::intrusive_ptr<Graph> Divide(torch::Tensor divisor, int64_t axis);
   c10::intrusive_ptr<Graph> Normalize(int64_t axis);

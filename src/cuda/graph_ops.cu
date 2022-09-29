@@ -26,7 +26,7 @@ __global__ void _SegmentDivKernel(IdType* indptr, IdType* e_ids, DType* data,
 template <typename IdType, typename DType>
 torch::Tensor GraphSum(torch::Tensor indptr,
                        torch::optional<torch::Tensor> e_ids,
-                       torch::optional<torch::Tensor> data) {
+                       torch::optional<torch::Tensor> data, int64_t powk) {
   auto size = indptr.numel() - 1;
   auto options = (data.has_value())
                      ? data.value().options()
@@ -37,7 +37,16 @@ torch::Tensor GraphSum(torch::Tensor indptr,
     auto permuted_data = (e_ids.has_value())
                              ? data.value().index({e_ids.value()})
                              : data.value();
-    cub_segmentedSum<IdType, DType>(permuted_data.data_ptr<DType>(),
+    auto data_powk = permuted_data;
+    if (powk != 1) {
+      using it = thrust::counting_iterator<IdType>;
+      thrust::for_each(
+          thrust::device, it(0), it(permuted_data.numel()),
+          [in = permuted_data.data_ptr<DType>(),
+           out = data_powk.data_ptr<DType>(),
+           k = powk] __device__(int i) mutable { out[i] = powf(in[i], k); });
+    }
+    cub_segmentedSum<IdType, DType>(data_powk.data_ptr<DType>(),
                                     segment_sum.data_ptr<DType>(),
                                     indptr.data_ptr<IdType>(), size);
   } else {
@@ -52,55 +61,14 @@ torch::Tensor GraphSum(torch::Tensor indptr,
   return segment_sum;
 }
 
-torch::Tensor GraphSumCUDA(torch::Tensor indptr,
-                           torch::optional<torch::Tensor> e_ids,
-                           torch::optional<torch::Tensor> data) {
-  return GraphSum<int64_t, float>(indptr, e_ids, data);
-}
-
-// CustomNormL2 functor
-struct CustomNormL2 {
-  template <typename T>
-  CUB_RUNTIME_FUNCTION __forceinline__ T operator()(const T& a,
-                                                    const T& b) const {
-    return a * a + b;
-  }
-};
-
-template <typename IdType, typename DType>
-torch::Tensor GraphL2Norm(torch::Tensor indptr,
-                          torch::optional<torch::Tensor> e_ids,
-                          torch::optional<torch::Tensor> data) {
-  auto size = indptr.numel() - 1;
-  auto options = (data.has_value())
-                     ? data.value().options()
-                     : torch::dtype(torch::kFloat32).device(torch::kCUDA);
-  auto segment_norm = torch::zeros(size, options);
-
-  if (data.has_value()) {
-    auto permuted_data = (e_ids.has_value())
-                             ? data.value().index({e_ids.value()})
-                             : data.value();
-    CustomNormL2 customL2;
-    cub_segmentedReduce<IdType, DType, CustomNormL2>(
-        permuted_data.data_ptr<DType>(), segment_norm.data_ptr<DType>(),
-        indptr.data_ptr<IdType>(), size, customL2, 0.0);
-  } else {
-    using it = thrust::counting_iterator<IdType>;
-    thrust::for_each(
-        thrust::device, it(0), it(size),
-        [d_offsets = indptr.data_ptr<IdType>(),
-         out = segment_norm.data_ptr<DType>()] __device__(int64_t i) mutable {
-          out[i] = static_cast<DType>(d_offsets[i + 1] - d_offsets[i]);
-        });
-  }
-  return segment_norm;
-}
-
 torch::Tensor GraphL2NormCUDA(torch::Tensor indptr,
                               torch::optional<torch::Tensor> e_ids,
-                              torch::optional<torch::Tensor> data) {
-  return GraphL2Norm<int64_t, float>(indptr, e_ids, data);
+                              torch::optional<torch::Tensor> data) {}
+
+torch::Tensor GraphSumCUDA(torch::Tensor indptr,
+                           torch::optional<torch::Tensor> e_ids,
+                           torch::optional<torch::Tensor> data, int64_t powk) {
+  return GraphSum<int64_t, float>(indptr, e_ids, data, powk);
 }
 
 template <typename IdType, typename DType>
@@ -140,7 +108,7 @@ torch::Tensor GraphNormalize(torch::Tensor indptr,
                              torch::optional<torch::Tensor> e_ids,
                              torch::optional<torch::Tensor> data) {
   torch::Tensor out_data, segment_sum;
-  segment_sum = GraphSum<IdType, DType>(indptr, e_ids, data);
+  segment_sum = GraphSum<IdType, DType>(indptr, e_ids, data, 1);
   out_data = GraphDiv<IdType, DType>(indptr, e_ids, data, segment_sum);
   return out_data;
 }

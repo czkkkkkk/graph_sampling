@@ -33,7 +33,7 @@ std::tuple<torch::Tensor, torch::Tensor> RelabelCUDA(torch::Tensor col_ids,
 
 torch::Tensor GraphSumCUDA(torch::Tensor indptr,
                            torch::optional<torch::Tensor> e_ids,
-                           torch::optional<torch::Tensor> data);
+                           torch::optional<torch::Tensor> data, int64_t powk);
 
 torch::Tensor GraphL2NormCUDA(torch::Tensor indptr,
                               torch::optional<torch::Tensor> e_ids,

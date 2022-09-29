@@ -1,6 +1,6 @@
 import gs
 import torch
-from ..load_graph import load_reddit
+from gs.utils import load_reddit
 import time
 import numpy as np
 

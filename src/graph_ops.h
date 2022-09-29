@@ -31,7 +31,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphRelabel(
 
 torch::Tensor GraphSum(torch::Tensor indptr,
                        torch::optional<torch::Tensor> e_ids,
-                       torch::optional<torch::Tensor> data);
+                       torch::optional<torch::Tensor> data, int64_t powk);
 
 torch::Tensor GraphDiv(torch::Tensor indptr,
                        torch::optional<torch::Tensor> e_ids,

@@ -152,9 +152,9 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphRelabel(
 
 torch::Tensor GraphSum(torch::Tensor indptr,
                        torch::optional<torch::Tensor> e_ids,
-                       torch::optional<torch::Tensor> data) {
+                       torch::optional<torch::Tensor> data, int64_t powk) {
   if (indptr.device().type() == torch::kCUDA) {
-    return impl::GraphSumCUDA(indptr, e_ids, data);
+    return impl::GraphSumCUDA(indptr, e_ids, data, powk);
   } else {
     LOG(FATAL) << "Not implemented warning";
     return torch::Tensor();

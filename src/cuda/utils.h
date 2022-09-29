@@ -88,24 +88,6 @@ void cub_segmentedSum(DType* d_in, DType* d_out, IdType* d_offsets,
                                   d_out, num_segments, d_offsets,
                                   d_offsets + 1);
 }
-
-template <typename IdType, typename DType, typename ReductionOp>
-void cub_segmentedReduce(DType* d_in, DType* d_out, IdType* d_offsets,
-                         int64_t num_segments, ReductionOp functor,
-                         DType initial_value) {
-  // Determine temporary device storage requirements
-  void* d_temp_storage = NULL;
-  size_t temp_storage_bytes = 0;
-  cub::DeviceSegmentedReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in,
-                                     d_out, num_segments, d_offsets,
-                                     d_offsets + 1, functor, initial_value);
-  // Allocate temporary storage
-  cudaMalloc(&d_temp_storage, temp_storage_bytes);
-  // Run reduction
-  cub::DeviceSegmentedReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in,
-                                     d_out, num_segments, d_offsets,
-                                     d_offsets + 1, functor, initial_value);
-}
 }  // namespace impl
 }  // namespace gs
 

@@ -46,8 +46,8 @@ class Matrix(object):
     def columnwise_sampling(self, fanout, replace=True):
         return Matrix(self._graph._CAPI_columnwise_sampling(fanout, replace))
 
-    def sum(self, axis) -> torch.Tensor:
-        return self._graph._CAPI_sum(axis)
+    def sum(self, axis, powk=1) -> torch.Tensor:
+        return self._graph._CAPI_sum(axis, powk)
 
     def l2norm(self, axis) -> torch.Tensor:
         return self._graph._CAPI_l2norm(axis)

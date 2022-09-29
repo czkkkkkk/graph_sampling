@@ -182,11 +182,11 @@ Graph::PrepareDataForCompute(int64_t axis) {
   return {indptr, data, e_ids};
 }
 
-torch::Tensor Graph::Sum(int64_t axis) {
+torch::Tensor Graph::Sum(int64_t axis, int64_t powk) {
   torch::Tensor indptr, out_data;
   torch::optional<torch::Tensor> in_data, e_ids;
   std::tie(indptr, in_data, e_ids) = PrepareDataForCompute(axis);
-  out_data = GraphSum(indptr, e_ids, in_data);
+  out_data = GraphSum(indptr, e_ids, in_data, powk);
   return out_data;
 }
 
