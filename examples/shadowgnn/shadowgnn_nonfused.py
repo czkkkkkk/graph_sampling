@@ -23,10 +23,7 @@ def shadowgnn_baseline(A: gs.Matrix, seeds, fanouts):
         subA = subA.columnwise_sampling(fanout, False)
         seeds = subA.all_indices()
     retA = A[seeds, seeds]
-    unique_tensor, csc_indptr, csc_indices = retA._graph.relabel()
-    retG = gs.Graph(False)
-    retG.load_csc(csc_indptr, csc_indices)
-    retA = gs.Matrix(retG)
+    retA = retA.relabel()
     torch.cuda.nvtx.range_pop()
     return seeds, output_nodes, retA
 
