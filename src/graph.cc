@@ -292,43 +292,58 @@ torch::Tensor Graph::AllIndices(bool unique) {
  *
  * @return std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
  */
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>, std::string>
+std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,
+           torch::optional<torch::Tensor>, std::string>
 Graph::Relabel() {
-  torch::Tensor frontier, relabeled_indices, relabeled_indptr;
   if (csc_ != nullptr) {
-    torch::Tensor col_ids, row_indices;
-    if (col_ids_.has_value()) {
-      col_ids = col_ids_.value();
-    } else {
-      col_ids = torch::arange(csc_->indptr.numel() - 1, csc_->indptr.options());
-    }
-    if (row_ids_.has_value()) {
-      row_indices = row_ids_.value().index({csc_->indices});
-    } else {
-      row_indices = csc_->indices;
-    }
-    std::tie(frontier, relabeled_indices, relabeled_indptr) =
-        GraphRelabel(col_ids, csc_->indptr, row_indices);
-    return {frontier, relabeled_indices, relabeled_indptr, csc_->e_ids, "csc"};
+    torch::Tensor col_ids =
+        col_ids_.has_value()
+            ? col_ids_.value()
+            : torch::arange(csc_->indptr.numel() - 1, csc_->indptr.options());
+    torch::Tensor row_ids =
+        (row_ids_.has_value()) ? row_ids_.value() : csc_->indices;
+
+    torch::Tensor row_indices = row_ids_.has_value()
+                                    ? row_ids_.value().index({csc_->indices})
+                                    : csc_->indices;
+
+    torch::Tensor frontier;
+    std::vector<torch::Tensor> relabeled_result;
+
+    std::tie(frontier, relabeled_result) =
+        BatchTensorRelabel({col_ids, row_ids}, {row_indices});
+
+    torch::Tensor relabeled_indptr = csc_->indptr.clone();
+    torch::Tensor relabeled_indices = relabeled_result[0];
+
+    return {frontier,          frontier.numel(), num_cols_, relabeled_indptr,
+            relabeled_indices, csc_->e_ids,      "csc"};
   } else if (csr_ != nullptr) {
-    torch::Tensor row_ids, col_indices;
-    if (row_ids_.has_value()) {
-      row_ids = row_ids_.value();
-    } else {
-      row_ids = torch::arange(csr_->indptr.numel() - 1, csr_->indptr.options());
+    torch::Tensor col_ids =
+        (col_ids_.has_value()) ? col_ids_.value() : csr_->indices;
+    torch::Tensor row_ids =
+        (row_ids_.has_value())
+            ? row_ids_.value()
+            : torch::arange(csr_->indptr.numel() - 1, csr_->indptr.options());
+    if (coo_ == nullptr) {
+      SetCOO(GraphCSR2COO(csr_));
     }
-    if (col_ids_.has_value()) {
-      col_indices = col_ids_.value().index({csr_->indices});
-    } else {
-      col_indices = csr_->indices;
-    }
-    std::tie(frontier, relabeled_indices, relabeled_indptr) =
-        GraphRelabel(row_ids, csr_->indptr, col_indices);
-    return {frontier, relabeled_indices, relabeled_indptr, csr_->e_ids, "csr"};
+
+    torch::Tensor frontier;
+    std::vector<torch::Tensor> relabeled_result;
+    std::tie(frontier, relabeled_result) =
+        BatchTensorRelabel({col_ids_.value(), row_ids_.value()},
+                           {col_ids_.value(), row_ids_.value()});
+
+    torch::Tensor relabel_coo_col = relabeled_result[0].index({coo_->col});
+    torch::Tensor relabel_coo_row = relabeled_result[1].index({coo_->row});
+
+    return {frontier,        frontier.numel(), num_cols_, relabel_coo_row,
+            relabel_coo_col, coo_->e_ids,      "coo"};
   } else {
-    LOG(FATAL) << "Error in relabel: no CSC nor CSR.";
-    return {};
+    LOG(FATAL) << "Error in Relabel: no CSC nor CSR";
   }
+  return {};
 }
 
 void Graph::Print() const {

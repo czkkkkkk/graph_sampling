@@ -26,8 +26,9 @@ CSCColumnwiseFusedSlicingAndSampling(std::shared_ptr<CSC> csc,
 
 torch::Tensor TensorUnique(torch::Tensor node_ids);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphRelabel(
-    torch::Tensor col_ids, torch::Tensor indptr, torch::Tensor indices);
+std::tuple<torch::Tensor, std::vector<torch::Tensor>> BatchTensorRelabel(
+    std::vector<torch::Tensor> mapping_tensors,
+    std::vector<torch::Tensor> to_be_relabeled_tensors);
 
 torch::Tensor GraphSum(torch::Tensor indptr,
                        torch::optional<torch::Tensor> e_ids,

@@ -46,7 +46,7 @@ class Graph : public torch::CustomClassHolder {
   c10::intrusive_ptr<Graph> Normalize(int64_t axis);
   torch::Tensor RowIndices(bool unique);
   torch::Tensor AllIndices(bool unique);
-  std::tuple<torch::Tensor, torch::Tensor, torch::Tensor,
+  std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,
              torch::optional<torch::Tensor>, std::string>
   Relabel();
   std::vector<torch::Tensor> MetaData();

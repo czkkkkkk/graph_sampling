@@ -142,12 +142,14 @@ torch::Tensor TensorUnique(torch::Tensor node_ids) {
 }
 
 // @todo Fix for new storage format
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphRelabel(
-    torch::Tensor col_ids, torch::Tensor indptr, torch::Tensor indices) {
-  torch::Tensor frontier, relabeled_indices, relabeled_indptr;
-  std::tie(frontier, relabeled_indices) = impl::RelabelCUDA(col_ids, indices);
-  relabeled_indptr = indptr.clone();
-  return std::make_tuple(frontier, relabeled_indptr, relabeled_indices);
+std::tuple<torch::Tensor, std::vector<torch::Tensor>> BatchTensorRelabel(
+    std::vector<torch::Tensor> mapping_tensors,
+    std::vector<torch::Tensor> to_be_relabeled_tensors) {
+  torch::Tensor frontier;
+  std::vector<torch::Tensor> relabel_result;
+  std::tie(frontier, relabel_result) =
+      impl::RelabelCUDA2(mapping_tensors, to_be_relabeled_tensors);
+  return std::make_tuple(frontier, relabel_result);
 }
 
 torch::Tensor GraphSum(torch::Tensor indptr,
