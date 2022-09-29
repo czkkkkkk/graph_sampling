@@ -20,7 +20,7 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_load_csc_with_col_ids", &Graph::LoadCSCWithColIds)
       .def("_CAPI_row_indices", &Graph::RowIndices)
       .def("_CAPI_print", &Graph::Print)
-      .def("_CAPI_all_indices", &Graph::AllIndices)
+      .def("_CAPI_all_valid_node", &Graph::AllValidNode)
       .def("_CAPI_relabel", &Graph::Relabel)
       .def("_CAPI_sum", &Graph::Sum)
       .def("_CAPI_l2norm", &Graph::L2Norm)

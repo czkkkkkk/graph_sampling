@@ -172,7 +172,7 @@ inline torch::Tensor Relabel(torch::Tensor total_tensor,
   int num_items = total_tensor.numel();
   using it = thrust::counting_iterator<IdType>;
   torch::Tensor relabel_tensor = torch::zeros_like(total_tensor);
-  int dir_size = UpPower(num_items);
+  int dir_size = key_tensor.numel();
 
   thrust::for_each(it(0), it(num_items),
                    [key = key_tensor.data_ptr<IdType>(),
@@ -214,5 +214,28 @@ std::tuple<torch::Tensor, torch::Tensor> RelabelCUDA(torch::Tensor col_ids,
   torch::Tensor relabeled_indices = ret[1];
   return std::make_tuple(unique_tensor, relabeled_indices);
 }
+
+std::tuple<torch::Tensor, std::vector<torch::Tensor>> RelabelCUDA2(
+    std::vector<torch::Tensor> mapping_tensor,
+    std::vector<torch::Tensor> data_requiring_relabel) {
+  std::vector<int64_t> split_sizes;
+  for (auto d : data_requiring_relabel) {
+    split_sizes.push_back(d.numel());
+  }
+
+  torch::Tensor total_tensor = torch::cat(data_requiring_relabel, 0);
+
+  std::vector<torch::Tensor> unique_result =
+      Unique<int64_t, true>(torch::cat(mapping_tensor, 0));
+  torch::Tensor unique_tensor = unique_result[0];
+  torch::Tensor reindex_tensor =
+      Relabel<int64_t>(total_tensor, unique_result[1], unique_result[2]);
+
+  std::vector<torch::Tensor> ret =
+      reindex_tensor.split_with_sizes(split_sizes, 0);
+
+  return std::make_tuple(unique_tensor, ret);
+}
 }  // namespace impl
+
 }  // namespace gs

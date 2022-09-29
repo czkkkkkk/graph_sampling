@@ -28,8 +28,9 @@ CSCColumnwiseFusedSlicingAndSamplingCUDA(torch::Tensor indptr,
 
 torch::Tensor TensorUniqueCUDA(torch::Tensor input);
 
-std::tuple<torch::Tensor, torch::Tensor> RelabelCUDA(torch::Tensor col_ids,
-                                                     torch::Tensor indices);
+std::tuple<torch::Tensor, std::vector<torch::Tensor>> RelabelCUDA2(
+    std::vector<torch::Tensor> mapping_tensor,
+    std::vector<torch::Tensor> data_requiring_relabel);
 
 torch::Tensor GraphSumCUDA(torch::Tensor indptr,
                            torch::optional<torch::Tensor> e_ids,

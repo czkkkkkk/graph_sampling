@@ -245,89 +245,92 @@ torch::Tensor Graph::RowIndices(bool unique) {
   return row_indices;
 }
 
-/**
- * @brief Returns the set of all nodes of the graph. Nodes in return tensor are
- * sorted in the order of their first occurrence in {col_ids, indices}.
- * For example,
- *    if graph.csc_.col_ids = [0, 2, 4, 2] and graph.csc_.indices = [4, 2, 1],
- *    graph.AllIndices() will be [0, 2, 4, 1]
- *
- * @return torch::Tensor
- */
-torch::Tensor Graph::AllIndices(bool unique) {
-  torch::Tensor col_ids, row_ids, cat;
-  if (csc_ != nullptr) {
-    col_ids = (col_ids_.has_value()) ? col_ids_.value()
-                                     : torch::arange(csc_->indptr.numel() - 1,
-                                                     csc_->indptr.options());
-    row_ids = (row_ids_.has_value()) ? row_ids_.value() : csc_->indices;
-    cat = torch::cat({col_ids, row_ids});
-  } else if (csr_ != nullptr) {
-    col_ids = (col_ids_.has_value()) ? col_ids_.value() : csr_->indices;
-    row_ids = (row_ids_.has_value()) ? row_ids_.value()
-                                     : torch::arange(csr_->indptr.numel() - 1,
-                                                     csr_->indptr.options());
-    cat = torch::cat({col_ids, row_ids});
-  } else {
-    LOG(FATAL) << "Error in RowIndices: no CSC nor CSR";
-    cat = torch::Tensor();
+torch::Tensor Graph::AllValidNode() {
+  // for sampling, col_ids_ is necessary!
+  if (!col_ids_.has_value()) {
+    LOG(ERROR) << "For sampling, col_ids_ is necessary!";
   }
-  return (unique) ? TensorUnique(cat) : cat;
+
+  torch::Tensor col_ids = col_ids_.value();
+  torch::Tensor row_ids;
+  if (csc_ != nullptr) {
+    row_ids = (row_ids_.has_value()) ? row_ids_.value() : csc_->indices;
+
+  } else if (coo_ != nullptr) {
+    row_ids = (row_ids_.has_value()) ? row_ids_.value() : coo_->row;
+
+  } else if (csr_ != nullptr) {
+    // turn csr2coo
+    SetCOO(GraphCSR2COO(csr_));
+    row_ids = (row_ids_.has_value()) ? row_ids_.value() : coo_->row;
+
+  } else {
+    LOG(ERROR) << "Error in AllValidNode!";
+  }
+
+  return TensorUnique(torch::cat({col_ids, row_ids}));
 }
 
-/**
- * @todo Need relabel or not?
- * @todo Fix for CSC and CSR.
- * @todo Fix for new storage format.
- *
- * @brief Do relabel operation on graph.col_ids and graph.indices;
- * It will return {all_indices, new_csc_indptr, new_csc_indices}.
- * Specifically, all_indices = graph.AllIndices(); new_csc_indptr is the
- * csc_indptr of the relabeled graph; new_csc_indices is the csc_indices of the
- * relabeled graph.
- * For example,
- *    if graph.csc_.col_ids = [0, 2, 4, 2], graph.csc_.indptr = [0, 0, 1, 1, 3]
- *    and graph.csc_.indices = [4, 2, 1],
- *    graph.relabel will return {[0, 2, 4, 1], [0, 0, 1, 1, 3], [2, 1, 3]}
- *
- * @return std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
- */
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>, std::string>
+std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,
+           torch::optional<torch::Tensor>, std::string>
 Graph::Relabel() {
-  torch::Tensor frontier, relabeled_indices, relabeled_indptr;
+  // for sampling, col_ids_ is necessary!
+  if (!col_ids_.has_value()) {
+    LOG(ERROR) << "For sampling, col_ids_ is necessary!";
+  }
+  torch::Tensor col_ids = col_ids_.value();
+
   if (csc_ != nullptr) {
-    torch::Tensor col_ids, row_indices;
-    if (col_ids_.has_value()) {
-      col_ids = col_ids_.value();
-    } else {
-      col_ids = torch::arange(csc_->indptr.numel() - 1, csc_->indptr.options());
+    torch::Tensor row_ids =
+        (row_ids_.has_value()) ? row_ids_.value() : csc_->indices;
+    torch::Tensor row_indices = row_ids_.has_value()
+                                    ? row_ids_.value().index({csc_->indices})
+                                    : csc_->indices;
+
+    torch::Tensor frontier;
+    std::vector<torch::Tensor> relabeled_result;
+
+    std::tie(frontier, relabeled_result) =
+        BatchTensorRelabel({col_ids, row_ids}, {row_indices});
+
+    torch::Tensor relabeled_indptr = csc_->indptr.clone();
+    torch::Tensor relabeled_indices = relabeled_result[0];
+
+    return {frontier,
+            frontier.numel(),
+            col_ids.numel(),
+            relabeled_indptr,
+            relabeled_indices,
+            csc_->e_ids,
+            "csc"};
+
+  } else if (csr_ != nullptr or coo_ != nullptr) {
+    if (coo_ == nullptr) {
+      SetCOO(GraphCSR2COO(csr_));
     }
-    if (row_ids_.has_value()) {
-      row_indices = row_ids_.value().index({csc_->indices});
-    } else {
-      row_indices = csc_->indices;
-    }
-    std::tie(frontier, relabeled_indices, relabeled_indptr) =
-        GraphRelabel(col_ids, csc_->indptr, row_indices);
-    return {frontier, relabeled_indices, relabeled_indptr, csc_->e_ids, "csc"};
-  } else if (csr_ != nullptr) {
-    torch::Tensor row_ids, col_indices;
-    if (row_ids_.has_value()) {
-      row_ids = row_ids_.value();
-    } else {
-      row_ids = torch::arange(csr_->indptr.numel() - 1, csr_->indptr.options());
-    }
-    if (col_ids_.has_value()) {
-      col_indices = col_ids_.value().index({csr_->indices});
-    } else {
-      col_indices = csr_->indices;
-    }
-    std::tie(frontier, relabeled_indices, relabeled_indptr) =
-        GraphRelabel(row_ids, csr_->indptr, col_indices);
-    return {frontier, relabeled_indices, relabeled_indptr, csr_->e_ids, "csr"};
+    torch::Tensor row_ids =
+        (row_ids_.has_value()) ? row_ids_.value() : coo_->row;
+
+    torch::Tensor coo_col = col_ids.index({coo_->col});
+    torch::Tensor coo_row = (row_ids_.has_value())
+                                ? row_ids_.value().index({coo_->row})
+                                : coo_->row;
+
+    torch::Tensor frontier;
+    std::vector<torch::Tensor> relabeled_result;
+    std::tie(frontier, relabeled_result) =
+        BatchTensorRelabel({col_ids, row_ids}, {coo_col, coo_row});
+
+    return {frontier,
+            frontier.numel(),
+            col_ids.numel(),
+            relabeled_result[1],
+            relabeled_result[0],
+            coo_->e_ids,
+            "coo"};
+
   } else {
-    LOG(FATAL) << "Error in relabel: no CSC nor CSR.";
-    return {};
+    LOG(ERROR) << "Error in Relabel!";
   }
 }
 

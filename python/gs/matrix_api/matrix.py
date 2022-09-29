@@ -29,15 +29,25 @@ class Matrix(object):
             self._graph._CAPI_set_data(g.edata[weight])
 
     def to_dgl_block(self):
-        unique_tensor, indptr, indices, e_ids, format = self._graph._CAPI_relabel()
-        block = create_block((format, (indptr, indices, [])),
-                             num_src_nodes=unique_tensor.numel(),
-                             num_dst_nodes=indptr.numel() - 1)
+        unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = self._graph._CAPI_relabel(
+        )
+        block = None
+        if format == 'coo':
+            block = create_block((format, (format_tensor1, format_tensor2)),
+                                 num_src_nodes=num_row,
+                                 num_dst_nodes=num_col)
+        else:
+            block = create_block(
+                (format, (format_tensor1, format_tensor2, [])),
+                num_src_nodes=num_row,
+                num_dst_nodes=num_col)
+
         data = self._graph._CAPI_get_data()
         if data is not None:
             if e_ids is not None:
                 data = data[e_ids]
             block.edata['w'] = data
+        block.srcdata['_ID'] = unique_tensor
         return block
 
     def columnwise_slicing(self, t):
@@ -62,7 +72,7 @@ class Matrix(object):
         return self._graph._CAPI_row_indices(unique)
 
     def all_indices(self, unique=True) -> torch.Tensor:
-        return self._graph._CAPI_all_indices(unique)
+        return self._graph._CAPI_all_valid_node()
 
     def __getitem__(self, data):
         ret = self._graph
