@@ -69,7 +69,10 @@ class Matrix(object):
         return Matrix(self._graph._CAPI_normalize(axis))
 
     def row_indices(self, unique=True) -> torch.Tensor:
-        return self._graph._CAPI_row_indices(unique)
+        if unique:
+            return self._graph._CAPI_get_valid_rows()
+        else:
+            return self._graph._CAPI_get_rows()
 
     def all_indices(self, unique=True) -> torch.Tensor:
         return self._graph._CAPI_all_valid_node()
