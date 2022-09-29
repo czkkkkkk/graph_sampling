@@ -58,12 +58,10 @@ inline std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COOSort(
   input_value = torch::arange(num_items,
                               torch::dtype(torch::kInt64).device(torch::kCUDA));
   output_value = torch::zeros_like(input_value);
-  
-  cub::DoubleBuffer<IdType> d_keys(input_key.data_ptr<IdType>(),
-                                   output_key.data_ptr<IdType>());
-  cub::DoubleBuffer<int64_t> d_values(input_value.data_ptr<int64_t>(),
-                                    output_value.data_ptr<int64_t>());
-  cub_sortPairs<IdType, int64_t>(d_keys, d_values, num_items);
+  cub_sortPairs<IdType, int64_t>(input_key.data_ptr<IdType>(),
+                                 output_key.data_ptr<IdType>(),
+                                 input_value.data_ptr<int64_t>(),
+                                 output_value.data_ptr<int64_t>(), num_items);
 
   return {output_key, coo_value.index({output_value}), output_value};
 }

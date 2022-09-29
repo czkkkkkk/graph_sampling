@@ -72,17 +72,16 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSlicing(
   }
 }
 
-// @todo slicing with e_ids
-std::shared_ptr<CSC> CSCRowwiseSlicing(std::shared_ptr<CSC> csc,
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCRowwiseSlicing(std::shared_ptr<CSC> csc,
                                        torch::Tensor row_ids) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     std::tie(sub_indptr, sub_indices, select_index) =
         impl::CSCRowwiseSlicingCUDA(csc->indptr, csc->indices, row_ids);
-    return std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt});
+    return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}), select_index};
   } else {
     std::cerr << "Not implemented warning";
-    return std::make_shared<CSC>(CSC{});
+    return {std::make_shared<CSC>(CSC{}), torch::Tensor()};
   }
 }
 
@@ -141,7 +140,6 @@ torch::Tensor TensorUnique(torch::Tensor node_ids) {
   }
 }
 
-// @todo Fix for new storage format
 std::tuple<torch::Tensor, std::vector<torch::Tensor>> BatchTensorRelabel(
     std::vector<torch::Tensor> mapping_tensors,
     std::vector<torch::Tensor> to_be_relabeled_tensors) {

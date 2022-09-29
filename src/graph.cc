@@ -46,7 +46,6 @@ void Graph::SetCOO(std::shared_ptr<COO> coo) { coo_ = coo; }
 
 void Graph::SetData(torch::Tensor data) { data_ = data; }
 
-// @todo data
 c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_index) {
   torch::Tensor select_index, out_data;
   std::shared_ptr<CSC> csc_ptr;
@@ -69,8 +68,7 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_index) {
   return ret;
 }
 
-// @todo data
-// @todo Fix for new storage format (index and duplicated rows)
+
 c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
   torch::Tensor select_index, out_data;
   torch::Tensor row_ids =
@@ -91,14 +89,24 @@ c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
       ret->SetData(out_data);
     }
   } else if (csc_ != nullptr) {
-    ret->SetCSC(CSCRowwiseSlicing(csc_, row_index));
+    std::shared_ptr<CSC> csc_ptr;
+    std::tie(csc_ptr, select_index) = CSCRowwiseSlicing(csc_, row_index);
+    ret->SetCSC(csc_ptr);
+    if (data_.has_value()) {
+      if (csc_->e_ids.has_value()) {
+        out_data =
+            data_.value().index({csc_->e_ids.value().index({select_index})});
+      } else {
+        out_data = data_.value().index({select_index});
+      }
+      ret->SetData(out_data);
+    }
   } else {
     LOG(FATAL) << "Error in RowwiseSlicing: no CSC nor CSR";
   }
   return ret;
 }
 
-// @todo data
 c10::intrusive_ptr<Graph> Graph::ColumnwiseSampling(int64_t fanout,
                                                     bool replace) {
   torch::Tensor select_index, out_data;
@@ -120,7 +128,6 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSampling(int64_t fanout,
   return ret;
 }
 
-// @todo data
 c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
     torch::Tensor column_index, int64_t fanout, bool replace) {
   torch::Tensor select_index, out_data;
