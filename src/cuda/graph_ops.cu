@@ -7,40 +7,9 @@
 namespace gs {
 namespace impl {
 template <typename IdType, typename DType>
-__global__ void GroupSum(IdType* indptr, IdType* e_ids, DType* data,
-                         DType* out_data, int64_t size) {
-  int64_t row = blockIdx.x * blockDim.y + threadIdx.y;
-
-  while (row < size) {
-    IdType start = indptr[row];
-    IdType n_edges = indptr[row + 1] - start;
-    for (int idx = threadIdx.x; idx < n_edges; idx += blockDim.x) {
-      IdType pos = (e_ids == nullptr) ? start + idx : e_ids[start + idx];
-      AtomicAdd(&out_data[row], (data == nullptr) ? 1.0 : data[start + idx]);
-    }
-    row += gridDim.x * blockDim.y;
-  }
-}
-
-template <typename IdType, typename DType>
-__global__ void GroupNormL2(IdType* indptr, IdType* e_ids, DType* data,
-                            DType* out_data, int64_t size) {
-  int64_t row = blockIdx.x * blockDim.y + threadIdx.y;
-
-  while (row < size) {
-    IdType start = indptr[row];
-    IdType n_edges = indptr[row + 1] - start;
-    for (int idx = threadIdx.x; idx < n_edges; idx += blockDim.x) {
-      IdType pos = (e_ids == nullptr) ? start + idx : e_ids[start + idx];
-      AtomicAdd(&out_data[row], (data == nullptr) ? 1.0 : powf(data[pos], 2));
-    }
-    row += gridDim.x * blockDim.y;
-  }
-}
-
-template <typename IdType, typename DType>
-__global__ void GroupDiv(IdType* indptr, IdType* e_ids, DType* data,
-                         DType* divisor, DType* out_data, int64_t size) {
+__global__ void _SegmentDivKernel(IdType* indptr, IdType* e_ids, DType* data,
+                                  DType* divisor, DType* out_data,
+                                  int64_t size) {
   int64_t row = blockIdx.x * blockDim.y + threadIdx.y;
 
   while (row < size) {
@@ -54,80 +23,132 @@ __global__ void GroupDiv(IdType* indptr, IdType* e_ids, DType* data,
   }
 }
 
-torch::Tensor GraphSumCUDA(torch::Tensor indptr,
-                           torch::optional<torch::Tensor> e_ids,
-                           torch::optional<torch::Tensor> data) {
+template <typename IdType, typename DType>
+torch::Tensor GraphSum(torch::Tensor indptr,
+                       torch::optional<torch::Tensor> e_ids,
+                       torch::optional<torch::Tensor> data) {
   auto size = indptr.numel() - 1;
-  auto data_ptr =
-      (data.has_value()) ? data.value().data_ptr<_Float32>() : nullptr;
-  auto e_ids_ptr =
-      (e_ids.has_value()) ? e_ids.value().data_ptr<int64_t>() : nullptr;
   auto options = (data.has_value())
                      ? data.value().options()
                      : torch::dtype(torch::kFloat32).device(torch::kCUDA);
-  auto group_sum = torch::zeros(size, options);
+  auto segment_sum = torch::zeros(size, options);
 
-  dim3 block(32, 16);
-  dim3 grid((size + block.x - 1) / block.x);
-  GroupSum<int64_t, _Float32>
-      <<<grid, block>>>(indptr.data_ptr<int64_t>(), e_ids_ptr, data_ptr,
-                        group_sum.data_ptr<_Float32>(), size);
-  return group_sum;
+  if (data.has_value()) {
+    auto permuted_data = (e_ids.has_value())
+                             ? data.value().index({e_ids.value()})
+                             : data.value();
+    cub_segmentedSum<IdType, DType>(permuted_data.data_ptr<DType>(),
+                                    segment_sum.data_ptr<DType>(),
+                                    indptr.data_ptr<IdType>(), size);
+  } else {
+    using it = thrust::counting_iterator<IdType>;
+    thrust::for_each(
+        thrust::device, it(0), it(size),
+        [d_offsets = indptr.data_ptr<IdType>(),
+         out = segment_sum.data_ptr<DType>()] __device__(int i) mutable {
+          out[i] = static_cast<DType>(d_offsets[i + 1] - d_offsets[i]);
+        });
+  }
+  return segment_sum;
+}
+
+torch::Tensor GraphSumCUDA(torch::Tensor indptr,
+                           torch::optional<torch::Tensor> e_ids,
+                           torch::optional<torch::Tensor> data) {
+  return GraphSum<int64_t, float>(indptr, e_ids, data);
+}
+
+// CustomNormL2 functor
+struct CustomNormL2 {
+  template <typename T>
+  CUB_RUNTIME_FUNCTION __forceinline__ T operator()(const T& a,
+                                                    const T& b) const {
+    return a * a + b;
+  }
+};
+
+template <typename IdType, typename DType>
+torch::Tensor GraphL2Norm(torch::Tensor indptr,
+                          torch::optional<torch::Tensor> e_ids,
+                          torch::optional<torch::Tensor> data) {
+  auto size = indptr.numel() - 1;
+  auto options = (data.has_value())
+                     ? data.value().options()
+                     : torch::dtype(torch::kFloat32).device(torch::kCUDA);
+  auto segment_norm = torch::zeros(size, options);
+
+  if (data.has_value()) {
+    auto permuted_data = (e_ids.has_value())
+                             ? data.value().index({e_ids.value()})
+                             : data.value();
+    CustomNormL2 customL2;
+    cub_segmentedReduce<IdType, DType, CustomNormL2>(
+        permuted_data.data_ptr<DType>(), segment_norm.data_ptr<DType>(),
+        indptr.data_ptr<IdType>(), size, customL2, 0.0);
+  } else {
+    using it = thrust::counting_iterator<IdType>;
+    thrust::for_each(
+        thrust::device, it(0), it(size),
+        [d_offsets = indptr.data_ptr<IdType>(),
+         out = segment_norm.data_ptr<DType>()] __device__(int64_t i) mutable {
+          out[i] = static_cast<DType>(d_offsets[i + 1] - d_offsets[i]);
+        });
+  }
+  return segment_norm;
 }
 
 torch::Tensor GraphL2NormCUDA(torch::Tensor indptr,
                               torch::optional<torch::Tensor> e_ids,
                               torch::optional<torch::Tensor> data) {
+  return GraphL2Norm<int64_t, float>(indptr, e_ids, data);
+}
+
+template <typename IdType, typename DType>
+torch::Tensor GraphDiv(torch::Tensor indptr,
+                       torch::optional<torch::Tensor> e_ids,
+                       torch::optional<torch::Tensor> data,
+                       torch::Tensor divisor) {
   auto size = indptr.numel() - 1;
-  auto data_ptr =
-      (data.has_value()) ? data.value().data_ptr<_Float32>() : nullptr;
+  auto data_ptr = (data.has_value()) ? data.value().data_ptr<DType>() : nullptr;
   auto e_ids_ptr =
-      (e_ids.has_value()) ? e_ids.value().data_ptr<int64_t>() : nullptr;
+      (e_ids.has_value()) ? e_ids.value().data_ptr<IdType>() : nullptr;
   auto options = (data.has_value())
                      ? data.value().options()
                      : torch::dtype(torch::kFloat32).device(torch::kCUDA);
-  auto group_norm = torch::zeros(size, options);
+  thrust::device_ptr<IdType> item_prefix(
+      static_cast<IdType*>(indptr.data_ptr<IdType>()));
+  int64_t n_edges = item_prefix[size];
+  auto out_data = torch::zeros(n_edges, options);
 
   dim3 block(32, 16);
   dim3 grid((size + block.x - 1) / block.x);
-  GroupNormL2<int64_t, _Float32>
-      <<<grid, block>>>(indptr.data_ptr<int64_t>(), e_ids_ptr, data_ptr,
-                        group_norm.data_ptr<_Float32>(), size);
-  return group_norm;
+  _SegmentDivKernel<IdType, DType><<<grid, block>>>(
+      indptr.data_ptr<IdType>(), e_ids_ptr, data_ptr, divisor.data_ptr<DType>(),
+      out_data.data_ptr<DType>(), size);
+  return out_data;
 }
 
 torch::Tensor GraphDivCUDA(torch::Tensor indptr,
                            torch::optional<torch::Tensor> e_ids,
                            torch::optional<torch::Tensor> data,
                            torch::Tensor divisor) {
-  auto size = indptr.numel() - 1;
-  auto data_ptr =
-      (data.has_value()) ? data.value().data_ptr<_Float32>() : nullptr;
-  auto e_ids_ptr =
-      (e_ids.has_value()) ? e_ids.value().data_ptr<int64_t>() : nullptr;
-  auto options = (data.has_value())
-                     ? data.value().options()
-                     : torch::dtype(torch::kFloat32).device(torch::kCUDA);
-  thrust::device_ptr<int64_t> item_prefix(
-      static_cast<int64_t*>(indptr.data_ptr<int64_t>()));
-  int64_t n_edges = item_prefix[size];
-  auto out_data = torch::zeros(n_edges, options);
+  return GraphDiv<int64_t, float>(indptr, e_ids, data, divisor);
+}
 
-  dim3 block(32, 16);
-  dim3 grid((size + block.x - 1) / block.x);
-  GroupDiv<int64_t, _Float32><<<grid, block>>>(
-      indptr.data_ptr<int64_t>(), e_ids_ptr, data_ptr,
-      divisor.data_ptr<_Float32>(), out_data.data_ptr<_Float32>(), size);
+template <typename IdType, typename DType>
+torch::Tensor GraphNormalize(torch::Tensor indptr,
+                             torch::optional<torch::Tensor> e_ids,
+                             torch::optional<torch::Tensor> data) {
+  torch::Tensor out_data, segment_sum;
+  segment_sum = GraphSum<IdType, DType>(indptr, e_ids, data);
+  out_data = GraphDiv<IdType, DType>(indptr, e_ids, data, segment_sum);
   return out_data;
 }
 
 torch::Tensor GraphNormalizeCUDA(torch::Tensor indptr,
                                  torch::optional<torch::Tensor> e_ids,
                                  torch::optional<torch::Tensor> data) {
-  torch::Tensor out_data, group_sum;
-  group_sum = GraphSumCUDA(indptr, e_ids, data);
-  out_data = GraphDivCUDA(indptr, e_ids, data, group_sum);
-  return out_data;
+  return GraphNormalize<int64_t, float>(indptr, e_ids, data);
 }
 }  // namespace impl
 }  // namespace gs

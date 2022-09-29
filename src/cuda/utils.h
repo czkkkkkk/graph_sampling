@@ -5,22 +5,6 @@
 #include <cub/cub.cuh>
 #include "cuda_common.h"
 
-#define DATA_TYPE_SWITCH(val, DType, ...)                         \
-  do {                                                            \
-    if ((val) == torch::kInt32) {                                 \
-      typedef int32_t DType;                                      \
-      { __VA_ARGS__ }                                             \
-    } else if ((val) == torch::kInt64) {                          \
-      typedef int64_t DType;                                      \
-      { __VA_ARGS__ }                                             \
-    } else if ((val) == torch::kFloat32) {                        \
-      typedef float DType;                                        \
-      { __VA_ARGS__ }                                             \
-    } else {                                                      \
-      LOG(FATAL) << "Data can only be int32 or int64 or float32"; \
-    }                                                             \
-  } while (0);
-
 namespace gs {
 namespace impl {
 
@@ -35,6 +19,20 @@ void cub_exclusiveSum(IdType* arrays, const IdType array_length) {
   c10::DataPtr _temp_data = cuda_allocator->allocate(temp_storage_bytes);
   d_temp_storage = _temp_data.get();
   cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
+                                arrays, array_length);
+}
+
+template <typename IdType>
+void cub_inclusiveSum(IdType* arrays, int32_t array_length) {
+  void* d_temp_storage = NULL;
+  size_t temp_storage_bytes = 0;
+  cub::DeviceScan::InclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
+                                arrays, array_length);
+
+  c10::Allocator* cuda_allocator = c10::cuda::CUDACachingAllocator::get();
+  c10::DataPtr _temp_data = cuda_allocator->allocate(temp_storage_bytes);
+  d_temp_storage = _temp_data.get();
+  cub::DeviceScan::InclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
                                 arrays, array_length);
 }
 
@@ -53,20 +51,6 @@ void cub_sortPairs(cub::DoubleBuffer<KeyType> d_keys,
 
   cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, d_keys,
                                   d_values, num_items);
-}
-
-template <typename IdType>
-void cub_inclusiveSum(IdType* arrays, int32_t array_length) {
-  void* d_temp_storage = NULL;
-  size_t temp_storage_bytes = 0;
-  cub::DeviceScan::InclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
-                                arrays, array_length);
-
-  c10::Allocator* cuda_allocator = c10::cuda::CUDACachingAllocator::get();
-  c10::DataPtr _temp_data = cuda_allocator->allocate(temp_storage_bytes);
-  d_temp_storage = _temp_data.get();
-  cub::DeviceScan::InclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
-                                arrays, array_length);
 }
 
 template <typename KeyType, typename ValueType>
@@ -89,31 +73,39 @@ void cub_sortPairsDescending(KeyType* d_keys_in, KeyType* d_keys_out,
                                             d_values_out, num_items);
 }
 
-/*!
- * \brief Given a sorted array and a value this function returns the index
- * of the first element which compares greater than value.
- *
- * This function assumes 0-based index
- * @param A: ascending sorted array
- * @param n: size of the A
- * @param x: value to search in A
- * @return index, i, of the first element st. A[i]>x. If x>=A[n-1] returns n.
- * if x<A[0] then it returns 0.
- */
-template <typename IdType>
-__device__ IdType _UpperBound(const IdType* A, int64_t n, IdType x) {
-  IdType l = 0, r = n, m = 0;
-  while (l < r) {
-    m = l + (r - l) / 2;
-    if (A[m] <= x) {
-      l = m + 1;
-    } else {
-      r = m;
-    }
-  }
-  return l;
+template <typename IdType, typename DType>
+void cub_segmentedSum(DType* d_in, DType* d_out, IdType* d_offsets,
+                      int64_t num_segments) {
+  void* d_temp_storage = NULL;
+  size_t temp_storage_bytes = 0;
+  cub::DeviceSegmentedReduce::Sum(d_temp_storage, temp_storage_bytes, d_in,
+                                  d_out, num_segments, d_offsets,
+                                  d_offsets + 1);
+  // Allocate temporary storage
+  cudaMalloc(&d_temp_storage, temp_storage_bytes);
+  // Run sum-reduction
+  cub::DeviceSegmentedReduce::Sum(d_temp_storage, temp_storage_bytes, d_in,
+                                  d_out, num_segments, d_offsets,
+                                  d_offsets + 1);
 }
 
+template <typename IdType, typename DType, typename ReductionOp>
+void cub_segmentedReduce(DType* d_in, DType* d_out, IdType* d_offsets,
+                         int64_t num_segments, ReductionOp functor,
+                         DType initial_value) {
+  // Determine temporary device storage requirements
+  void* d_temp_storage = NULL;
+  size_t temp_storage_bytes = 0;
+  cub::DeviceSegmentedReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in,
+                                     d_out, num_segments, d_offsets,
+                                     d_offsets + 1, functor, initial_value);
+  // Allocate temporary storage
+  cudaMalloc(&d_temp_storage, temp_storage_bytes);
+  // Run reduction
+  cub::DeviceSegmentedReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in,
+                                     d_out, num_segments, d_offsets,
+                                     d_offsets + 1, functor, initial_value);
+}
 }  // namespace impl
 }  // namespace gs
 

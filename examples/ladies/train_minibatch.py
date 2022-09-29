@@ -1,6 +1,6 @@
 import gs
 from gs.jit.passes import dce
-from gs import SeedGenerator
+from gs.utils import SeedGenerator, load_reddit, ConvModel, GraphConv
 import torch
 import torch.nn.functional as F
 import torchmetrics.functional as MF
@@ -9,8 +9,6 @@ import dgl.function as fn
 import numpy as np
 import time
 import argparse
-from ..load_graph import load_reddit
-from ..model import ConvModel, GraphConv
 
 
 device = torch.device('cuda')
@@ -26,7 +24,8 @@ def normalized_laplacian_edata(g, weight=None):
         g.update_all(fn.copy_e(weight, weight), fn.sum(weight, 'v'))
         g_rev.update_all(fn.copy_e(weight, weight), fn.sum(weight, 'u'))
         g.ndata['u'] = g_rev.ndata['u']
-        g.apply_edges(lambda edges: {'w': edges.data[weight] / torch.sqrt(edges.src['u'] * edges.dst['v'])})
+        g.apply_edges(lambda edges: {
+                      'w': edges.data[weight] / torch.sqrt(edges.src['u'] * edges.dst['v'])})
         return g.edata['w']
 
 
@@ -52,7 +51,7 @@ def ladies_sampler(P: gs.Matrix, seeds: torch.Tensor, fanouts: list):
         selected, _ = torch.ops.gs_ops.list_sampling_with_probs(
             U.row_indices(unique=False), prob + 1, fanout, False)
         # nodes = torch.cat((seeds, selected)).unique()  # add self-loop
-        nodes = seeds
+        nodes = selected
         subU = U[nodes, :].divide(prob[nodes], axis=1).normalize(axis=1)
         seeds = subU.all_indices(unique=True)
         ret.insert(0, subU.to_dgl_block())
@@ -65,7 +64,8 @@ def evaluate(model, matrix, compiled_func, seedloader, features, labels, fanouts
     ys = []
     y_hats = []
     for it, seeds in enumerate(seedloader):
-        input_nodes, output_nodes, blocks = compiled_func(matrix, seeds, fanouts)
+        input_nodes, output_nodes, blocks = compiled_func(
+            matrix, seeds, fanouts)
         with torch.no_grad():
             x = features[input_nodes]
             y = labels[output_nodes]
@@ -86,7 +86,8 @@ def layerwise_infer(graph, nid, model, batch_size, feat, label, edge_weight):
 
 def train(g, dataset, feat_device):
     features, labels, n_classes, train_idx, val_idx, test_idx = dataset
-    model = ConvModel(features.shape[1], 256, n_classes, feat_device, GraphConv).to(device)
+    model = ConvModel(features.shape[1], 256,
+                      n_classes, feat_device, GraphConv).to(device)
     # compute edge weight
     g.edata['weight'] = normalized_laplacian_edata(g)
     # create sampler & dataloader
@@ -114,7 +115,8 @@ def train(g, dataset, feat_device):
         model.train()
         total_loss = 0
         for it, seeds in enumerate(train_seedloader):
-            input_nodes, output_nodes, blocks = compiled_func(m, seeds, fanouts)
+            input_nodes, output_nodes, blocks = compiled_func(
+                m, seeds, fanouts)
             x = features[input_nodes]
             y = labels[output_nodes]
             y_hat = model(blocks, x)

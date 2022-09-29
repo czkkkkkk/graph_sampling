@@ -26,7 +26,7 @@ __global__ void _RepeatKernel(const IdType* pos, IdType* out, int64_t n_col,
   IdType tx = static_cast<IdType>(blockIdx.x) * blockDim.x + threadIdx.x;
   const int stride_x = gridDim.x * blockDim.x;
   while (tx < length) {
-    IdType i = _UpperBound(pos, n_col, tx) - 1;
+    IdType i = cub::UpperBound(pos, n_col, tx) - 1;
     out[tx] = i;
     tx += stride_x;
   }
@@ -46,9 +46,8 @@ std::pair<torch::Tensor, torch::Tensor> GraphCSC2COOCUDA(
 }
 
 template <typename IdType>
-inline std::vector<torch::Tensor> coo_sort(torch::Tensor coo_key,
-                                           torch::Tensor coo_value,
-                                           bool need_index) {
+inline std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COOSort(
+    torch::Tensor coo_key, torch::Tensor coo_value) {
   int num_items = coo_key.numel();
 
   torch::Tensor input_key = coo_key;
@@ -56,27 +55,17 @@ inline std::vector<torch::Tensor> coo_sort(torch::Tensor coo_key,
   torch::Tensor output_key = torch::zeros_like(coo_key);
   torch::Tensor output_value;
 
-  if (need_index) {
-    input_value = torch::arange(
-        num_items, torch::dtype(torch::kInt64).device(torch::kCUDA));
-  } else {
-    input_value = coo_value;
-  }
+  input_value = torch::arange(num_items,
+                              torch::dtype(torch::kInt64).device(torch::kCUDA));
   output_value = torch::zeros_like(input_value);
+  
+  cub::DoubleBuffer<IdType> d_keys(input_key.data_ptr<IdType>(),
+                                   output_key.data_ptr<IdType>());
+  cub::DoubleBuffer<int64_t> d_values(input_value.data_ptr<int64_t>(),
+                                    output_value.data_ptr<int64_t>());
+  cub_sortPairs<IdType, int64_t>(d_keys, d_values, num_items);
 
-  DATA_TYPE_SWITCH(input_value.dtype(), VType, {
-    cub::DoubleBuffer<IdType> d_keys(input_key.data_ptr<IdType>(),
-                                     output_key.data_ptr<IdType>());
-    cub::DoubleBuffer<VType> d_values(input_value.data_ptr<VType>(),
-                                      output_value.data_ptr<VType>());
-    cub_sortPairs<IdType, VType>(d_keys, d_values, num_items);
-  });
-
-  if (need_index) {
-    return {output_key, coo_value.index({output_value}), output_value};
-  } else {
-    return {output_key, output_value};
-  }
+  return {output_key, coo_value.index({output_value}), output_value};
 }
 
 /*!
@@ -107,7 +96,7 @@ __global__ void _SortedSearchKernelUpperBound(const IdType* hay,
   IdType tx = static_cast<IdType>(blockIdx.x) * blockDim.x + threadIdx.x;
   const int stride_x = gridDim.x * blockDim.x;
   while (tx < num_needles) {
-    pos[tx] = _UpperBound(hay, hay_size, tx);
+    pos[tx] = cub::UpperBound(hay, hay_size, tx);
     tx += stride_x;
   }
 }
@@ -115,10 +104,7 @@ __global__ void _SortedSearchKernelUpperBound(const IdType* hay,
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphCOO2CSRCUDA(
     torch::Tensor row, torch::Tensor col, int64_t num_rows) {
   torch::Tensor sort_row, sort_col, sort_index;
-  auto sort_results = coo_sort<int64_t>(row, col, true);
-  sort_row = sort_results[0];
-  sort_col = sort_results[1];
-  sort_index = sort_results[2];
+  std::tie(sort_row, sort_col, sort_index) = COOSort<int64_t>(row, col);
 
   auto row_size = num_rows;
   auto indptr = torch::zeros(row_size + 1, sort_row.options());

@@ -1,14 +1,12 @@
 import gs
 from gs.jit.passes import dce
-from gs import SeedGenerator
+from gs.utils import SeedGenerator, load_reddit, ConvModel
 import torch
 import torch.nn.functional as F
 import torchmetrics.functional as MF
 import numpy as np
 import time
 import argparse
-from ..load_graph import load_reddit
-from ..model import ConvModel
 
 
 device = torch.device('cuda')
