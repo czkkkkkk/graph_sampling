@@ -9,11 +9,10 @@
 namespace gs {
 namespace impl {
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-CSCColumnwiseSlicingCUDA(torch::Tensor indptr, torch::Tensor indices,
-                         torch::Tensor column_ids);
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndptrSlicingCUDA(
+    torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCRowwiseSlicingCUDA(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndicesSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
