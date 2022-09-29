@@ -304,7 +304,7 @@ Graph::Relabel() {
             csc_->e_ids,
             "csc"};
 
-  } else if (csr_ != nullptr) {
+  } else if (csr_ != nullptr or coo_ != nullptr) {
     if (coo_ == nullptr) {
       SetCOO(GraphCSR2COO(csr_));
     }
