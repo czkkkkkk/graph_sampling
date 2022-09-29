@@ -27,7 +27,7 @@ class Graph : public torch::CustomClassHolder {
   torch::Tensor AllIndices();
   std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> Relabel();
   std::vector<torch::Tensor> MetaData();
-
+  torch::Tensor RandomWalk(torch::Tensor seeds, int64_t walk_length);
   void Print() const;
 
  private:

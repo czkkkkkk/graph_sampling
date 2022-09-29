@@ -82,4 +82,12 @@ std::shared_ptr<CSC> CSCColumnwiseFusedSlicingAndSampling(
   }
 }
 
+torch::Tensor RandomWalkFused(std::shared_ptr<CSC> csc, torch::Tensor seeds,
+                              int64_t walk_length) {
+  torch::Tensor paths = impl::RandomWalkFusedCUDA(
+      seeds, walk_length, csc->indices.data_ptr<int64_t>(),
+      csc->indptr.data_ptr<int64_t>());
+  return paths;
+}
+
 }  // namespace gs

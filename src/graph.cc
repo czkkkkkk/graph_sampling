@@ -10,8 +10,8 @@ void Graph::LoadCSC(torch::Tensor indptr, torch::Tensor indices) {
   csc_ = std::make_shared<CSC>();
   csc_->indptr = indptr;
   csc_->indices = indices;
-  LOG(INFO) << "Loaded CSC with " << indptr.size(0) - 1 << " nodes and "
-               << indices.size(0) << " edges";
+  // LOG(INFO) << "Loaded CSC with " << indptr.size(0) - 1 << " nodes and "
+  //           << indices.size(0) << " edges";
 }
 
 void Graph::LoadCSCWithColIds(torch::Tensor column_ids, torch::Tensor indptr,
@@ -58,6 +58,10 @@ torch::Tensor Graph::RowIndices(bool unique) {
     return TensorUnique(this->csc_->indices);
   }
   return this->csc_->indices;
+}
+
+torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length) {
+  return RandomWalkFused(this->csc_, seeds, walk_length);
 }
 
 /**

@@ -25,6 +25,9 @@ std::shared_ptr<CSC> CSCColumnwiseFusedSlicingAndSampling(
     std::shared_ptr<CSC> csc, torch::Tensor column_ids, int64_t fanout,
     bool replace);
 
+torch::Tensor RandomWalkFused(std::shared_ptr<CSC> csc, torch::Tensor seeds,
+                              int64_t walk_length);
+
 }  // namespace gs
 
 #endif
