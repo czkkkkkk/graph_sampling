@@ -64,7 +64,7 @@ def bench(loop_num,  seed_num,
 
 # seeds_set = [1000, 10000, 50000, 100000, 200000, 2000000, 10000000]
 # metapath_len = [5, 10, 15, 20, 25, 30]
-seeds_set = [10000000]
+seeds_set = [200000]
 metapath_len = [30]
 for seed_num in seeds_set:
     for metalenth in metapath_len:

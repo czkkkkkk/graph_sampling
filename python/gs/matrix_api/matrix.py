@@ -59,3 +59,7 @@ class Matrix(object):
 
     def fused_columnwise_slicing_sampling(self, seeds, fanouts, raplace):
         return Matrix(self._graph.fused_columnwise_slicing_sampling(seeds, fanouts, raplace))
+
+    def random_walk(self, seeds, walk_length):
+        return self._graph.random_walk(seeds, walk_length)
+

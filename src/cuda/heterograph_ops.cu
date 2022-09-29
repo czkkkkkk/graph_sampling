@@ -54,45 +54,6 @@ __global__ void _RandomWalkKernel(const int64_t* seed_data,
                                   const uint64_t max_num_steps,
                                   int64_t** all_indices, int64_t** all_indptr,
                                   int64_t* out_traces_data) {
-  int64_t idx = blockIdx.x * BLOCK_SIZE + threadIdx.x;
-  int64_t last_idx =
-      min(static_cast<int64_t>(blockIdx.x + 1) * BLOCK_SIZE, num_seeds);
-  int64_t trace_length = (max_num_steps + 1);
-  curandState rng;
-  uint64_t rand_seed = 7777777;
-  curand_init(rand_seed + idx, 0, 0, &rng);
-  while (idx < last_idx) {
-    int64_t curr = seed_data[idx];
-    int64_t* traces_data_ptr = &out_traces_data[idx * trace_length];
-    *(traces_data_ptr++) = curr;
-    int64_t step_idx;
-    for (step_idx = 0; step_idx < max_num_steps; ++step_idx) {
-      int64_t metapath_id = metapath_data[step_idx];
-      int64_t* graph_indice = all_indices[metapath_id];
-      int64_t* graph_indptr = all_indptr[metapath_id];
-      const int64_t in_row_start = graph_indptr[curr];
-      const int64_t deg = graph_indptr[curr + 1] - graph_indptr[curr];
-      if (deg == 0) {  // the degree is zero
-        break;
-      }
-      const int64_t num = curand(&rng) % deg;
-      int64_t pick = graph_indice[in_row_start + num];
-      *traces_data_ptr = pick;
-      ++traces_data_ptr;
-      curr = pick;
-    }
-    for (; step_idx < max_num_steps; ++step_idx) {
-      *(traces_data_ptr++) = -1;
-    }
-    idx += BLOCK_SIZE;
-  }
-}
-
-template <int BLOCK_SIZE>
-__global__ void _RandomWalkKernel_v2(
-    const int64_t* seed_data, const int64_t num_seeds,
-    const int64_t* metapath_data, const uint64_t max_num_steps,
-    int64_t** all_indices, int64_t** all_indptr, int64_t* out_traces_data) {
   int64_t tid = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   int64_t last_idx =
       min(static_cast<int64_t>(blockIdx.x + 1) * BLOCK_SIZE, num_seeds);
@@ -132,8 +93,8 @@ __global__ void _RandomWalkKernel_v2(
 
 torch::Tensor MetapathRandomWalkFusedCUDA(
     torch::Tensor seeds, torch::Tensor metapath,
-    thrust::device_vector<int64_t*>& all_indices,
-    thrust::device_vector<int64_t*>& all_indptr) {
+    int64_t** all_indices,
+    int64_t** all_indptr) {
   const int64_t* seed_data = seeds.data_ptr<int64_t>();
   const int64_t num_seeds = seeds.numel();
   const int64_t* metapath_data = metapath.data_ptr<int64_t>();
@@ -145,11 +106,9 @@ torch::Tensor MetapathRandomWalkFusedCUDA(
   constexpr int BLOCK_SIZE = 256;
   dim3 block(BLOCK_SIZE);
   dim3 grid((num_seeds + BLOCK_SIZE - 1) / BLOCK_SIZE);
-  int64_t** all_indices_ptr = thrust::raw_pointer_cast(all_indices.data());
-  int64_t** all_indptr_ptr = thrust::raw_pointer_cast(all_indptr.data());
   _RandomWalkKernel<BLOCK_SIZE><<<grid, block>>>(
       seeds.data_ptr<int64_t>(), num_seeds, metapath_data, max_num_steps,
-      all_indices_ptr, all_indptr_ptr, out_traces_data);
+      all_indices, all_indptr, out_traces_data);
   return out_traces_tensor.reshape({seeds.numel(), -1});
 }
 
