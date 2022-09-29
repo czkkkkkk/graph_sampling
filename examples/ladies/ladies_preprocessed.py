@@ -10,7 +10,7 @@ def ladies(P: gs.Matrix, seeds: torch.Tensor, fanouts: list):
     ret = []
     for fanout in fanouts:
         U = P[:, seeds]
-        prob = U.l2norm(axis=1)
+        prob = U.sum(axis=1, powk=2)
         selected, _ = torch.ops.gs_ops.list_sampling_with_probs(
             U.row_indices(unique=False), prob + 1, fanout, False)
         nodes = torch.cat((seeds, selected)).unique()  # add self-loop

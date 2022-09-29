@@ -255,15 +255,12 @@ torch::Tensor Graph::AllValidNode() {
   torch::Tensor row_ids;
   if (csc_ != nullptr) {
     row_ids = (row_ids_.has_value()) ? row_ids_.value() : csc_->indices;
-
   } else if (coo_ != nullptr) {
     row_ids = (row_ids_.has_value()) ? row_ids_.value() : coo_->row;
-
   } else if (csr_ != nullptr) {
     // turn csr2coo
     SetCOO(GraphCSR2COO(csr_));
     row_ids = (row_ids_.has_value()) ? row_ids_.value() : coo_->row;
-
   } else {
     LOG(ERROR) << "Error in AllValidNode!";
   }

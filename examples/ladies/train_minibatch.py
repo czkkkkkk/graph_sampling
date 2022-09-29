@@ -47,11 +47,10 @@ def ladies_sampler(P: gs.Matrix, seeds: torch.Tensor, fanouts: list):
     # P = A.divide(D_out.sqrt(), axis=1).divide(D_in.sqrt(), axis=0)
     for fanout in fanouts:
         U = P[:, seeds]
-        prob = U.l2norm(axis=1)
+        prob = U.sum(axis=1, powk=2)
         selected, _ = torch.ops.gs_ops.list_sampling_with_probs(
             U.row_indices(unique=False), prob + 1, fanout, False)
-        # nodes = torch.cat((seeds, selected)).unique()  # add self-loop
-        nodes = selected
+        nodes = torch.cat((seeds, selected)).unique()  # add self-loop
         subU = U[nodes, :].divide(prob[nodes], axis=1).normalize(axis=1)
         seeds = subU.all_indices(unique=True)
         ret.insert(0, subU.to_dgl_block())
