@@ -72,7 +72,7 @@ class Matrix(object):
         return self._graph._CAPI_row_indices(unique)
 
     def all_indices(self, unique=True) -> torch.Tensor:
-        return self._graph._CAPI_all_indices(unique)
+        return self._graph._CAPI_all_valid_node()
 
     def __getitem__(self, data):
         ret = self._graph

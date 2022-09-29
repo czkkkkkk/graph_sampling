@@ -172,7 +172,7 @@ inline torch::Tensor Relabel(torch::Tensor total_tensor,
   int num_items = total_tensor.numel();
   using it = thrust::counting_iterator<IdType>;
   torch::Tensor relabel_tensor = torch::zeros_like(total_tensor);
-  int dir_size = UpPower(num_items);
+  int dir_size = key_tensor.numel();
 
   thrust::for_each(it(0), it(num_items),
                    [key = key_tensor.data_ptr<IdType>(),
