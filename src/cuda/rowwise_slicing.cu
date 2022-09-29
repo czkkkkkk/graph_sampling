@@ -139,7 +139,6 @@ __global__ void _OnIndicesSlicinigQueryKernel(
   }
 }
 
-// todo(ping): maybe we need to return _idxs for the selected edge;
 template <typename IdType>
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _OnIndicesSlicing(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids) {
