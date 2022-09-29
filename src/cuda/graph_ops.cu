@@ -116,7 +116,7 @@ __global__ void _RandomWalkKernel(const int64_t* seed_data,
 }
 
 torch::Tensor RandomWalkFusedCUDA(torch::Tensor seeds, int64_t walk_length,
-                                  int64_t* all_indices, int64_t* all_indptr) {
+                                  int64_t* indices, int64_t* indptr) {
   const int64_t* seed_data = seeds.data_ptr<int64_t>();
   const int64_t num_seeds = seeds.numel();
   const uint64_t max_num_steps = walk_length;
@@ -129,7 +129,7 @@ torch::Tensor RandomWalkFusedCUDA(torch::Tensor seeds, int64_t walk_length,
   dim3 grid((num_seeds + BLOCK_SIZE - 1) / BLOCK_SIZE);
   _RandomWalkKernel<BLOCK_SIZE>
       <<<grid, block>>>(seeds.data_ptr<int64_t>(), num_seeds, max_num_steps,
-                        all_indices, all_indptr, out_traces_data);
+                        indices, all_indptr, out_traces_data);
   return out_traces_tensor.reshape({seeds.numel(), -1});
 }
 

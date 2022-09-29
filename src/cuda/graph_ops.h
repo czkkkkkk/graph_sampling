@@ -26,10 +26,8 @@ CSCColumnwiseFusedSlicingAndSamplingCUDA(torch::Tensor indptr,
                                          torch::Tensor column_ids,
                                          int64_t fanout, bool replace);
 
-torch::Tensor RandomWalkFusedCUDA(
-    torch::Tensor seeds, int64_t walklength,
-    int64_t* all_indices,
-    int64_t* all_indptr);
+torch::Tensor RandomWalkFusedCUDA(torch::Tensor seeds, int64_t walklength,
+                                  int64_t* indices, int64_t* indptr);
 
 }  // namespace impl
 }  // namespace gs
