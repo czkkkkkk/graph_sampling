@@ -63,7 +63,10 @@ torch::Tensor GraphSum(torch::Tensor indptr,
 
 torch::Tensor GraphL2NormCUDA(torch::Tensor indptr,
                               torch::optional<torch::Tensor> e_ids,
-                              torch::optional<torch::Tensor> data) {}
+                              torch::optional<torch::Tensor> data) {
+  LOG(FATAL) << "Not implemented warning";
+  return torch::Tensor();
+}
 
 torch::Tensor GraphSumCUDA(torch::Tensor indptr,
                            torch::optional<torch::Tensor> e_ids,
