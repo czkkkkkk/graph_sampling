@@ -1,6 +1,7 @@
 #include "./graph_ops.h"
 
 #include "cuda/graph_ops.h"
+#include "cuda/heterograph_ops.h"
 
 namespace gs {
 
