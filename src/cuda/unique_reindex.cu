@@ -191,31 +191,7 @@ torch::Tensor TensorUniqueCUDA(torch::Tensor node_ids) {
   return ret_tensor;
 }
 
-std::tuple<torch::Tensor, torch::Tensor> RelabelCUDA(torch::Tensor col_ids,
-                                                     torch::Tensor indices) {
-  std::vector<torch::Tensor> data = {col_ids, indices};
-  std::vector<int64_t> split_sizes;
-  for (auto d : data) {
-    split_sizes.push_back(d.numel());
-  }
-
-  torch::Tensor total_tensor = torch::cat(data, 0);
-  torch::Tensor unique_tensor;
-  torch::Tensor reindex_tensor;
-  std::vector<torch::Tensor> unique_result =
-      Unique<int64_t, true>(total_tensor);
-  unique_tensor = unique_result[0];
-  reindex_tensor =
-      Relabel<int64_t>(total_tensor, unique_result[1], unique_result[2]);
-
-  std::vector<torch::Tensor> ret =
-      reindex_tensor.split_with_sizes(split_sizes, 0);
-
-  torch::Tensor relabeled_indices = ret[1];
-  return std::make_tuple(unique_tensor, relabeled_indices);
-}
-
-std::tuple<torch::Tensor, std::vector<torch::Tensor>> RelabelCUDA2(
+std::tuple<torch::Tensor, std::vector<torch::Tensor>> RelabelCUDA(
     std::vector<torch::Tensor> mapping_tensor,
     std::vector<torch::Tensor> data_requiring_relabel) {
   std::vector<int64_t> split_sizes;

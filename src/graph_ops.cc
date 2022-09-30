@@ -147,7 +147,7 @@ std::tuple<torch::Tensor, std::vector<torch::Tensor>> BatchTensorRelabel(
   torch::Tensor frontier;
   std::vector<torch::Tensor> relabel_result;
   std::tie(frontier, relabel_result) =
-      impl::RelabelCUDA2(mapping_tensors, to_be_relabeled_tensors);
+      impl::RelabelCUDA(mapping_tensors, to_be_relabeled_tensors);
   return std::make_tuple(frontier, relabel_result);
 }
 
