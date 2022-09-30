@@ -44,18 +44,25 @@ class Graph : public torch::CustomClassHolder {
   torch::Tensor L2Norm(int64_t axis);
   c10::intrusive_ptr<Graph> Divide(torch::Tensor divisor, int64_t axis);
   c10::intrusive_ptr<Graph> Normalize(int64_t axis);
+  // A "valid" node means that the node is required by the user or that it is
+  // not an isolated node.
   torch::Tensor AllValidNode();
-  torch::Tensor GetRows();
-  torch::Tensor GetCols();
-  torch::Tensor GetValidRows();
-  torch::Tensor GetValidCols();
-  torch::Tensor GetCOORows(bool is_original);
-  torch::Tensor GetCOOCols(bool is_original);
+  torch::Tensor GetRows();       // return row_ids
+  torch::Tensor GetCols();       // return col_ids
+  torch::Tensor GetValidRows();  // return valid row_ids.
+  torch::Tensor GetValidCols();  // return valid col_ids.
+
+  //  If is_original, it return  in global_id else in local_id.
+  torch::Tensor GetCOORows(bool is_original);  // return coo_row, which is
+                                               // coo[0]
+  torch::Tensor GetCOOCols(bool is_original);  // return coo_row, which is
+                                               // coo[1]
   std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,
              torch::optional<torch::Tensor>, std::string>
   Relabel();
   std::vector<torch::Tensor> MetaData();
 
+  // todo: return global_e_id
  private:
   bool is_subgraph_;
   int64_t num_cols_;  // total number of cols in a matrix

@@ -141,6 +141,10 @@ torch::Tensor TensorUnique(torch::Tensor node_ids) {
   }
 }
 
+// BatchTensorRelabel leverages vector<Tensor> mapping_tensors to create the
+// hashmap which stores the mapping. Then, it will do relabel operation for
+// tensor in to_be_relabeled_tensors with the hashmap. It return {unique_tensor,
+// {tensor1_after_relabeled, tensor2_after_relabeled, ...}}.
 std::tuple<torch::Tensor, std::vector<torch::Tensor>> BatchTensorRelabel(
     std::vector<torch::Tensor> mapping_tensors,
     std::vector<torch::Tensor> to_be_relabeled_tensors) {
