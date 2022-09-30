@@ -68,17 +68,17 @@ class Matrix(object):
     def normalize(self, axis):
         return Matrix(self._graph._CAPI_normalize(axis))
 
-    def row_indices(self, unique=True) -> torch.Tensor:
+    def row_ids(self, unique=True) -> torch.Tensor:
         if unique:
             return self._graph._CAPI_get_valid_rows()
         else:
             return self._graph._CAPI_get_rows()
 
-    def all_indices(self, unique=True) -> torch.Tensor:
+    def all_indices(self) -> torch.Tensor:
         return self._graph._CAPI_all_valid_node()
 
-    def row_indices(self, unique: bool = True) -> torch.Tensor:
-        return self._graph.row_indices(unique)
+    def row_indices(self) -> torch.Tensor:
+        return self._graph._CAPI_get_coo_rows()
 
     def __getitem__(self, data):
         ret = self._graph
@@ -94,4 +94,6 @@ class Matrix(object):
         return Matrix(ret)
 
     def fused_columnwise_slicing_sampling(self, seeds, fanouts, raplace):
-        return Matrix(self._graph.fused_columnwise_slicing_sampling(seeds, fanouts, raplace))
+        return Matrix(
+            self._graph.fused_columnwise_slicing_sampling(
+                seeds, fanouts, raplace))
