@@ -9,21 +9,20 @@ import numpy as np
 def graphsaint(A: gs.Matrix, seeds_num, walk_length):
     seeds = torch.randint(
         0, 232965, (seeds_num,), device='cuda')
-    torch.cuda.nvtx.range_push("graph saint non-fused random walk")
+    torch.cuda.nvtx.range_push("matrix saint non-fused random walk")
     paths = A.random_walk(seeds, walk_length)
     torch.cuda.nvtx.range_pop()
-    torch.cuda.nvtx.range_push("graph unique")
+    torch.cuda.nvtx.range_push("matrix unique")
     node_ids = paths.view(seeds_num*(walk_length+1))
     out = torch.unique(node_ids, sorted=False)
     torch.cuda.nvtx.range_pop()
-    torch.cuda.nvtx.range_push("graph induce subgraph")
+    torch.cuda.nvtx.range_push("matrix induce subgraph")
     induced_subA = A[out, out]
-    unique_tensor, csc_indptr, csc_indices = induced_subA._graph.relabel()
-    retA = gs.Graph(False)
-    retA.load_csc(csc_indptr, csc_indices)
-    ret_m = gs.Matrix(retA)
     torch.cuda.nvtx.range_pop()
-    return ret_m
+    torch.cuda.nvtx.range_push("matrix relabel subgraph")
+    induced_subA = induced_subA.relabel()
+    torch.cuda.nvtx.range_pop()
+    return induced_subA
 
 
 dataset = load_graph.load_reddit()
