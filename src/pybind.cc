@@ -28,7 +28,6 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_get_coo_cols", &Graph::GetCOOCols)
       .def("_CAPI_relabel", &Graph::Relabel)
       .def("_CAPI_sum", &Graph::Sum)
-      .def("_CAPI_l2norm", &Graph::L2Norm)
       .def("_CAPI_divide", &Graph::Divide)
       .def("_CAPI_normalize", &Graph::Normalize)
       .def("_CAPI_metadata", &Graph::MetaData);

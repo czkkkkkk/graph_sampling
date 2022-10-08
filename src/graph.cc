@@ -68,7 +68,6 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_index) {
   return ret;
 }
 
-
 c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
   torch::Tensor select_index, out_data;
   torch::Tensor row_ids =
@@ -166,54 +165,40 @@ void Graph::CSR2CSC() {
   SetCSC(GraphCOO2CSC(coo_, num_cols));
 }
 
-std::tuple<torch::Tensor, torch::optional<torch::Tensor>,
-           torch::optional<torch::Tensor>>
-Graph::PrepareDataForCompute(int64_t axis) {
-  assertm(axis == 0 || axis == 1, "axis should be 0 or 1");
-  torch::Tensor indptr;
-  torch::optional<torch::Tensor> data, e_ids;
-  data = GetData();
-  if (axis == 0) {
-    if (csc_ == nullptr) {
-      CSR2CSC();
-    }
-    indptr = csc_->indptr;
-    e_ids = csc_->e_ids;
-  } else {
-    if (csr_ == nullptr) {
-      CSC2CSR();
-    }
-    indptr = csr_->indptr;
-    e_ids = csr_->e_ids;
+void Graph::CreateSparseFormat(int64_t axis) {
+  if (axis != 0 && axis != 1) {
+    LOG(FATAL) << "axis should be 0 or 1";
   }
-  return {indptr, data, e_ids};
+  if (axis == 0 && csc_ == nullptr) {
+    CSR2CSC();
+  } else if (axis == 1 && csr_ == nullptr) {
+    CSC2CSR();
+  }
 }
 
 torch::Tensor Graph::Sum(int64_t axis, int64_t powk) {
-  torch::Tensor indptr, out_data;
-  torch::optional<torch::Tensor> in_data, e_ids;
-  std::tie(indptr, in_data, e_ids) = PrepareDataForCompute(axis);
-  out_data = GraphSum(indptr, e_ids, in_data, powk);
-  return out_data;
-}
-
-torch::Tensor Graph::L2Norm(int64_t axis) {
-  torch::Tensor indptr, out_data;
-  torch::optional<torch::Tensor> in_data, e_ids;
-  std::tie(indptr, in_data, e_ids) = PrepareDataForCompute(axis);
-  out_data = GraphL2Norm(indptr, e_ids, in_data);
+  torch::Tensor out_data;
+  CreateSparseFormat(axis);
+  if (axis == 0) {
+    out_data = GraphSum(csc_, GetData(), powk);
+  } else if (axis == 1) {
+    out_data = GraphSum(csr_, GetData(), powk);
+  }
   return out_data;
 }
 
 c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(is_subgraph_, col_ids_, row_ids_, num_cols_, num_rows_)));
-  torch::Tensor indptr, out_data;
-  torch::optional<torch::Tensor> in_data, e_ids;
-  std::tie(indptr, in_data, e_ids) = PrepareDataForCompute(axis);
+  torch::Tensor out_data;
+  CreateSparseFormat(axis);
+  if (axis == 0) {
+    out_data = GraphDiv(csc_, GetData(), divisor);
+  } else if (axis == 1) {
+    out_data = GraphDiv(csr_, GetData(), divisor);
+  }
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);
-  out_data = GraphDiv(indptr, e_ids, in_data, divisor);
   ret->SetData(out_data);
   return ret;
 }
@@ -221,12 +206,15 @@ c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis) {
 c10::intrusive_ptr<Graph> Graph::Normalize(int64_t axis) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(is_subgraph_, col_ids_, row_ids_, num_cols_, num_rows_)));
-  torch::Tensor indptr, out_data;
-  torch::optional<torch::Tensor> in_data, e_ids;
-  std::tie(indptr, in_data, e_ids) = PrepareDataForCompute(axis);
+  torch::Tensor out_data;
+  CreateSparseFormat(axis);
+  if (axis == 0) {
+    out_data = GraphNormalize(csc_, GetData());
+  } else if (axis == 1) {
+    out_data = GraphNormalize(csr_, GetData());
+  }
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);
-  out_data = GraphNormalize(indptr, e_ids, in_data);
   ret->SetData(out_data);
   return ret;
 }

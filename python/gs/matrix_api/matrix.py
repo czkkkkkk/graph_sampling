@@ -59,9 +59,6 @@ class Matrix(object):
     def sum(self, axis, powk=1) -> torch.Tensor:
         return self._graph._CAPI_sum(axis, powk)
 
-    def l2norm(self, axis) -> torch.Tensor:
-        return self._graph._CAPI_l2norm(axis)
-
     def divide(self, divisor, axis):
         return Matrix(self._graph._CAPI_divide(divisor, axis))
 

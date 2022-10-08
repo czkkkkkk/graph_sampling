@@ -156,45 +156,62 @@ std::tuple<torch::Tensor, std::vector<torch::Tensor>> BatchTensorRelabel(
   return std::make_tuple(frontier, relabel_result);
 }
 
-torch::Tensor GraphSum(torch::Tensor indptr,
-                       torch::optional<torch::Tensor> e_ids,
+torch::Tensor GraphSum(std::shared_ptr<CSC> csc,
                        torch::optional<torch::Tensor> data, int64_t powk) {
-  if (indptr.device().type() == torch::kCUDA) {
-    return impl::GraphSumCUDA(indptr, e_ids, data, powk);
+  if (csc->indptr.device().type() == torch::kCUDA) {
+    return impl::GraphSumCUDA(csc->indptr, csc->e_ids, data, powk);
   } else {
     LOG(FATAL) << "Not implemented warning";
     return torch::Tensor();
   }
 }
 
-torch::Tensor GraphDiv(torch::Tensor indptr,
-                       torch::optional<torch::Tensor> e_ids,
+torch::Tensor GraphSum(std::shared_ptr<CSR> csr,
+                       torch::optional<torch::Tensor> data, int64_t powk) {
+  if (csr->indptr.device().type() == torch::kCUDA) {
+    return impl::GraphSumCUDA(csr->indptr, csr->e_ids, data, powk);
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return torch::Tensor();
+  }
+}
+
+torch::Tensor GraphDiv(std::shared_ptr<CSC> csc,
                        torch::optional<torch::Tensor> data,
                        torch::Tensor divisor) {
-  if (indptr.device().type() == torch::kCUDA) {
-    return impl::GraphDivCUDA(indptr, e_ids, data, divisor);
+  if (csc->indptr.device().type() == torch::kCUDA) {
+    return impl::GraphDivCUDA(csc->indptr, csc->e_ids, data, divisor);
   } else {
     LOG(FATAL) << "Not implemented warning";
     return torch::Tensor();
   }
 }
 
-torch::Tensor GraphL2Norm(torch::Tensor indptr,
-                          torch::optional<torch::Tensor> e_ids,
-                          torch::optional<torch::Tensor> data) {
-  if (indptr.device().type() == torch::kCUDA) {
-    return impl::GraphL2NormCUDA(indptr, e_ids, data);
+torch::Tensor GraphDiv(std::shared_ptr<CSR> csr,
+                       torch::optional<torch::Tensor> data,
+                       torch::Tensor divisor) {
+  if (csr->indptr.device().type() == torch::kCUDA) {
+    return impl::GraphDivCUDA(csr->indptr, csr->e_ids, data, divisor);
   } else {
     LOG(FATAL) << "Not implemented warning";
     return torch::Tensor();
   }
 }
 
-torch::Tensor GraphNormalize(torch::Tensor indptr,
-                             torch::optional<torch::Tensor> e_ids,
+torch::Tensor GraphNormalize(std::shared_ptr<CSC> csc,
                              torch::optional<torch::Tensor> data) {
-  if (indptr.device().type() == torch::kCUDA) {
-    return impl::GraphNormalizeCUDA(indptr, e_ids, data);
+  if (csc->indptr.device().type() == torch::kCUDA) {
+    return impl::GraphNormalizeCUDA(csc->indptr, csc->e_ids, data);
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return torch::Tensor();
+  }
+}
+
+torch::Tensor GraphNormalize(std::shared_ptr<CSR> csr,
+                             torch::optional<torch::Tensor> data) {
+  if (csr->indptr.device().type() == torch::kCUDA) {
+    return impl::GraphNormalizeCUDA(csr->indptr, csr->e_ids, data);
   } else {
     LOG(FATAL) << "Not implemented warning";
     return torch::Tensor();

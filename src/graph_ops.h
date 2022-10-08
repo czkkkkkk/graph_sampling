@@ -10,8 +10,8 @@ namespace gs {
 std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor column_ids);
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCRowwiseSlicing(std::shared_ptr<CSC> csc,
-                                       torch::Tensor row_ids);
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCRowwiseSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor row_ids);
 
 std::pair<std::shared_ptr<CSR>, torch::Tensor> CSRRowwiseSlicing(
     std::shared_ptr<CSR> csr, torch::Tensor row_ids);
@@ -30,21 +30,24 @@ std::tuple<torch::Tensor, std::vector<torch::Tensor>> BatchTensorRelabel(
     std::vector<torch::Tensor> mapping_tensors,
     std::vector<torch::Tensor> to_be_relabeled_tensors);
 
-torch::Tensor GraphSum(torch::Tensor indptr,
-                       torch::optional<torch::Tensor> e_ids,
+torch::Tensor GraphSum(std::shared_ptr<CSC> csc,
                        torch::optional<torch::Tensor> data, int64_t powk);
 
-torch::Tensor GraphDiv(torch::Tensor indptr,
-                       torch::optional<torch::Tensor> e_ids,
+torch::Tensor GraphSum(std::shared_ptr<CSR> csr,
+                       torch::optional<torch::Tensor> data, int64_t powk);
+
+torch::Tensor GraphDiv(std::shared_ptr<CSC> csc,
                        torch::optional<torch::Tensor> data,
                        torch::Tensor divisor);
 
-torch::Tensor GraphL2Norm(torch::Tensor indptr,
-                          torch::optional<torch::Tensor> e_ids,
-                          torch::optional<torch::Tensor> data);
+torch::Tensor GraphDiv(std::shared_ptr<CSR> csr,
+                       torch::optional<torch::Tensor> data,
+                       torch::Tensor divisor);
 
-torch::Tensor GraphNormalize(torch::Tensor indptr,
-                             torch::optional<torch::Tensor> e_ids,
+torch::Tensor GraphNormalize(std::shared_ptr<CSC> csc,
+                             torch::optional<torch::Tensor> data);
+
+torch::Tensor GraphNormalize(std::shared_ptr<CSR> csr,
                              torch::optional<torch::Tensor> data);
 
 std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc);

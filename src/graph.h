@@ -41,7 +41,6 @@ class Graph : public torch::CustomClassHolder {
   c10::intrusive_ptr<Graph> ColumnwiseFusedSlicingAndSampling(
       torch::Tensor column_index, int64_t fanout, bool replace);
   torch::Tensor Sum(int64_t axis, int64_t powk);
-  torch::Tensor L2Norm(int64_t axis);
   c10::intrusive_ptr<Graph> Divide(torch::Tensor divisor, int64_t axis);
   c10::intrusive_ptr<Graph> Normalize(int64_t axis);
   // A "valid" node means that the node is required by the user or that it is
@@ -74,9 +73,7 @@ class Graph : public torch::CustomClassHolder {
   torch::optional<torch::Tensor> col_ids_;  // column id in matrix
   torch::optional<torch::Tensor> row_ids_;  // row id in matrix
 
-  std::tuple<torch::Tensor, torch::optional<torch::Tensor>,
-             torch::optional<torch::Tensor>>
-  PrepareDataForCompute(int64_t axis);
+  void CreateSparseFormat(int64_t axis);
 };
 
 }  // namespace gs
