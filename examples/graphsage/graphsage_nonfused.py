@@ -1,7 +1,7 @@
 from typing import List
 import gs
 import torch
-import load_graph
+import examples.load_graph as load_graph
 import time
 import numpy as np
 

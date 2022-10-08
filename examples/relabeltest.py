@@ -6,14 +6,20 @@ A = Graph(False)
 indptr = torch.LongTensor([0, 1, 1, 3, 4]).to('cuda:0')
 indices = torch.LongTensor([4, 0, 1, 2]).to('cuda:0')
 column_ids = torch.LongTensor([2, 3]).to('cuda:0')
-A.load_csc(indptr, indices)
-subA = A.columnwise_slicing(column_ids)
-subA.print()
+A._CAPI_load_csc(indptr, indices)
+subA = A._CAPI_columnwise_slicing(column_ids)
 
-print("subA all_indices:", subA.all_indices())
+for i in subA._CAPI_relabel():
+    print(i)
 
-print("subA relabel result:")
-subA_rebaled = subA.relabel()
-print("subA relabel frontier:", subA_rebaled[0])
-print("subA relbael indptr:", subA_rebaled[1])
-print("subA rebel indices:", subA_rebaled[2])
+print(subA._CAPI_get_coo_rows(True))
+print(subA._CAPI_get_coo_cols(True))
+
+print(subA._CAPI_get_coo_rows(False))
+print(subA._CAPI_get_coo_cols(False))
+
+print(subA._CAPI_get_valid_rows())
+print(subA._CAPI_get_valid_cols())
+
+print(subA._CAPI_get_rows())
+print(subA._CAPI_get_cols())

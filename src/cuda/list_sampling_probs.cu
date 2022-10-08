@@ -70,7 +70,9 @@ std::tuple<torch::Tensor, torch::Tensor> _ListSamplingProbs(torch::Tensor data,
                        curand_init(i * random_seed, 0, 0, &rng);
                        FloatType item_prob = _probs[i];
                        FloatType ares_prob =
-                           __powf(curand_uniform(&rng), 1.0f / item_prob);
+                           item_prob <= 0
+                               ? -1
+                               : __powf(curand_uniform(&rng), 1.0f / item_prob);
                        _ares[i] = ares_prob;
                        _ares_ids[i] = i;
                      });
@@ -78,12 +80,10 @@ std::tuple<torch::Tensor, torch::Tensor> _ListSamplingProbs(torch::Tensor data,
     torch::Tensor sort_ares = torch::empty_like(ares_tensor);
     torch::Tensor sort_index = torch::empty_like(ares_index);
 
-    cub::DoubleBuffer<FloatType> d_keys(ares_tensor.data_ptr<FloatType>(),
-                                        sort_ares.data_ptr<FloatType>());
-    cub::DoubleBuffer<int64_t> d_values(ares_index.data_ptr<int64_t>(),
-                                        sort_index.data_ptr<int64_t>());
-
-    cub_sortPairsDescending<FloatType, int64_t>(d_keys, d_values, num_items);
+    cub_sortPairsDescending<FloatType, int64_t>(
+        ares_tensor.data_ptr<FloatType>(), sort_ares.data_ptr<FloatType>(),
+        ares_index.data_ptr<int64_t>(), sort_index.data_ptr<int64_t>(),
+        num_items);
 
     index = sort_index.slice(0, 0, num_picks, 1);
     select = data.index({index});
