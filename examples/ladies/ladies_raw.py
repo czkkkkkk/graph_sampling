@@ -15,7 +15,7 @@ def ladies(A: gs.Matrix, seeds: torch.Tensor, fanouts: list):
         U = P[:, seeds]
         prob = U.sum(axis=1, powk=2)
         selected, _ = torch.ops.gs_ops.list_sampling_with_probs(
-            U.row_ids(unique=False), prob + 1, fanout, False)
+            U.row_ids(unique=False), prob, fanout, False)
         nodes = torch.cat((seeds, selected)).unique()  # add self-loop
         subU = U[nodes, :]
         subU = subU.divide(prob[nodes], axis=1).normalize(axis=1)
