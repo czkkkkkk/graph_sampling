@@ -1,8 +1,5 @@
-from dataclasses import replace
-import imp
 import torch
-import load_graph
-import dgl
+import examples.load_graph as load_graph
 from dgl.transforms.functional import to_block
 import time
 import numpy as np
