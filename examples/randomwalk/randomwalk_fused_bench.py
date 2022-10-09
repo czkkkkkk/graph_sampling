@@ -26,7 +26,7 @@ node_types = ['user']
 edge_types = [('user', 'cite', 'user')]
 A1 = Graph(False)
 
-A1.load_csc(csc_indptr, csc_indices)
+A1._CAPI_load_csc(csc_indptr, csc_indices)
 graphs = [Matrix(A1)]
 hg = HeteroGraph()
 heteroM = HeteroMatrix(hg)

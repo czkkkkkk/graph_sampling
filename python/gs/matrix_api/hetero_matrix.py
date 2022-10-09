@@ -19,7 +19,7 @@ class HeteroMatrix(object):
         for etype in metapath:
             A = self.get_homo_matrix(etype)
             subA = A.fused_columnwise_slicing_sampling(seeds, 1, True)
-            seeds = subA.row_indices(unique=False)
+            seeds = subA.row_indices()
             ret.append(seeds)
         return torch.stack(ret).transpose(0,1)
 

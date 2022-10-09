@@ -1,7 +1,8 @@
+from gs.jit.passes import dce
 from typing import List
 import gs
 import torch
-import load_graph
+import examples.load_graph as load_graph
 import time
 import numpy as np
 
@@ -12,6 +13,7 @@ def graphsage(A: gs.Matrix, seeds: torch.Tensor, fanouts: List):
     for fanout in fanouts:
         subA = A[:, seeds]
         subA = subA.columnwise_sampling(fanout, True)
+        # subA = gs.Matrix(A._graph._CAPI_fused_columnwise_slicing_sampling(seeds, fanout, True))
         seeds = subA.all_indices()
         ret.append(subA)  # [todo] maybe bug before subA.row_indices
     output_node = seeds
@@ -26,7 +28,6 @@ print("Check load successfully:", m._graph._CAPI_metadata(), '\n')
 seeds = torch.arange(0, 5000).long().cuda()
 
 compiled_func = gs.jit.compile(func=graphsage, args=(m, seeds, [25, 15]))
-from gs.jit.passes import dce
 
 
 def slicing_and_sampling_fuse(gm):
@@ -34,13 +35,13 @@ def slicing_and_sampling_fuse(gm):
     Fuses columnwise_slicing and columnwise_sampling
     """
     for node in gm.graph.nodes:
-        if node.target == 'columnwise_sampling' and node.args[
-                0].target == 'columnwise_slicing':
+        if node.target == '_CAPI_columnwise_sampling' and node.args[
+                0].target == '_CAPI_columnwise_slicing':
             if len(node.args[0].users) > 1:
                 continue
             with gm.graph.inserting_after(node):
                 new_node = gm.graph.call_method(
-                    'fused_columnwise_slicing_sampling',
+                    '_CAPI_fused_columnwise_slicing_sampling',
                     args=(
                         *node.args[0].args,
                         *node.args[1:],
@@ -57,7 +58,7 @@ compiled_func.gm = dce(slicing_and_sampling_fuse(compiled_func.gm))
 def bench(func, args):
     time_list = []
     for i in range(100):
-        #print(i)
+        # print(i)
         torch.cuda.synchronize()
         begin = time.time()
 
