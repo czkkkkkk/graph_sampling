@@ -60,10 +60,11 @@ class Graph : public torch::CustomClassHolder {
              torch::optional<torch::Tensor>, std::string>
   Relabel();
   std::vector<torch::Tensor> MetaData();
-  torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length)
+  torch::Tensor RandomWalk(torch::Tensor seeds, int64_t walk_length);
 
-      // todo: return global_e_id
-      private : bool is_subgraph_;
+  // todo: return global_e_id
+ private:
+  bool is_subgraph_;
   int64_t num_cols_;  // total number of cols in a matrix
   int64_t num_rows_;  // total number of rows in a matrix
   std::shared_ptr<CSC> csc_;
