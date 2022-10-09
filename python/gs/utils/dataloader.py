@@ -38,4 +38,4 @@ class SeedGenerator(object):
         return ret
 
     def __len__(self):
-        return self.data.shape[0]
+        return int((self.data.shape[0] + self.batch_size - 1) / self.batch_size)
