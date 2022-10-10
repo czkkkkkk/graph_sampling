@@ -122,11 +122,20 @@ CSCColumnwiseFusedSlicingAndSampling(std::shared_ptr<CSC> csc,
                                      bool replace) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
-    std::tie(sub_indptr, sub_indices, select_index) =
-        impl::CSCColumnwiseFusedSlicingAndSamplingCUDA(
-            csc->indptr, csc->indices, column_ids, fanout, replace);
-    return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
-            select_index};
+    if (fanout == 1 && replace) {
+      std::tie(sub_indptr, sub_indices, select_index) =
+          impl::CSCColumnwiseSamplingOneKeepDimCUDA(csc->indptr, csc->indices, column_ids);
+      return {
+          std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
+          select_index};
+    } else {
+      std::tie(sub_indptr, sub_indices, select_index) =
+          impl::CSCColumnwiseFusedSlicingAndSamplingCUDA(
+              csc->indptr, csc->indices, column_ids, fanout, replace);
+      return {
+          std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
+          select_index};
+    }
   } else {
     LOG(FATAL) << "Not implemented warning";
     return {std::make_shared<CSC>(CSC{}), torch::Tensor()};

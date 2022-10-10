@@ -6,7 +6,8 @@
 namespace gs {
 namespace impl {
 
-std::pair<torch::Tensor, torch::Tensor> CSCColumnwiseSamplingOneKeepDimCUDA(
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColumnwiseSamplingOneKeepDimCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids);
 
 torch::Tensor MetapathRandomWalkFusedCUDA(

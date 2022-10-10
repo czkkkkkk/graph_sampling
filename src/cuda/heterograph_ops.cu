@@ -7,8 +7,9 @@
 namespace gs {
 namespace impl {
 
-std::pair<torch::Tensor, torch::Tensor> CSCColumnwiseSamplingOneKeepDimCUDA(
-    torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids) {
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+CSCColumnwiseSamplingOneKeepDimCUDA(torch::Tensor indptr, torch::Tensor indices,
+                                    torch::Tensor column_ids) {
   // get subptr
   int64_t num_items = column_ids.numel();
   auto sub_indptr = torch::ones(num_items + 1, indptr.options());
@@ -16,6 +17,7 @@ std::pair<torch::Tensor, torch::Tensor> CSCColumnwiseSamplingOneKeepDimCUDA(
       static_cast<int64_t*>(sub_indptr.data_ptr<int64_t>()));
   cub_exclusiveSum<int64_t>(thrust::raw_pointer_cast(item_prefix),
                             num_items + 1);
+  auto select_index = torch::empty(num_items, indices.options());
   // get subindices
   auto sub_indices = torch::empty(num_items, indices.options());
   using it = thrust::counting_iterator<int64_t>;
@@ -25,6 +27,7 @@ std::pair<torch::Tensor, torch::Tensor> CSCColumnwiseSamplingOneKeepDimCUDA(
        indptr_ptr = indptr.data_ptr<int64_t>(),
        indices_ptr = indices.data_ptr<int64_t>(),
        sub_indptr_ptr = sub_indptr.data_ptr<int64_t>(),
+       select_index_ptr = select_index.data_ptr<int64_t>(),
        column_ids_ptr =
            column_ids.data_ptr<int64_t>()] __device__(int i) mutable {
         const uint64_t random_seed = 7777777;
@@ -36,15 +39,17 @@ std::pair<torch::Tensor, torch::Tensor> CSCColumnwiseSamplingOneKeepDimCUDA(
         int64_t degree = indptr_ptr[col + 1] - indptr_ptr[col];
         if (degree == 0) {
           sub_indices_ptr[out_start] = -1;
+          select_index_ptr[out_start] = -1;
         } else {
           // Sequential Sampling
           // const int64_t edge = tid % degree;
           // Random Sampling
           const int64_t edge = curand(&rng) % degree;
           sub_indices_ptr[out_start] = indices_ptr[in_start + edge];
+          select_index_ptr[out_start] = in_start + edge;
         }
       });
-  return {sub_indptr, sub_indices};
+  return {sub_indptr, sub_indices, select_index};
 }
 
 template <int BLOCK_SIZE>
@@ -91,10 +96,10 @@ __global__ void _RandomWalkKernel(const int64_t* seed_data,
   }
 }
 
-torch::Tensor MetapathRandomWalkFusedCUDA(
-    torch::Tensor seeds, torch::Tensor metapath,
-    int64_t** all_indices,
-    int64_t** all_indptr) {
+torch::Tensor MetapathRandomWalkFusedCUDA(torch::Tensor seeds,
+                                          torch::Tensor metapath,
+                                          int64_t** all_indices,
+                                          int64_t** all_indptr) {
   const int64_t* seed_data = seeds.data_ptr<int64_t>();
   const int64_t num_seeds = seeds.numel();
   const int64_t* metapath_data = metapath.data_ptr<int64_t>();
