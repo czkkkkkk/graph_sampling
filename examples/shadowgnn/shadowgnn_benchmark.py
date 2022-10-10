@@ -151,7 +151,7 @@ def main(args):
         retA = A[seeds, seeds]
         torch.cuda.nvtx.range_pop()
         torch.cuda.nvtx.range_push("shadowgnn subgraph relabel")
-        retA = retA.relabel()
+        retA.relabel()
         torch.cuda.nvtx.range_pop()
         return seeds, output_nodes, retA
 
@@ -169,7 +169,7 @@ def main(args):
         retA = A[seeds, seeds]
         torch.cuda.nvtx.range_pop()
         torch.cuda.nvtx.range_push("shadowgnn subgraph relabel")
-        retA = retA.relabel()
+        retA.relabel()
         torch.cuda.nvtx.range_pop()
         return seeds, output_nodes, retA
 

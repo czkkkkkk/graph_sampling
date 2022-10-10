@@ -14,7 +14,7 @@ def graphsaint(A: gs.Matrix, seeds_num, walk_length):
     ret = [seeds, ]
     for i in range(0, walk_length):
         subA = A.fused_columnwise_slicing_sampling(seeds, 1, True)
-        seeds = subA.row_indices(unique=False)
+        seeds = subA.row_indices()
         ret.append(seeds)
     torch.cuda.nvtx.range_pop()
     torch.cuda.nvtx.range_push("matrix unique")
@@ -25,7 +25,7 @@ def graphsaint(A: gs.Matrix, seeds_num, walk_length):
     induced_subA = A[out, out]
     torch.cuda.nvtx.range_pop()
     torch.cuda.nvtx.range_push("matrix relabel subgraph")
-    induced_subA = induced_subA.relabel()
+    induced_subA.relabel()
     torch.cuda.nvtx.range_pop()
     return induced_subA
 

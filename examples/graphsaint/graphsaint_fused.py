@@ -20,7 +20,7 @@ def graphsaint(A: gs.Matrix, seeds_num, walk_length):
     induced_subA = A[out, out]
     torch.cuda.nvtx.range_pop()
     torch.cuda.nvtx.range_push("matrix relabel subgraph")
-    induced_subA = induced_subA.relabel()
+    induced_subA.relabel()
     torch.cuda.nvtx.range_pop()
     return induced_subA
 
