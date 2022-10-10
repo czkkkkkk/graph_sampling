@@ -75,7 +75,7 @@ class Matrix(object):
         return self._graph._CAPI_all_valid_node()
 
     def row_indices(self) -> torch.Tensor:
-        return self._graph._CAPI_get_coo_rows(False)
+        return self._graph._CAPI_get_coo_rows(True)
 
     def __getitem__(self, data):
         ret = self._graph
