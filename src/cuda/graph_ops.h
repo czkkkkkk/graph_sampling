@@ -23,8 +23,7 @@ CSCColumnwiseFusedSlicingAndSamplingCUDA(torch::Tensor indptr,
                                          torch::Tensor column_ids,
                                          int64_t fanout, bool replace);
 
-torch::Tensor RandomWalkFusedCUDA(torch::Tensor seeds, int64_t walklength,
-                                  int64_t* indices, int64_t* indptr);
+
 torch::Tensor TensorUniqueCUDA(torch::Tensor input);
 
 // RelabelCUDA leverages vector<Tensor> mapping_tensor to create the hashmap

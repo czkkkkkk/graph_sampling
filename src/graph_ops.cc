@@ -2,6 +2,7 @@
 
 #include "cuda/graph_ops.h"
 #include "cuda/heterograph_ops.h"
+#include "cuda/random_walk.h"
 
 namespace gs {
 
@@ -15,7 +16,6 @@ std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc) {
     return std::make_shared<COO>(COO{});
   }
 }
-
 
 std::shared_ptr<COO> GraphCSR2COO(std::shared_ptr<CSR> csr) {
   if (csr->indptr.device().type() == torch::kCUDA) {
@@ -124,7 +124,8 @@ CSCColumnwiseFusedSlicingAndSampling(std::shared_ptr<CSC> csc,
     torch::Tensor sub_indptr, sub_indices, select_index;
     if (fanout == 1 && replace) {
       std::tie(sub_indptr, sub_indices, select_index) =
-          impl::CSCColumnwiseSamplingOneKeepDimCUDA(csc->indptr, csc->indices, column_ids);
+          impl::CSCColumnwiseSamplingOneKeepDimCUDA(csc->indptr, csc->indices,
+                                                    column_ids);
       return {
           std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
           select_index};

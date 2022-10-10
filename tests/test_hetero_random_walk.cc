@@ -58,8 +58,6 @@ TEST(RandomWalk, testGraphWithOnePath)
     // because the seeds have only one possible path, we specify it and test result
     std::vector<int64_t> expected_path_vector = {2, 1, 2, 1, 1, 0, 0, -1};
     torch::Tensor expected_path_tensor = torch::from_blob(expected_path_vector.data(), {4, 2}, options).to(torch::kCPU);
-    std::cout << "expected path:" << expected_path_tensor << std::endl;
-    std::cout << "actual path:" << actual_path_tensor << std::endl;
     // check the edge exists in corresponding homograph
     for (int j = 0; j < seeds_vector.size(); j++)
     {
@@ -70,8 +68,6 @@ TEST(RandomWalk, testGraphWithOnePath)
             auto homograph = hg.GetHomoGraph(metapath[i]);
             torch::Tensor indices = homograph->GetCSC()->indices.to(torch::kCPU);
             torch::Tensor indptr = homograph->GetCSC()->indptr.to(torch::kCPU);
-            // std::cout << "indices:" << indices << std::endl;
-            // std::cout << "indptr:" << indptr << std::endl;
             bool result = check_if_edge_exist(row[i], row[i + 1], indptr.data_ptr<int64_t>(), indices.data_ptr<int64_t>());
             EXPECT_TRUE(result);
         }
@@ -116,7 +112,6 @@ TEST(RandomWalk, testGraphWithMultiPath)
     std::cout << "actual path tensor: " << actual_path_tensor << std::endl;
     for (int j = 0; j < seeds_vector.size(); j++)
     {
-        std::cout << "tensor row  " << j << " th:" << actual_path_tensor.index({"...", j}) << std::endl;
         torch::Tensor clonedTensor = actual_path_tensor.index({"...", j}).clone();
         int64_t *row = clonedTensor.unsqueeze(0).data_ptr<int64_t>();
         for (int i = 0; i < metapath.size(); i++)
@@ -125,12 +120,9 @@ TEST(RandomWalk, testGraphWithMultiPath)
         }
         for (int i = 0; i < metapath.size(); i++)
         {
-            std::cout << "metapath " << i << ":" << std::endl;
             auto homograph = hg.GetHomoGraph(metapath[i]);
             torch::Tensor indices = homograph->GetCSC()->indices.to(torch::kCPU);
             torch::Tensor indptr = homograph->GetCSC()->indptr.to(torch::kCPU);
-            std::cout << "indices:" << indices << std::endl;
-            std::cout << "indptr:" << indptr << std::endl;
             bool result = check_if_edge_exist(row[i], row[i + 1], indptr.data_ptr<int64_t>(), indices.data_ptr<int64_t>());
             EXPECT_TRUE(result);
         }
