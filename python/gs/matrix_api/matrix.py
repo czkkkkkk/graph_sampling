@@ -2,6 +2,7 @@ import torch
 from torch.fx import Proxy
 import dgl
 from dgl import DGLHeteroGraph, create_block
+from typing import Optional
 
 torch.fx.wrap('create_block')
 
@@ -15,22 +16,20 @@ class Matrix(object):
     def set_data(self, data):
         self._graph._CAPI_set_data(data)
 
+    def get_data(self) -> Optional[torch.Tensor]:
+        return self._graph._CAPI_get_data()
+
     def load_dgl_graph(self, g, weight=None):
         # import csc
         if not isinstance(g, DGLHeteroGraph):
             raise ValueError
-        reverse_g = dgl.reverse(g)
-        reverse_g = reverse_g.formats(['csr'])
-        csc = reverse_g.adj(scipy_fmt='csr')
-        csc_indptr = torch.tensor(csc.indptr).long().cuda()
-        csc_indices = torch.tensor(csc.indices).long().cuda()
+        csc_indptr, csc_indices, edge_ids = g.adj_sparse('csc')
         self._graph._CAPI_load_csc(csc_indptr, csc_indices)
         if weight is not None:
-            self._graph._CAPI_set_data(g.edata[weight])
+            self._graph._CAPI_set_data(g.edata[weight][edge_ids])
 
     def to_dgl_block(self):
-        unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = self._graph._CAPI_relabel(
-        )
+        unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = self._graph._CAPI_relabel()
         block = None
         if format == 'coo':
             block = create_block((format, (format_tensor1, format_tensor2)),
@@ -75,7 +74,7 @@ class Matrix(object):
         return self._graph._CAPI_all_valid_node()
 
     def row_indices(self) -> torch.Tensor:
-        return self._graph._CAPI_get_coo_rows()
+        return self._graph._CAPI_get_coo_rows(True)
 
     def __getitem__(self, data):
         ret = self._graph
