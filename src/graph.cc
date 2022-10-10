@@ -176,6 +176,11 @@ void Graph::CreateSparseFormat(int64_t axis) {
   }
 }
 
+torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length) {
+  return RandomWalkFused(this->csc_, seeds, walk_length);
+}
+
+
 torch::Tensor Graph::Sum(int64_t axis, int64_t powk) {
   torch::Tensor out_data;
   CreateSparseFormat(axis);

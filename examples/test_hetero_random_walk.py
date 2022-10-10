@@ -11,12 +11,12 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 A1 = Graph(False)
 indptr1 = torch.LongTensor([0, 0, 1, 2, 3]).to('cuda:0')
 indices1 = torch.LongTensor([0, 1, 2]).to('cuda:0')
-A1.load_csc(indptr1, indices1)
+A1._CAPI_load_csc(indptr1, indices1)
 
 A2 = Graph(False)
 indptr2 = torch.LongTensor([0, 1, 2, 3]).to('cuda:0')
 indices2 = torch.LongTensor([0, 1, 2]).to('cuda:0')
-A2.load_csc(indptr2, indices2)
+A2._CAPI_load_csc(indptr2, indices2)
 
 
 node_types = ['user', 'item']
@@ -35,4 +35,5 @@ print(nodes)
 print("random walk fused:")
 other_nodes = heteroM.metapath_random_walk_fused(
     seeds, ['view', 'follow', 'follow'])
-print(other_nodes)
+
+print(other_nodes.reshape((-1, seeds.numel())))

@@ -1,5 +1,7 @@
 #include "graph_ops.h"
 
+#include <curand_kernel.h>
+#include <nvToolsExt.h>
 #include "atomic.h"
 #include "cuda_common.h"
 #include "utils.h"

@@ -50,16 +50,15 @@ TEST(RandomWalk, testGraphWithOnePath)
     std::vector<int64_t> seeds_vector = {2, 1};
     std::vector<std::string> metapath = {"view", "follow", "follow"};
     torch::Tensor seeds = torch::from_blob(seeds_vector.data(), {2}, options).to(torch::kCUDA);
-    auto actual_path_tensor = hg.MetapathRandomWalkFused(seeds, metapath).to(torch::kCPU);
+    auto actual_path_tensor = hg.MetapathRandomWalkFused(seeds, metapath).reshape({-1, seeds.numel()}).to(torch::kCPU);
     // because the seeds have only one possible path, we specify it and test result
-    std::vector<int64_t> expected_path_vector = {2, 2, 1, 0, 1, 1, 0, -1};
-    torch::Tensor expected_path_tensor = torch::from_blob(expected_path_vector.data(), {2, 4}, options).to(torch::kCPU);
-    std::cout << "expected path:" << expected_path_tensor << std::endl;
-    std::cout << "actual path:" << actual_path_tensor << std::endl;
+    std::vector<int64_t> expected_path_vector = {2, 1, 2, 1, 1, 0, 0, -1};
+    torch::Tensor expected_path_tensor = torch::from_blob(expected_path_vector.data(), {4, 2}, options).to(torch::kCPU);
     // check the edge exists in corresponding homograph
     for (int j = 0; j < seeds_vector.size(); j++)
     {
-        int64_t *row = actual_path_tensor.index({j, "..."}).data_ptr<int64_t>();
+        torch::Tensor clonedTensor = actual_path_tensor.index({"...", j}).clone();
+        int64_t *row = clonedTensor.unsqueeze(0).data_ptr<int64_t>();
         for (int i = 0; i < metapath.size(); i++)
         {
             auto homograph = hg.GetHomoGraph(metapath[i]);
@@ -98,7 +97,7 @@ TEST(RandomWalk, testGraphWithMultiPath)
     std::vector<int64_t> seeds_vector = {2, 2, 1, 1, 0};
     std::vector<std::string> metapath = {"view", "follow", "follow"};
     torch::Tensor seeds = torch::from_blob(seeds_vector.data(), {5}, options).to(torch::kCUDA);
-    torch::Tensor actual_path_tensor = hg.MetapathRandomWalkFused(seeds, metapath).to(torch::kCPU);
+    torch::Tensor actual_path_tensor = hg.MetapathRandomWalkFused(seeds, metapath).reshape({-1, seeds.numel()}).to(torch::kCPU);
 
     /*
     if seed node is 2, there are two possible path: 2->2->1->0, 2->3->2->1,
@@ -108,7 +107,8 @@ TEST(RandomWalk, testGraphWithMultiPath)
     // check the edge exists in corresponding homograph
     for (int j = 0; j < seeds_vector.size(); j++)
     {
-        int64_t *row = actual_path_tensor.index({j, "..."}).data_ptr<int64_t>();
+        torch::Tensor clonedTensor = actual_path_tensor.index({"...", j}).clone();
+        int64_t *row = clonedTensor.unsqueeze(0).data_ptr<int64_t>();
         for (int i = 0; i < metapath.size(); i++)
         {
             auto homograph = hg.GetHomoGraph(metapath[i]);

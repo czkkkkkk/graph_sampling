@@ -60,6 +60,7 @@ class Graph : public torch::CustomClassHolder {
              torch::optional<torch::Tensor>, std::string>
   Relabel();
   std::vector<torch::Tensor> MetaData();
+  torch::Tensor RandomWalk(torch::Tensor seeds, int64_t walk_length);
 
   // todo: return global_e_id
  private:

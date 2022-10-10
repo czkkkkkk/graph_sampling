@@ -58,6 +58,9 @@ std::shared_ptr<CSR> GraphCOO2CSR(std::shared_ptr<COO> coo, int64_t num_rows);
 
 std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_cols);
 
+torch::Tensor RandomWalkFused(std::shared_ptr<CSC> csc, torch::Tensor seeds,
+                              int64_t walk_length);
+
 }  // namespace gs
 
 #endif

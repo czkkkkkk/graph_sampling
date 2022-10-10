@@ -11,7 +11,6 @@ from gs import Graph, HeteroGraph, Matrix, HeteroMatrix
 import gs
 
 
-
 device = torch.device('cuda:%d' % 0)
 
 dataset = load_graph.load_reddit()
@@ -27,7 +26,7 @@ node_types = ['user']
 edge_types = [('user', 'cite', 'user')]
 A1 = Graph(False)
 
-A1.load_csc(csc_indptr, csc_indices)
+A1._CAPI_load_csc(csc_indptr, csc_indices)
 graphs = [Matrix(A1)]
 hg = HeteroGraph()
 heteroM = HeteroMatrix(hg)
@@ -41,8 +40,11 @@ def randomwalk_baseline(heteroM: HeteroMatrix, seeds, metapath):
     return ret
 
 
+str_list = []
+
+
 def bench(loop_num,  seed_num,
-          metalenth, func, args, ):
+          metalength, func, args, ):
     time_list = []
     for i in range(loop_num):
         torch.cuda.synchronize()
@@ -54,18 +56,19 @@ def bench(loop_num,  seed_num,
         end = time.time()
 
         time_list.append(end - begin)
-
-    print("fused randomwalk with %d seeds and %d metapath length AVG:" % (seed_num, metalenth),
+    str_list.append("%d,%d,%.3f" %
+                    (seed_num, metalength, np.mean(time_list[10:]) * 1000))
+    print("fused randomwalk with %d seeds and %d metapath length AVG:" % (seed_num, metalength),
           np.mean(time_list[10:]) * 1000, " ms.")
 
 
-seeds_set = [1000, 10000, 50000, 100000, 200000, ]
-metapath_len = [5, 10, 15, 20, 25, 30]
+# seeds_set = [1000, 10000, 50000, 100000, 200000, 2000000, 10000000]
+# metapath_len = [5, 10, 15, 20, 25, 30]
 seeds_set = [200000]
 metapath_len = [30]
 for seed_num in seeds_set:
     for metalenth in metapath_len:
-        seeds = torch.arange(0, seed_num).long().cuda()
+        seeds = torch.randint(0, 232964, (seed_num,), device='cuda')
         metapath = ['cite']*metalenth
         bench(
             100,
@@ -77,3 +80,6 @@ for seed_num in seeds_set:
                 metapath
             )
         )
+print("seed_num,metapath_length,randomwalk_time")
+for line in str_list:
+    print(line)

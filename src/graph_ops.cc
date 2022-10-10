@@ -2,6 +2,7 @@
 
 #include "cuda/graph_ops.h"
 #include "cuda/heterograph_ops.h"
+#include "cuda/random_walk.h"
 
 namespace gs {
 
@@ -115,18 +116,27 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSampling(
     return {std::make_shared<CSC>(CSC{}), torch::Tensor()};
   }
 }
-
 std::pair<std::shared_ptr<CSC>, torch::Tensor>
 CSCColumnwiseFusedSlicingAndSampling(std::shared_ptr<CSC> csc,
                                      torch::Tensor column_ids, int64_t fanout,
                                      bool replace) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
-    std::tie(sub_indptr, sub_indices, select_index) =
-        impl::CSCColumnwiseFusedSlicingAndSamplingCUDA(
-            csc->indptr, csc->indices, column_ids, fanout, replace);
-    return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
-            select_index};
+    if (fanout == 1 && replace) {
+      std::tie(sub_indptr, sub_indices, select_index) =
+          impl::CSCColumnwiseSamplingOneKeepDimCUDA(csc->indptr, csc->indices,
+                                                    column_ids);
+      return {
+          std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
+          select_index};
+    } else {
+      std::tie(sub_indptr, sub_indices, select_index) =
+          impl::CSCColumnwiseFusedSlicingAndSamplingCUDA(
+              csc->indptr, csc->indices, column_ids, fanout, replace);
+      return {
+          std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
+          select_index};
+    }
   } else {
     LOG(FATAL) << "Not implemented warning";
     return {std::make_shared<CSC>(CSC{}), torch::Tensor()};
@@ -216,6 +226,14 @@ torch::Tensor GraphNormalize(std::shared_ptr<CSR> csr,
     LOG(FATAL) << "Not implemented warning";
     return torch::Tensor();
   }
+}
+
+torch::Tensor RandomWalkFused(std::shared_ptr<CSC> csc, torch::Tensor seeds,
+                              int64_t walk_length) {
+  torch::Tensor paths = impl::RandomWalkFusedCUDA(
+      seeds, walk_length, csc->indices.data_ptr<int64_t>(),
+      csc->indptr.data_ptr<int64_t>());
+  return paths;
 }
 
 }  // namespace gs

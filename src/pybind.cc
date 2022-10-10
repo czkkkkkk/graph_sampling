@@ -2,9 +2,9 @@
 #include <torch/script.h>
 
 #include "./graph.h"
+#include "./graph_ops.h"
 #include "./hetero_graph.h"
 #include "./tensor_ops.h"
-
 using namespace gs;
 
 TORCH_LIBRARY(gs_classes, m) {
