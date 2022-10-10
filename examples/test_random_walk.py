@@ -4,10 +4,6 @@ import torch
 import os
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
-
-# g2 = dgl.heterograph({
-#     ('user', 'follow', 'user'): ([0, 1, 2], [1, 2, 3]),
-#     ('user', 'view', 'item'): ([0,1,2], [0,1,2]),
 A1 = Graph(False)
 indptr1 = torch.LongTensor([0, 0, 1, 2, 3]).to('cuda:0')
 indices1 = torch.LongTensor([0, 1, 2]).to('cuda:0')
