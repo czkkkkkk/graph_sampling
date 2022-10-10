@@ -3,7 +3,6 @@
 #include "cuda_common.h"
 #include "heterograph_ops.h"
 #include "utils.h"
-
 namespace gs {
 namespace impl {
 
@@ -65,18 +64,15 @@ __global__ void _RandomWalkKernel(const int64_t* seed_data,
   curandState rng;
   uint64_t rand_seed = 7777777;
   curand_init(rand_seed + tid, 0, 0, &rng);
-
   // fisrt step
   for (int idx = tid; idx < last_idx; idx += BLOCK_SIZE) {
     int64_t curr = seed_data[idx];
     out_traces_data[0 * num_seeds + idx] = curr;
   }
-
   // begin random walk
   for (int step_idx = 0; step_idx < max_num_steps; step_idx++) {
     for (int idx = tid; idx < last_idx; idx += BLOCK_SIZE) {
       int64_t curr = out_traces_data[step_idx * num_seeds + idx];
-
       int64_t pick = -1;
       if (curr < 0) {
         out_traces_data[(step_idx + 1) * num_seeds + idx] = pick;
@@ -86,7 +82,6 @@ __global__ void _RandomWalkKernel(const int64_t* seed_data,
         int64_t* graph_indptr = all_indptr[metapath_id];
         const int64_t in_row_start = graph_indptr[curr];
         const int64_t deg = graph_indptr[curr + 1] - graph_indptr[curr];
-
         if (deg > 0) {
           pick = graph_indice[in_row_start + curand(&rng) % deg];
         }
@@ -106,7 +101,6 @@ torch::Tensor MetapathRandomWalkFusedCUDA(torch::Tensor seeds,
   const uint64_t max_num_steps = metapath.numel();
   int64_t outsize = num_seeds * (max_num_steps + 1);
   torch::Tensor out_traces_tensor = torch::empty(outsize, seeds.options());
-
   int64_t* out_traces_data = out_traces_tensor.data_ptr<int64_t>();
   constexpr int BLOCK_SIZE = 256;
   dim3 block(BLOCK_SIZE);
@@ -116,6 +110,5 @@ torch::Tensor MetapathRandomWalkFusedCUDA(torch::Tensor seeds,
       all_indices, all_indptr, out_traces_data);
   return out_traces_tensor.reshape({seeds.numel(), -1});
 }
-
 }  // namespace impl
 }  // namespace gs

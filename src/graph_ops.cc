@@ -16,6 +16,7 @@ std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc) {
   }
 }
 
+
 std::shared_ptr<COO> GraphCSR2COO(std::shared_ptr<CSR> csr) {
   if (csr->indptr.device().type() == torch::kCUDA) {
     torch::Tensor row, col;
@@ -115,7 +116,6 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSampling(
     return {std::make_shared<CSC>(CSC{}), torch::Tensor()};
   }
 }
-
 std::pair<std::shared_ptr<CSC>, torch::Tensor>
 CSCColumnwiseFusedSlicingAndSampling(std::shared_ptr<CSC> csc,
                                      torch::Tensor column_ids, int64_t fanout,
