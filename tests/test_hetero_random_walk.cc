@@ -16,10 +16,6 @@ static bool check_if_edge_exist(int64_t src, int64_t dst, int64_t *indptr_arr, i
     }
     int64_t begin = indptr_arr[src];
     int64_t end = indptr_arr[src + 1];
-    std::cout << "begin:" << begin << std::endl;
-    std::cout << "end:" << end << std::endl;
-    std::cout << "src:" << src << std::endl;
-    std::cout << "dst:" << dst << std::endl;
     for (int64_t i = begin; i < end; i++)
     {
         if (indices_arr[i] == dst)
@@ -109,15 +105,10 @@ TEST(RandomWalk, testGraphWithMultiPath)
     if seed node is 0, there are one possible path: 0->0->-1->-1
     */
     // check the edge exists in corresponding homograph
-    std::cout << "actual path tensor: " << actual_path_tensor << std::endl;
     for (int j = 0; j < seeds_vector.size(); j++)
     {
         torch::Tensor clonedTensor = actual_path_tensor.index({"...", j}).clone();
         int64_t *row = clonedTensor.unsqueeze(0).data_ptr<int64_t>();
-        for (int i = 0; i < metapath.size(); i++)
-        {
-            std::cout << row[i] << "," << row[i + 1] << std::endl;
-        }
         for (int i = 0; i < metapath.size(); i++)
         {
             auto homograph = hg.GetHomoGraph(metapath[i]);
