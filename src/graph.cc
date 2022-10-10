@@ -18,6 +18,9 @@ void Graph::LoadCSC(torch::Tensor indptr, torch::Tensor indices) {
 
 void Graph::LoadCSCWithColIds(torch::Tensor column_ids, torch::Tensor indptr,
                               torch::Tensor indices) {
+  if (column_ids.numel() != indptr.numel() - 1) {
+    LOG(FATAL) << "length of column_ids is not aligned with indptr";
+  }
   csc_ = std::make_shared<CSC>();
   col_ids_ = column_ids;
   csc_->indptr = indptr;
@@ -307,6 +310,7 @@ Graph::Relabel() {
 
   } else {
     LOG(ERROR) << "Error in Relabel!";
+    return {};
   }
 }
 
