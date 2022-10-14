@@ -18,20 +18,9 @@ class KGCN(torch.nn.Module):
         self.aggregator = Aggregator(
             self.batch_size, self.dim, args.aggregator)
 
-        self._gen_adj()
-
         self.usr = torch.nn.Embedding(num_user, args.dim)
         self.ent = torch.nn.Embedding(num_ent, args.dim)
         self.rel = torch.nn.Embedding(num_rel, args.dim)
-
-    def _gen_adj(self):
-        '''
-        Generate adjacency matrix for entities and relations
-        Only cares about fixed number of samples
-        '''
-        sampled_adj_matrix = self.kg.columnwise_sampling(self.n_neighbor, True)
-        self.adj_ent = sampled_adj_matrix.row_indices().view((self.num_ent, self.n_neighbor))
-        self.adj_rel = sampled_adj_matrix.get_data().view((self.num_ent, self.n_neighbor))
 
     def forward(self, u, v):
         '''
@@ -54,11 +43,13 @@ class KGCN(torch.nn.Module):
         item_embeddings = self._aggregate(user_embeddings, entities, relations)
 
         scores = (user_embeddings * item_embeddings).sum(dim=1)
-        
+
         return torch.sigmoid(scores)
 
     def _get_neighbors(self, v):
         '''
+        Different from the author's version, we use online sampling to generate adjcent matrix in a batch.
+
         v is batch sized indices for items
         v: [batch_size, 1]
         '''
@@ -66,8 +57,10 @@ class KGCN(torch.nn.Module):
         relations = []
 
         for h in range(self.n_iter):
-            neighbor_entities = self.adj_ent[entities[h]].view((self.batch_size, -1))
-            neighbor_relations = self.adj_rel[entities[h]].view((self.batch_size, -1))
+            sampled_adj_matrix = self.kg[:, entities[h]].columnwise_sampling(
+                self.n_neighbor, True)
+            neighbor_entities = sampled_adj_matrix.row_indices().view((self.batch_size, -1))
+            neighbor_relations = sampled_adj_matrix.get_data().view((self.batch_size, -1))
             entities.append(neighbor_entities)
             relations.append(neighbor_relations)
 

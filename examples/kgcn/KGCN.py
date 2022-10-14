@@ -112,7 +112,7 @@ if __name__ == '__main__':
                         default=8, help='the number of neighbors to be sampled')
     parser.add_argument('--dim', type=int, default=16,
                         help='dimension of user and entity embeddings')
-    parser.add_argument('--n_iter', type=int, default=1,
+    parser.add_argument('--n_iter', type=int, default=2,
                         help='number of iterations when computing entity representation')
     parser.add_argument('--batch_size', type=int,
                         default=32, help='batch size')
