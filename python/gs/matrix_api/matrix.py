@@ -2,8 +2,11 @@ import torch
 from torch.fx import Proxy
 import dgl
 from dgl import DGLHeteroGraph, create_block
+from gs.utils import create_block_from_coo, create_block_from_csc
 
 torch.fx.wrap('create_block')
+torch.fx.wrap('create_block_from_coo')
+torch.fx.wrap('create_block_from_csc')
 
 
 class Matrix(object):
@@ -33,14 +36,16 @@ class Matrix(object):
         )
         block = None
         if format == 'coo':
-            block = create_block((format, (format_tensor1, format_tensor2)),
-                                 num_src_nodes=num_row,
-                                 num_dst_nodes=num_col)
+            block = create_block_from_coo(format_tensor1,
+                                          format_tensor2,
+                                          num_src=num_row,
+                                          num_dst=num_col)
         else:
-            block = create_block(
-                (format, (format_tensor1, format_tensor2, [])),
-                num_src_nodes=num_row,
-                num_dst_nodes=num_col)
+            block = create_block_from_csc(format_tensor1,
+                                          format_tensor2,
+                                          torch.tensor([]),
+                                          num_src=num_row,
+                                          num_dst=num_col)
 
         data = self._graph._CAPI_get_data()
         if data is not None:
