@@ -37,7 +37,7 @@ torch::Tensor GetSampledSubIndptrFused(torch::Tensor indptr,
                                        torch::Tensor column_ids, int64_t fanout,
                                        bool replace) {
   int64_t size = column_ids.numel();
-  auto sub_indptr = torch::empty(size + 1, indptr.options());
+  auto sub_indptr = torch::empty(size + 1, torch::dtype(indptr.dtype()).device(torch::kCUDA));
 
   using it = thrust::counting_iterator<IdType>;
   thrust::for_each(

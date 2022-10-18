@@ -211,8 +211,10 @@ std::pair<torch::Tensor, torch::Tensor> SampleSubIndicesFused(
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
   int n_edges = item_prefix[size];  // cpu
-  auto sub_indices = torch::zeros(n_edges, indices.options());
-  auto select_index = torch::zeros(n_edges, indices.options());
+  auto sub_indices =
+      torch::zeros(n_edges, torch::dtype(indices.dtype()).device(torch::kCUDA));
+  auto select_index =
+      torch::zeros(n_edges, torch::dtype(indices.dtype()).device(torch::kCUDA));
 
   const uint64_t random_seed = 7777;
   dim3 block(32, 16);
