@@ -22,15 +22,10 @@ g = g.to("cuda")
 def graphsaint_baseline(graph: dgl, num_roots, walk_length):
     sampled_roots = torch.randint(
         0, g.num_nodes(), (num_roots,), device='cuda')
-    torch.cuda.nvtx.range_push("dgl random walk")
     traces, types = random_walk(g, nodes=sampled_roots, length=walk_length)
-    torch.cuda.nvtx.range_pop()
-    torch.cuda.nvtx.range_push("traces_viw")
     sampled_nodes = traces.view(num_roots*(walk_length+1))
-    torch.cuda.nvtx.range_pop()
-    torch.cuda.nvtx.range_push("induce subgraph")
+    sampled_nodes = sampled_nodes[sampled_nodes!=-1]
     sg = graph.subgraph(sampled_nodes, relabel_nodes=True)
-    torch.cuda.nvtx.range_pop()
     return sg
 
 
