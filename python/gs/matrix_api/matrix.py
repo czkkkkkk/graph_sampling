@@ -3,6 +3,7 @@ from torch.fx import Proxy
 import dgl
 from dgl import DGLHeteroGraph, create_block
 
+
 torch.fx.wrap('create_block')
 
 
@@ -96,4 +97,8 @@ class Matrix(object):
                 seeds, fanouts, raplace))
 
     def random_walk(self, seeds, walk_length):
-        return self._graph.random_walk(seeds, walk_length)
+        return self._graph._CAPI_random_walk(seeds, walk_length)
+
+    def relabel(self):
+        self._graph._CAPI_relabel()
+        return self
