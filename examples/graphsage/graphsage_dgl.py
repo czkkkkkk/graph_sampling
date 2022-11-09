@@ -1,5 +1,5 @@
 import torch
-import examples.load_graph as load_graph
+from gs.utils import load_graph
 from dgl.transforms.functional import to_block
 import time
 import numpy as np
