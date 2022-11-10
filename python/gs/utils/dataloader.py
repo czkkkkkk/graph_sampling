@@ -8,7 +8,7 @@ class SeedGenerator(object):
                  batch_size: int,
                  shuffle: bool = False,
                  drop_last: bool = False):
-        self.data = data.cuda()
+        self.data = data
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.drop_last = drop_last

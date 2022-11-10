@@ -11,7 +11,7 @@ def load_reddit():
     train_nid = torch.nonzero(g.ndata["train_mask"], as_tuple=True)[0]
     test_nid = torch.nonzero(g.ndata["test_mask"], as_tuple=True)[0]
     val_nid = torch.nonzero(g.ndata["val_mask"], as_tuple=True)[0]
-    splitted_idx = {"train": train_nid, "test": test_nid, "val": val_nid}
+    splitted_idx = {"train": train_nid, "test": test_nid, "valid": val_nid}
     feat = g.ndata['feat']
     labels = g.ndata['label']
     g.ndata.clear()
