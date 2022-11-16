@@ -41,6 +41,9 @@ class Matrix(object):
                 num_src_nodes=num_row,
                 num_dst_nodes=num_col)
 
+        if e_ids is not None:
+            block.edata['_ID'] = e_ids
+
         data = self._graph._CAPI_get_data()
         if data is not None:
             if e_ids is not None:

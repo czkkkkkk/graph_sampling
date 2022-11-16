@@ -341,7 +341,7 @@ torch::Tensor Graph::GetValidRows() {
   if (row_ids_.has_value()) {
     return row_ids_.value();
   } else {
-    return TensorUnique(GetCOORows(true));
+    return std::get<0>(torch::_unique(GetCOORows(true)));
   }
 }
 
@@ -349,7 +349,7 @@ torch::Tensor Graph::GetValidCols() {
   if (col_ids_.has_value()) {
     return col_ids_.value();
   } else {
-    return TensorUnique(GetCOOCols(true));
+    return std::get<0>(torch::_unique(GetCOOCols(true)));
   }
 }
 
