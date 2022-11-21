@@ -6,3 +6,4 @@ gs.egg-info
 __pycache__
 *.nsys-rep
 third_party
+data
