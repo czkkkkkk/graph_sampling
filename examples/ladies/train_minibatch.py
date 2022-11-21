@@ -52,7 +52,7 @@ def ladies_sampler(P: gs.Matrix, seeds: torch.Tensor, fanouts: list):
         selected, _ = torch.ops.gs_ops.list_sampling_with_probs(
             U.row_ids(unique=False), prob, fanout, False)
         nodes = torch.cat((seeds, selected)).unique()  # add self-loop
-        subU = U[nodes, :].divide(prob[nodes], axis=1).normalize(axis=1)
+        subU = U[nodes, :].divide(prob[nodes], axis=1).normalize(axis=0)
         seeds = subU.all_indices()
         ret.insert(0, subU.to_dgl_block())
     input_node = seeds
@@ -169,7 +169,7 @@ if __name__ == '__main__':
     print('num of edges:', g.num_edges())
     g = g.long().to('cuda')
     train_mask, val_mask, test_mask = splitted_idx['train'], splitted_idx[
-        'val'], splitted_idx['test']
+        'valid'], splitted_idx['test']
     train_idx = train_mask.to(device)
     val_idx = val_mask.to(device)
     features = features.to(feat_device)

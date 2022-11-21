@@ -134,7 +134,7 @@ if __name__ == '__main__':
     print('Loading data')
     g, features, labels, n_classes, splitted_idx = load_reddit()
     g = g.to('cuda')
-    train_mask, val_mask, test_mask = splitted_idx['train'], splitted_idx['val'], splitted_idx['test']
+    train_mask, val_mask, test_mask = splitted_idx['train'], splitted_idx['valid'], splitted_idx['test']
     train_idx = train_mask.to(device)
     val_idx = val_mask.to(device)
     features = features.to(feat_device)
