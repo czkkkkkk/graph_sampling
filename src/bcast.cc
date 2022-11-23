@@ -1,7 +1,5 @@
 #include "./bcast.h"
 
-#include <algorithm>
-
 namespace gs {
 /*!
  * \brief Determine whether use broadcasting or not, given the operator
@@ -50,7 +48,7 @@ BcastOff CalcBcastOff(const std::string& op, torch::Tensor lhs,
       const int dr = (rhs.dim() - 1 - j < 1) ? 1 : rhs.size(rhs.dim() - 1 - j);
       for (int i = 1; i < std::max(dl, dr); ++i) {
         for (int k = 0; k < out_len; ++k) {
-          /* Explaination:
+          /* Explanation:
            * if current dimension is not broadcast dimension for lhs array
            *   lhs_offset[i * out_len + k] = lhs_offset[k] + i * stride_l
            * else

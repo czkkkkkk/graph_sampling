@@ -12,6 +12,7 @@ void Graph::LoadCSC(torch::Tensor indptr, torch::Tensor indices) {
   csc_->indices = indices;
   num_cols_ = indptr.numel() - 1;
   num_rows_ = indptr.numel() - 1;
+  num_edges_ = indices.numel();
   LOG(INFO) << "Loaded CSC with " << indptr.numel() - 1 << " nodes and "
             << indices.numel() << " edges";
 }
@@ -27,6 +28,7 @@ void Graph::LoadCSCWithColIds(torch::Tensor column_ids, torch::Tensor indptr,
   csc_->indices = indices;
   num_cols_ = column_ids.numel();
   num_rows_ = indices.max().item<int64_t>() + 1;
+  num_edges_ = indices.numel();
 }
 
 std::shared_ptr<CSC> Graph::GetCSC() { return csc_; }
@@ -41,6 +43,8 @@ int64_t Graph::GetNumCols() { return num_cols_; }
 
 int64_t Graph::GetNumRows() { return num_rows_; }
 
+int64_t Graph::GetNumEdges() { return num_edges_; }
+
 void Graph::SetCSC(std::shared_ptr<CSC> csc) { csc_ = csc; }
 
 void Graph::SetCSR(std::shared_ptr<CSR> csr) { csr_ = csr; }
@@ -48,6 +52,8 @@ void Graph::SetCSR(std::shared_ptr<CSR> csr) { csr_ = csr; }
 void Graph::SetCOO(std::shared_ptr<COO> coo) { coo_ = coo; }
 
 void Graph::SetData(torch::Tensor data) { data_ = data; }
+
+void Graph::SetNumEdges(int64_t num_edges) { num_edges_ = num_edges; }
 
 c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_index) {
   torch::Tensor select_index, out_data;
@@ -59,6 +65,7 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_index) {
       new Graph(true, col_ids, row_ids_, column_index.numel(), num_rows_)));
   std::tie(csc_ptr, select_index) = CSCColumnwiseSlicing(csc_, column_index);
   ret->SetCSC(csc_ptr);
+  ret->SetNumEdges(csc_ptr->indices.numel());
   if (data_.has_value()) {
     if (csc_->e_ids.has_value()) {
       out_data =
@@ -81,6 +88,7 @@ c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
     std::shared_ptr<CSR> csr_ptr;
     std::tie(csr_ptr, select_index) = CSRRowwiseSlicing(csr_, row_index);
     ret->SetCSR(csr_ptr);
+    ret->SetNumEdges(csr_ptr->indices.numel());
     if (data_.has_value()) {
       if (csr_->e_ids.has_value()) {
         out_data =
@@ -94,6 +102,7 @@ c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
     std::shared_ptr<CSC> csc_ptr;
     std::tie(csc_ptr, select_index) = CSCRowwiseSlicing(csc_, row_index);
     ret->SetCSC(csc_ptr);
+    ret->SetNumEdges(csc_ptr->indices.numel());
     if (data_.has_value()) {
       if (csc_->e_ids.has_value()) {
         out_data =
@@ -118,6 +127,7 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSampling(int64_t fanout,
   std::tie(csc_ptr, select_index) =
       CSCColumnwiseSampling(csc_, fanout, replace);
   ret->SetCSC(csc_ptr);
+  ret->SetNumEdges(csc_ptr->indices.numel());
   if (data_.has_value()) {
     if (csc_->e_ids.has_value()) {
       out_data =
@@ -142,6 +152,7 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
   std::tie(csc_ptr, select_index) =
       CSCColumnwiseFusedSlicingAndSampling(csc_, column_index, fanout, replace);
   ret->SetCSC(csc_ptr);
+  ret->SetNumEdges(csc_ptr->indices.numel());
   if (data_.has_value()) {
     if (csc_->e_ids.has_value()) {
       out_data =
@@ -206,6 +217,7 @@ c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis) {
   }
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);
+  ret->SetNumEdges(num_edges_);
   ret->SetData(out_data);
   return ret;
 }
@@ -222,6 +234,7 @@ c10::intrusive_ptr<Graph> Graph::Normalize(int64_t axis) {
   }
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);
+  ret->SetNumEdges(num_edges_);
   ret->SetData(out_data);
   return ret;
 }
