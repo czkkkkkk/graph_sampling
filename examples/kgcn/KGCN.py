@@ -44,9 +44,9 @@ def train(args):
     # train_dataset = KGCNDataset(x_train)
     # test_dataset = KGCNDataset(x_test)
     train_seedloader = SeedGenerator(
-        torch.tensor(x_train.index), batch_size=args.batch_size, shuffle=True, drop_last=False)
+        torch.tensor(x_train.index, dtype=torch.int64, device=device), batch_size=args.batch_size, shuffle=True, drop_last=False)
     test_seedloader = SeedGenerator(
-        torch.tensor(x_test.index), batch_size=args.batch_size, shuffle=True, drop_last=False)
+        torch.tensor(x_test.index, dtype=torch.int64, device=device), batch_size=args.batch_size, shuffle=True, drop_last=False)
     # train_loader = torch.utils.data.DataLoader(
     #     train_dataset, batch_size=args.batch_size)
     # test_loader = torch.utils.data.DataLoader(

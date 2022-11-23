@@ -18,7 +18,7 @@ def fastgcn_sampler(A: gs.Matrix, seeds: torch.Tensor, probs: torch.Tensor, fano
     ret = []
     for fanout in fanouts:
         subA = A[:, seeds]
-        row_indices = subA.row_indices()
+        row_indices = subA.row_ids()
 
         # selected, _ = torch.ops.gs_ops.list_sampling(row_indices,
         #                                              fanout, False)
@@ -130,7 +130,7 @@ if __name__ == '__main__':
     print('num of nodes:', g.num_nodes())
     print('num of edges:', g.num_edges())
     g = g.long().to('cuda')
-    train_mask, val_mask, test_mask = splitted_idx['train'], splitted_idx['val'], splitted_idx['test']
+    train_mask, val_mask, test_mask = splitted_idx['train'], splitted_idx['valid'], splitted_idx['test']
     train_idx = train_mask.to(device)
     val_idx = val_mask.to(device)
     features = features.to(feat_device)

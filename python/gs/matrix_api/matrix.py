@@ -3,8 +3,12 @@ from torch.fx import Proxy
 import dgl
 from dgl import DGLHeteroGraph, create_block
 from typing import Optional
+from gs.utils import create_block_from_coo, create_block_from_csc
+
 
 torch.fx.wrap('create_block')
+torch.fx.wrap('create_block_from_coo')
+torch.fx.wrap('create_block_from_csc')
 
 
 class Matrix(object):
@@ -32,14 +36,16 @@ class Matrix(object):
         unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = self._graph._CAPI_relabel()
         block = None
         if format == 'coo':
-            block = create_block((format, (format_tensor1, format_tensor2)),
-                                 num_src_nodes=num_row,
-                                 num_dst_nodes=num_col)
+            block = create_block_from_coo(format_tensor1,
+                                          format_tensor2,
+                                          num_src=num_row,
+                                          num_dst=num_col)
         else:
-            block = create_block(
-                (format, (format_tensor1, format_tensor2, [])),
-                num_src_nodes=num_row,
-                num_dst_nodes=num_col)
+            block = create_block_from_csc(format_tensor1,
+                                          format_tensor2,
+                                          torch.tensor([]),
+                                          num_src=num_row,
+                                          num_dst=num_col)
 
         if e_ids is not None:
             block.edata['_ID'] = e_ids
@@ -98,4 +104,8 @@ class Matrix(object):
                 seeds, fanouts, raplace))
 
     def random_walk(self, seeds, walk_length):
-        return self._graph.random_walk(seeds, walk_length)
+        return self._graph._CAPI_random_walk(seeds, walk_length)
+
+    def relabel(self):
+        self._graph._CAPI_relabel()
+        return self

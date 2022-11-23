@@ -14,7 +14,7 @@ def ladies(P: gs.Matrix, seeds: torch.Tensor, fanouts: list):
         selected, _ = torch.ops.gs_ops.list_sampling_with_probs(
             U.row_ids(unique=False), prob, fanout, False)
         nodes = torch.cat((seeds, selected)).unique()  # add self-loop
-        subU = U[nodes, :].divide(prob[nodes], axis=1).normalize(axis=1)
+        subU = U[nodes, :].divide(prob[nodes], axis=1).normalize(axis=0)
         seeds = subU.all_indices()
         ret.insert(0, subU.to_dgl_block())
     output_node = seeds

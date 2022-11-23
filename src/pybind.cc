@@ -30,7 +30,9 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_sum", &Graph::Sum)
       .def("_CAPI_divide", &Graph::Divide)
       .def("_CAPI_normalize", &Graph::Normalize)
-      .def("_CAPI_metadata", &Graph::MetaData);
+      .def("_CAPI_metadata", &Graph::MetaData)
+      .def("_CAPI_random_walk",&Graph::RandomWalk)
+      ;
   m.class_<HeteroGraph>("HeteroGraph")
       .def(torch::init<>())
       .def("load_from_homo", &HeteroGraph::LoadFromHomo)
