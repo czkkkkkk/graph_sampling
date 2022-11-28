@@ -122,7 +122,7 @@ def _gsddmm(gidx, op, lhs, rhs, lhs_target='u', rhs_target='v'):
     out_shp = (gidx._CAPI_get_num_edges(), ) +\
         infer_broadcast_shape(op, lhs_shp[1:], rhs_shp[1:])
     out = torch.zeros(out_shp, dtype=dtype, device=device)
-    if gidx._CPI_num_edges() > 0:
+    if gidx._CAPI_get_num_edges() > 0:
         gidx._CAPI_sddmm(op,
                          lhs if use_lhs else torch.Tensor(),
                          rhs if use_rhs else torch.Tensor(),

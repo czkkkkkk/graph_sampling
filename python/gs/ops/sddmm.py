@@ -1,5 +1,5 @@
 from itertools import product
-from sparse import *
+from .sparse import *
 import sys
 
 __all__ = ['gsddmm', 'copy_u', 'copy_v', 'copy_e']
