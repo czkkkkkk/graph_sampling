@@ -1,7 +1,8 @@
 #include "./graph.h"
 
 #include <sstream>
-
+#include "./bcast.h"
+#include "./cuda/sddmm.h"
 #include "./graph_ops.h"
 
 namespace gs {
@@ -422,6 +423,25 @@ std::vector<torch::Tensor> Graph::MetaData() {
   } else {
     LOG(FATAL) << "Error in MetaData: no CSC nor CSR.";
     return {coo_->row, coo_->col};
+  }
+}
+
+/*! \brief Generalized Sampled Dense-Dense Matrix Multiplication. */
+void Graph::SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
+                  torch::Tensor out, int64_t lhs_target, int64_t rhs_target) {
+  const auto& bcast = CalcBcastOff(op, lhs, rhs);
+  if (csc_ != nullptr) {
+    auto csr_ptr =
+        std::make_shared<CSR>(CSR{csc_->indptr, csc_->indices, csc_->e_ids});
+    lhs_target = lhs_target == 1 ? lhs_target : (2 - lhs_target);
+    rhs_target = rhs_target == 1 ? rhs_target : (2 - rhs_target);
+    impl::SDDMMCSR(op, bcast, csr_ptr, lhs, rhs, out, lhs_target, rhs_target);
+  } else if (csr_ != nullptr) {
+    impl::SDDMMCSR(op, bcast, csr_, lhs, rhs, out, lhs_target, rhs_target);
+  } else if (coo_ != nullptr) {
+    impl::SDDMMCOO(op, bcast, coo_, lhs, rhs, out, lhs_target, rhs_target);
+  } else {
+    LOG(FATAL) << "SDDMM only supports CSR and COO formats";
   }
 }
 

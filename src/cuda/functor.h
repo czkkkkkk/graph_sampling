@@ -1,7 +1,7 @@
 #ifndef GS_CUDA_FUNCTOR_H_
 #define GS_CUDA_FUNCTOR_H_
 
-#include <cuda_runtime.h>
+#include "./atomic.h"
 
 namespace gs {
 namespace impl {
@@ -138,6 +138,133 @@ template <typename DType>
 constexpr bool Dot<DType>::reduce_last_dim;
 
 }  // end of namespace binary
+
+//////////// CUDA reduce operators ////////////////
+namespace reduce {
+template <typename Idx, typename DType, bool atomic>
+struct _Sum {
+  static constexpr __host__ __device__ __forceinline__ DType zero() {
+    return 0.;
+  };
+  static constexpr bool require_arg = false;
+  static __device__ __forceinline__ void Call(DType *out_buf, Idx *arg_u_buf,
+                                              Idx *arg_e_buf, DType val,
+                                              Idx uid, Idx eid) {
+    if (!atomic) {
+      *out_buf += val;
+    } else {
+      impl::AtomicAdd(out_buf, val);
+    }
+  }
+  static __device__ __forceinline__ void Call(DType *out_buf, Idx *arg_buf,
+                                              DType val, Idx id) {
+    if (!atomic) {
+      *out_buf += val;
+    } else {
+      impl::AtomicAdd(out_buf, val);
+    }
+  }
+  static __device__ __forceinline__ void CallArg(Idx fid, Idx *arg_u_buf,
+                                                 Idx *arg_e_buf, DType val,
+                                                 DType val_ref, Idx uid,
+                                                 Idx eid) {}
+};
+
+template <typename Idx, typename DType, bool atomic = false>
+struct Sum : _Sum<Idx, DType, atomic> {};
+
+template <typename Idx, typename DType, bool atomic>
+struct _Max {
+  static constexpr __host__ __device__ __forceinline__ DType zero() {
+    return -std::numeric_limits<DType>::infinity();
+  };
+  static constexpr bool require_arg = true;
+  static __device__ __forceinline__ void Call(DType *out_buf, Idx *arg_u_buf,
+                                              Idx *arg_e_buf, DType val,
+                                              Idx uid, Idx eid) {
+    if (!atomic) {
+      if (*out_buf < val) {
+        *out_buf = val;
+        *arg_u_buf = uid;
+        *arg_e_buf = eid;
+      }
+    } else {
+      impl::AtomicMax(out_buf, val);
+    }
+  }
+  static __device__ __forceinline__ void Call(DType *out_buf, Idx *arg_buf,
+                                              DType val, Idx id) {
+    if (!atomic) {
+      if (*out_buf < val) {
+        *out_buf = val;
+        *arg_buf = id;
+      }
+    } else {
+      impl::AtomicMax(out_buf, val);
+    }
+  }
+  static __device__ __forceinline__ void CallArg(Idx fid, Idx *arg_u_buf,
+                                                 Idx *arg_e_buf, DType val,
+                                                 DType val_ref, Idx uid,
+                                                 Idx eid) {
+    if (atomic) {
+      if (val == val_ref) {
+        if (arg_u_buf) arg_u_buf[fid] = uid;
+        if (arg_e_buf) arg_e_buf[fid] = eid;
+      }
+    }
+  }
+};
+
+template <typename Idx, typename DType, bool atomic = false>
+struct Max : _Max<Idx, DType, atomic> {};
+
+template <typename Idx, typename DType, bool atomic>
+struct _Min {
+  static constexpr __host__ __device__ __forceinline__ DType zero() {
+    return std::numeric_limits<DType>::infinity();
+  };
+  static constexpr bool require_arg = true;
+  static __device__ __forceinline__ void Call(DType *out_buf, Idx *arg_u_buf,
+                                              Idx *arg_e_buf, DType val,
+                                              Idx uid, Idx eid) {
+    if (!atomic) {
+      if (*out_buf > val) {
+        *out_buf = val;
+        *arg_u_buf = uid;
+        *arg_e_buf = eid;
+      }
+    } else {
+      impl::AtomicMin(out_buf, val);
+    }
+  }
+  static __device__ __forceinline__ void Call(DType *out_buf, Idx *arg_buf,
+                                              DType val, Idx id) {
+    if (!atomic) {
+      if (*out_buf > val) {
+        *out_buf = val;
+        *arg_buf = id;
+      }
+    } else {
+      impl::AtomicMin(out_buf, val);
+    }
+  }
+  static __device__ __forceinline__ void CallArg(Idx fid, Idx *arg_u_buf,
+                                                 Idx *arg_e_buf, DType val,
+                                                 DType val_ref, Idx uid,
+                                                 Idx eid) {
+    if (atomic) {
+      if (val == val_ref) {
+        if (arg_u_buf) arg_u_buf[fid] = uid;
+        if (arg_e_buf) arg_e_buf[fid] = eid;
+      }
+    }
+  }
+};
+
+template <typename Idx, typename DType, bool atomic = false>
+struct Min : _Min<Idx, DType, atomic> {};
+}  // namespace reduce
 
 }  // namespace impl
 }  // namespace gs
