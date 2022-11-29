@@ -62,7 +62,7 @@ std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_cols) {
 
 std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor column_ids) {
-  if (true) {
+  if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     std::tie(sub_indptr, sub_indices, select_index) =
         impl::OnIndptrSlicingCUDA(csc->indptr, csc->indices, column_ids);
@@ -120,7 +120,7 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor>
 CSCColumnwiseFusedSlicingAndSampling(std::shared_ptr<CSC> csc,
                                      torch::Tensor column_ids, int64_t fanout,
                                      bool replace) {
-  if (true) {
+  if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     if (fanout == 1 && replace) {
       std::tie(sub_indptr, sub_indices, select_index) =

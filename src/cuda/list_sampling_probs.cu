@@ -20,7 +20,7 @@ std::tuple<torch::Tensor, torch::Tensor> _ListSamplingProbs(torch::Tensor data,
 
   if (num_items <= num_picks and !replace) {
     // todo (ping), do we need clone here?
-    return std::make_tuple(data.clone().to(torch::kCUDA),
+    return std::make_tuple(data.clone(),
                            torch::arange(num_items, index_options));
   }
 
@@ -86,7 +86,7 @@ std::tuple<torch::Tensor, torch::Tensor> _ListSamplingProbs(torch::Tensor data,
         num_items);
 
     index = sort_index.slice(0, 0, num_picks, 1);
-    select = data.index({index}).to(torch::kCUDA);
+    select = data.index({index});
   }
 
   return std::make_tuple(select, index);

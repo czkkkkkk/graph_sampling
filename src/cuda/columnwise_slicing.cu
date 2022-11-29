@@ -9,7 +9,7 @@ namespace impl {
 template <typename IdType>
 torch::Tensor GetSubIndptr(torch::Tensor indptr, torch::Tensor column_ids) {
   int64_t size = column_ids.numel();
-  auto new_indptr = torch::zeros(size + 1, torch::dtype(indptr.dtype()).device(torch::kCUDA));
+  auto new_indptr = torch::zeros(size + 1, indptr.options());
 
   using it = thrust::counting_iterator<IdType>;
   thrust::for_each(
@@ -56,8 +56,8 @@ std::pair<torch::Tensor, torch::Tensor> GetSubIndices(
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
   int n_edges = item_prefix[size];  // cpu
-  auto sub_indices = torch::zeros(n_edges, torch::dtype(indices.dtype()).device(torch::kCUDA));
-  auto select_index = torch::zeros(n_edges, torch::dtype(indices.dtype()).device(torch::kCUDA));
+  auto sub_indices = torch::zeros(n_edges, indices.options());
+  auto select_index = torch::zeros(n_edges, indices.options());
 
   dim3 block(32, 16);
   dim3 grid((size + block.x - 1) / block.x);
