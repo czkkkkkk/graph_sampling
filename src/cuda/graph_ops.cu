@@ -25,6 +25,42 @@ __global__ void _SegmentDivKernel(IdType* indptr, IdType* e_ids, DType* data,
   }
 }
 
+/**
+ * @brief SpMV for graphSum
+ */
+template <typename IdType, typename DType, int BLOCK_WARPS, int TILE_SIZE>
+__global__ void _SegmentSumKernel(IdType* indptr, DType* data, int size,
+                                  int powk, DType* out) {
+  assert(blockDim.x == WARP_SIZE);
+  assert(blockDim.y == BLOCK_WARPS);
+  assert(powk > 0);
+
+  int warp_id = threadIdx.y;
+  int laneid = threadIdx.x;
+  IdType out_row = blockIdx.x * TILE_SIZE + threadIdx.y;
+  IdType last_row =
+      MIN(static_cast<IdType>((blockIdx.x + 1) * TILE_SIZE), size);
+
+  typedef cub::WarpReduce<DType> WarpReduce;
+  __shared__ typename WarpReduce::TempStorage temp_storage[BLOCK_WARPS];
+
+  while (out_row < last_row) {
+    DType local_reduce = 0;
+    IdType in_row_start = indptr[out_row];
+    IdType in_row_end = indptr[out_row + 1];
+    for (int idx = in_row_start + laneid; idx < in_row_end; idx += WARP_SIZE) {
+      local_reduce += powf(data[idx], powk);
+    }
+
+    DType reduce = WarpReduce(temp_storage[warp_id]).Sum(local_reduce);
+    if (laneid == 0) {
+      out[out_row] = reduce;
+    }
+
+    out_row += BLOCK_WARPS;
+  }
+}
+
 template <typename IdType, typename DType>
 torch::Tensor GraphSum(torch::Tensor indptr,
                        torch::optional<torch::Tensor> e_ids,
@@ -33,24 +69,23 @@ torch::Tensor GraphSum(torch::Tensor indptr,
   auto options = (data.has_value())
                      ? data.value().options()
                      : torch::dtype(torch::kFloat32).device(torch::kCUDA);
-  auto segment_sum = torch::zeros(size, options);
+  torch::Tensor segment_sum = torch::empty(size, options);
 
   if (data.has_value()) {
     auto permuted_data = (e_ids.has_value())
                              ? data.value().index({e_ids.value()})
                              : data.value();
-    auto data_powk = permuted_data;
-    if (powk != 1) {
-      using it = thrust::counting_iterator<IdType>;
-      thrust::for_each(
-          thrust::device, it(0), it(permuted_data.numel()),
-          [in = permuted_data.data_ptr<DType>(),
-           out = data_powk.data_ptr<DType>(),
-           k = powk] __device__(int i) mutable { out[i] = powf(in[i], k); });
-    }
-    cub_segmentedSum<IdType, DType>(data_powk.data_ptr<DType>(),
-                                    segment_sum.data_ptr<DType>(),
-                                    indptr.data_ptr<IdType>(), size);
+
+    // Aligning DGL
+    constexpr int TILE_SIZE = 256;
+    constexpr int BLOCK_WARPS = 256 / WARP_SIZE;
+    int nb = (size + TILE_SIZE - 1) / TILE_SIZE;
+    const dim3 block(WARP_SIZE, BLOCK_WARPS);
+    const dim3 grid(nb);
+    _SegmentSumKernel<IdType, DType, BLOCK_WARPS, TILE_SIZE><<<grid, block>>>(
+        indptr.data_ptr<IdType>(), permuted_data.data_ptr<DType>(), size, powk,
+        segment_sum.data_ptr<DType>());
+
   } else {
     using it = thrust::counting_iterator<IdType>;
     thrust::for_each(
