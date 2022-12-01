@@ -28,36 +28,25 @@ __global__ void _SegmentDivKernel(IdType* indptr, IdType* e_ids, DType* data,
 /**
  * @brief SpMV for graphSum
  */
-template <typename IdType, typename DType, int BLOCK_WARPS, int TILE_SIZE>
-__global__ void _SegmentSumKernel(IdType* indptr, DType* data, int size,
-                                  int powk, DType* out) {
-  assert(blockDim.x == WARP_SIZE);
-  assert(blockDim.y == BLOCK_WARPS);
-  assert(powk > 0);
-
-  int warp_id = threadIdx.y;
-  int laneid = threadIdx.x;
-  IdType out_row = blockIdx.x * TILE_SIZE + threadIdx.y;
-  IdType last_row =
-      MIN(static_cast<IdType>((blockIdx.x + 1) * TILE_SIZE), size);
-
-  typedef cub::WarpReduce<DType> WarpReduce;
-  __shared__ typename WarpReduce::TempStorage temp_storage[BLOCK_WARPS];
-
-  while (out_row < last_row) {
-    DType local_reduce = 0;
-    IdType in_row_start = indptr[out_row];
-    IdType in_row_end = indptr[out_row + 1];
-    for (int idx = in_row_start + laneid; idx < in_row_end; idx += WARP_SIZE) {
-      local_reduce += powf(data[idx], powk);
+template <typename IdType, typename DType>
+__global__ void _SegmentSumKernel(IdType* indptr, DType* data, int num_rows,
+                                  int powk, int out_len, DType* out) {
+  // SPMM with CSR.
+  int ty = blockIdx.x * blockDim.y + threadIdx.y;
+  const IdType stride_y = blockDim.y * gridDim.x;
+  const int stride_x = blockDim.x * gridDim.y;
+  while (ty < num_rows) {
+    int tx = blockIdx.y * blockDim.x + threadIdx.x;
+    while (tx < out_len) {
+      DType local_accum = 0;
+      for (IdType i = indptr[ty]; i < indptr[ty + 1]; ++i) {
+        DType tmp = powk == 1 ? data[i] : __powf(data[i], powk);
+        local_accum += tmp;
+      }
+      out[ty * out_len + tx] = local_accum;
+      tx += stride_x;
     }
-
-    DType reduce = WarpReduce(temp_storage[warp_id]).Sum(local_reduce);
-    if (laneid == 0) {
-      out[out_row] = reduce;
-    }
-
-    out_row += BLOCK_WARPS;
+    ty += stride_y;
   }
 }
 
@@ -77,14 +66,17 @@ torch::Tensor GraphSum(torch::Tensor indptr,
                              : data.value();
 
     // Aligning DGL
-    constexpr int TILE_SIZE = 256;
-    constexpr int BLOCK_WARPS = 256 / WARP_SIZE;
-    int nb = (size + TILE_SIZE - 1) / TILE_SIZE;
-    const dim3 block(WARP_SIZE, BLOCK_WARPS);
-    const dim3 grid(nb);
-    _SegmentSumKernel<IdType, DType, BLOCK_WARPS, TILE_SIZE><<<grid, block>>>(
+    const int out_len = 1;
+
+    const int ntx = 1;
+    const int nty = 256;
+    const int nby = (out_len + ntx - 1) / ntx;
+    const int nbx = (size + nty - 1) / nty;
+    const dim3 nblks(nbx, nby);
+    const dim3 nthrs(ntx, nty);
+    _SegmentSumKernel<IdType, DType><<<nblks, nthrs>>>(
         indptr.data_ptr<IdType>(), permuted_data.data_ptr<DType>(), size, powk,
-        segment_sum.data_ptr<DType>());
+        out_len, segment_sum.data_ptr<DType>());
 
   } else {
     using it = thrust::counting_iterator<IdType>;
