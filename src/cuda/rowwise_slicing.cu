@@ -100,7 +100,7 @@ template <typename IdType, int BLOCK_WARPS, int TILE_SIZE>
 __global__ void _OnIndicesSlicinigQueryKernel(
     const IdType *const in_indptr, const IdType *const in_indices,
     IdType *const key_buffer, IdType *const value_buffer, IdType *const out_deg,
-    IdType *const out_indices, bool *const out_mask, const int num_items,
+    IdType *const out_indices, IdType *const out_mask, const int num_items,
     const int dir_size) {
   assert(blockDim.x == WARP_SIZE);
   assert(blockDim.y == BLOCK_WARPS);
@@ -124,10 +124,11 @@ __global__ void _OnIndicesSlicinigQueryKernel(
 
     for (int idx = in_row_start + laneid; idx < in_row_end; idx += WARP_SIZE) {
       IdType value = hashmap.Query(in_indices[idx]);
-      bool is_in = value != -1;
-      count += is_in ? 1 : 0;
-      out_mask[idx] = is_in;
-      out_indices[idx] = value;
+      if (value != -1) {
+        count += 1;
+        out_mask[idx] = 1;
+        out_indices[idx] = value;
+      }
     }
 
     int deg = WarpReduce(temp_storage[warp_id]).Sum(count);
@@ -169,16 +170,14 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _OnIndicesSlicing(
 
   torch::Tensor out_indptr = torch::empty_like(indptr);
   torch::Tensor out_indices = torch::empty_like(indices);
-  torch::Tensor out_mask = torch::empty(
-      num_edge,
-      torch::TensorOptions().dtype(torch::kBool).device(torch::kCUDA));
+  torch::Tensor out_mask = torch::zeros_like(indices);
 
   // query hashmap to get mask
   _OnIndicesSlicinigQueryKernel<IdType, BLOCK_WARP, TILE_SIZE><<<grid, block>>>(
       indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
       key_buffer.data_ptr<IdType>(), value_buffer.data_ptr<IdType>(),
       out_indptr.data_ptr<IdType>(), out_indices.data_ptr<IdType>(),
-      out_mask.data_ptr<bool>(), num_items, dir_size);
+      out_mask.data_ptr<IdType>(), num_items, dir_size);
 
   // prefix sum to get out_indptr and out_indices_index
   cub_exclusiveSum<IdType>(out_indptr.data_ptr<IdType>(), num_items + 1);
