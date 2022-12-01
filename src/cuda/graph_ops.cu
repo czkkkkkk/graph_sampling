@@ -77,7 +77,7 @@ torch::Tensor GraphSum(torch::Tensor indptr,
     _SegmentSumKernel<IdType, DType><<<nblks, nthrs>>>(
         indptr.data_ptr<IdType>(), permuted_data.data_ptr<DType>(), size, powk,
         out_len, segment_sum.data_ptr<DType>());
-
+        
   } else {
     using it = thrust::counting_iterator<IdType>;
     thrust::for_each(
