@@ -7,6 +7,9 @@
 
 namespace gs {
 
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCFusionSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor seeds);
+
 std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor column_ids);
 
