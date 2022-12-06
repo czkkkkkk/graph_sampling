@@ -51,6 +51,28 @@ TEST(CSC2CSR, test2)
     EXPECT_TRUE(csr_ptr->indices.equal(col));
 }
 
+TEST(CSC2CSR, test3)
+{
+    Graph A(false);
+    auto options = torch::TensorOptions().dtype(torch::kInt64).device(torch::kCUDA);
+    auto data_options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA);
+    torch::Tensor indptr = torch::cat({torch::zeros(10, options), torch::arange(0, 3, options) * 2});
+    torch::Tensor indices = torch::arange(1, 4, 2, options).repeat({2});
+    torch::Tensor data = torch::arange(3, 7, data_options);
+    torch::Tensor expected_indptr = torch::cat({torch::zeros(2, options), torch::ones(2, options) * 2, torch::ones(9, options) * 4});
+    torch::Tensor expected_indices = torch::arange(10, 12, options).repeat({2});
+    torch::Tensor expected_eid = torch::cat({torch::arange(0, 3, 2, options), torch::arange(0, 3, 2, options) + 1});
+    A.LoadCSC(indptr, indices);
+    A.SetData(data);
+
+    A.CSC2CSR();
+    auto csr_ptr = A.GetCSR();
+
+    EXPECT_TRUE(csr_ptr->indptr.equal(expected_indptr));
+    EXPECT_TRUE(csr_ptr->indices.equal(expected_indices));
+    EXPECT_TRUE(csr_ptr->e_ids.value().equal(expected_eid));
+}
+
 TEST(CSR2CSC, test1)
 {
     Graph A(true);
