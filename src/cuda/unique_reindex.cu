@@ -1,6 +1,6 @@
 #include "atomic.h"
 #include "cuda_common.h"
-#include "graph_ops.h"
+#include "tensor_ops.h"
 #include "utils.h"
 
 namespace gs {

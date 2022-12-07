@@ -8,7 +8,7 @@
 
 namespace gs {
 namespace impl {
-//////////////////////// GraphDivCUDA //////////////////////////
+//////////////////////// CSCDivCUDA //////////////////////////
 template <typename IdType, typename DType>
 __global__ void _SegmentDivKernel(IdType* indptr, IdType* e_ids, DType* data,
                                   DType* divisor, DType* out_data,
@@ -27,10 +27,9 @@ __global__ void _SegmentDivKernel(IdType* indptr, IdType* e_ids, DType* data,
 }
 
 template <typename IdType, typename DType>
-torch::Tensor GraphDiv(torch::Tensor indptr,
-                       torch::optional<torch::Tensor> e_ids,
-                       torch::optional<torch::Tensor> data,
-                       torch::Tensor divisor) {
+torch::Tensor CSCDiv(torch::Tensor indptr, torch::optional<torch::Tensor> e_ids,
+                     torch::optional<torch::Tensor> data,
+                     torch::Tensor divisor) {
   auto size = indptr.numel() - 1;
   auto data_ptr = (data.has_value()) ? data.value().data_ptr<DType>() : nullptr;
   auto e_ids_ptr =
@@ -51,16 +50,16 @@ torch::Tensor GraphDiv(torch::Tensor indptr,
   return out_data;
 }
 
-torch::Tensor GraphDivCUDA(torch::Tensor indptr,
-                           torch::optional<torch::Tensor> e_ids,
-                           torch::optional<torch::Tensor> data,
-                           torch::Tensor divisor) {
-  return GraphDiv<int64_t, float>(indptr, e_ids, data, divisor);
+torch::Tensor CSCDivCUDA(torch::Tensor indptr,
+                         torch::optional<torch::Tensor> e_ids,
+                         torch::optional<torch::Tensor> data,
+                         torch::Tensor divisor) {
+  return CSCDiv<int64_t, float>(indptr, e_ids, data, divisor);
 }
 
-//////////////////////// GraphSumCUDA //////////////////////////
+//////////////////////// CSCSumCUDA //////////////////////////
 /**
- * @brief SpMV for graphSum
+ * @brief SpMV for CSCSum
  */
 template <typename IdType, typename DType>
 __global__ void _SegmentSumKernel(IdType* indptr, DType* data, int num_rows,
@@ -85,9 +84,8 @@ __global__ void _SegmentSumKernel(IdType* indptr, DType* data, int num_rows,
 }
 
 template <typename IdType, typename DType>
-torch::Tensor GraphSum(torch::Tensor indptr,
-                       torch::optional<torch::Tensor> e_ids,
-                       torch::optional<torch::Tensor> data, int64_t powk) {
+torch::Tensor CSCSum(torch::Tensor indptr, torch::optional<torch::Tensor> e_ids,
+                     torch::optional<torch::Tensor> data, int64_t powk) {
   auto size = indptr.numel() - 1;
   auto options = (data.has_value())
                      ? data.value().options()
@@ -124,27 +122,27 @@ torch::Tensor GraphSum(torch::Tensor indptr,
   return segment_sum;
 }
 
-torch::Tensor GraphSumCUDA(torch::Tensor indptr,
-                           torch::optional<torch::Tensor> e_ids,
-                           torch::optional<torch::Tensor> data, int64_t powk) {
-  return GraphSum<int64_t, float>(indptr, e_ids, data, powk);
+torch::Tensor CSCSumCUDA(torch::Tensor indptr,
+                         torch::optional<torch::Tensor> e_ids,
+                         torch::optional<torch::Tensor> data, int64_t powk) {
+  return CSCSum<int64_t, float>(indptr, e_ids, data, powk);
 }
 
-//////////////////////// GraphNormalizeCUDA //////////////////////////
+//////////////////////// CSCNormalizeCUDA //////////////////////////
 template <typename IdType, typename DType>
-torch::Tensor GraphNormalize(torch::Tensor indptr,
-                             torch::optional<torch::Tensor> e_ids,
-                             torch::optional<torch::Tensor> data) {
+torch::Tensor CSCNormalize(torch::Tensor indptr,
+                           torch::optional<torch::Tensor> e_ids,
+                           torch::optional<torch::Tensor> data) {
   torch::Tensor out_data, segment_sum;
-  segment_sum = GraphSum<IdType, DType>(indptr, e_ids, data, 1);
-  out_data = GraphDiv<IdType, DType>(indptr, e_ids, data, segment_sum);
+  segment_sum = CSCSum<IdType, DType>(indptr, e_ids, data, 1);
+  out_data = CSCDiv<IdType, DType>(indptr, e_ids, data, segment_sum);
   return out_data;
 }
 
-torch::Tensor GraphNormalizeCUDA(torch::Tensor indptr,
-                                 torch::optional<torch::Tensor> e_ids,
-                                 torch::optional<torch::Tensor> data) {
-  return GraphNormalize<int64_t, float>(indptr, e_ids, data);
+torch::Tensor CSCNormalizeCUDA(torch::Tensor indptr,
+                               torch::optional<torch::Tensor> e_ids,
+                               torch::optional<torch::Tensor> data) {
+  return CSCNormalize<int64_t, float>(indptr, e_ids, data);
 }
 }  // namespace impl
 }  // namespace gs

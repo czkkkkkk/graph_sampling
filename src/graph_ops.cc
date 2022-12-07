@@ -3,6 +3,7 @@
 #include "cuda/fusion/random_walk.h"
 #include "cuda/fusion/slice_sampling.h"
 #include "cuda/graph_ops.h"
+#include "cuda/tensor_ops.h"
 
 namespace gs {
 
@@ -10,9 +11,9 @@ std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc, bool CSC2COO) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor row, col;
     if (CSC2COO) {
-      std::tie(row, col) = impl::GraphCSC2COOCUDA(csc->indptr, csc->indices);
+      std::tie(row, col) = impl::CSC2COOCUDA(csc->indptr, csc->indices);
     } else {
-      std::tie(col, row) = impl::GraphCSC2COOCUDA(csc->indptr, csc->indices);
+      std::tie(col, row) = impl::CSC2COOCUDA(csc->indptr, csc->indices);
     }
     return std::make_shared<COO>(COO{row, col, csc->e_ids});
   } else {
@@ -28,10 +29,10 @@ std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
     torch::optional<torch::Tensor> sorted_e_ids = torch::nullopt;
     if (COO2CSC) {
       std::tie(indptr, indices, sort_index) =
-          impl::GraphCOO2CSCCUDA(coo->row, coo->col, num_items);
+          impl::COO2CSCCUDA(coo->row, coo->col, num_items);
     } else {
       std::tie(indptr, indices, sort_index) =
-          impl::GraphCOO2CSCCUDA(coo->col, coo->row, num_items);
+          impl::COO2CSCCUDA(coo->col, coo->row, num_items);
     }
 
     sorted_e_ids = coo->e_ids.has_value()
@@ -139,7 +140,7 @@ std::tuple<torch::Tensor, std::vector<torch::Tensor>> BatchTensorRelabel(
 torch::Tensor GraphSum(std::shared_ptr<CSC> csc,
                        torch::optional<torch::Tensor> data, int64_t powk) {
   if (csc->indptr.device().type() == torch::kCUDA) {
-    return impl::GraphSumCUDA(csc->indptr, csc->e_ids, data, powk);
+    return impl::CSCSumCUDA(csc->indptr, csc->e_ids, data, powk);
   } else {
     LOG(FATAL) << "Not implemented warning";
     return torch::Tensor();
@@ -150,7 +151,7 @@ torch::Tensor GraphDiv(std::shared_ptr<CSC> csc,
                        torch::optional<torch::Tensor> data,
                        torch::Tensor divisor) {
   if (csc->indptr.device().type() == torch::kCUDA) {
-    return impl::GraphDivCUDA(csc->indptr, csc->e_ids, data, divisor);
+    return impl::CSCDivCUDA(csc->indptr, csc->e_ids, data, divisor);
   } else {
     LOG(FATAL) << "Not implemented warning";
     return torch::Tensor();
@@ -160,7 +161,7 @@ torch::Tensor GraphDiv(std::shared_ptr<CSC> csc,
 torch::Tensor GraphNormalize(std::shared_ptr<CSC> csc,
                              torch::optional<torch::Tensor> data) {
   if (csc->indptr.device().type() == torch::kCUDA) {
-    return impl::GraphNormalizeCUDA(csc->indptr, csc->e_ids, data);
+    return impl::CSCNormalizeCUDA(csc->indptr, csc->e_ids, data);
   } else {
     LOG(FATAL) << "Not implemented warning";
     return torch::Tensor();
