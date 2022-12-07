@@ -12,11 +12,7 @@ struct CSC {
   torch::optional<torch::Tensor> e_ids;
 };
 
-struct CSR {
-  torch::Tensor indptr;
-  torch::Tensor indices;
-  torch::optional<torch::Tensor> e_ids;
-};
+typedef CSC CSR;
 
 struct COO {
   torch::Tensor row;

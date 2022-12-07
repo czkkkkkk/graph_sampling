@@ -33,21 +33,11 @@ std::tuple<torch::Tensor, std::vector<torch::Tensor>> BatchTensorRelabel(
 torch::Tensor GraphSum(std::shared_ptr<CSC> csc,
                        torch::optional<torch::Tensor> data, int64_t powk);
 
-torch::Tensor GraphSum(std::shared_ptr<CSR> csr,
-                       torch::optional<torch::Tensor> data, int64_t powk);
-
 torch::Tensor GraphDiv(std::shared_ptr<CSC> csc,
                        torch::optional<torch::Tensor> data,
                        torch::Tensor divisor);
 
-torch::Tensor GraphDiv(std::shared_ptr<CSR> csr,
-                       torch::optional<torch::Tensor> data,
-                       torch::Tensor divisor);
-
 torch::Tensor GraphNormalize(std::shared_ptr<CSC> csc,
-                             torch::optional<torch::Tensor> data);
-
-torch::Tensor GraphNormalize(std::shared_ptr<CSR> csr,
                              torch::optional<torch::Tensor> data);
 
 std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc);
