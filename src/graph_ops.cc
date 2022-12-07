@@ -44,26 +44,12 @@ std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
   }
 }
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSlicing(
-    std::shared_ptr<CSC> csc, torch::Tensor column_ids) {
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCIndicesSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor node_ids) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     std::tie(sub_indptr, sub_indices, select_index) =
-        impl::OnIndptrSlicingCUDA(csc->indptr, csc->indices, column_ids);
-    return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
-            select_index};
-  } else {
-    LOG(FATAL) << "Not implemented warning";
-    return {std::make_shared<CSC>(CSC{}), torch::Tensor()};
-  }
-}
-
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCIndptrRowwiseSlicing(
-    std::shared_ptr<CSC> csc, torch::Tensor row_ids) {
-  if (csc->indptr.device().type() == torch::kCUDA) {
-    torch::Tensor sub_indptr, sub_indices, select_index;
-    std::tie(sub_indptr, sub_indices, select_index) =
-        impl::OnIndicesSlicingCUDA(csc->indptr, csc->indices, row_ids);
+        impl::OnIndicesSlicingCUDA(csc->indptr, csc->indices, node_ids);
     return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
             select_index};
   } else {
@@ -72,12 +58,12 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCIndptrRowwiseSlicing(
   }
 }
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCIndicesRowwiseSlicing(
-    std::shared_ptr<CSC> csc, torch::Tensor row_ids) {
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCIndptrSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor node_ids) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     std::tie(sub_indptr, sub_indices, select_index) =
-        impl::OnIndptrSlicingCUDA(csc->indptr, csc->indices, row_ids);
+        impl::OnIndptrSlicingCUDA(csc->indptr, csc->indices, node_ids);
     return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
             select_index};
   } else {

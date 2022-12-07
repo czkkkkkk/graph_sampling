@@ -64,7 +64,7 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_index) {
                               : column_index;
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(true, col_ids, row_ids_, column_index.numel(), num_rows_)));
-  std::tie(csc_ptr, select_index) = CSCColumnwiseSlicing(csc_, column_index);
+  std::tie(csc_ptr, select_index) = CSCIndptrSlicing(csc_, column_index);
   ret->SetCSC(csc_ptr);
   ret->SetNumEdges(csc_ptr->indices.numel());
   if (data_.has_value()) {
@@ -87,7 +87,7 @@ c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
       new Graph(true, col_ids_, row_ids, num_cols_, row_index.numel())));
   if (csr_ != nullptr) {
     std::shared_ptr<CSR> csr_ptr;
-    std::tie(csr_ptr, select_index) = CSCIndicesRowwiseSlicing(csr_, row_index);
+    std::tie(csr_ptr, select_index) = CSCIndptrSlicing(csr_, row_index);
     ret->SetCSR(csr_ptr);
     ret->SetNumEdges(csr_ptr->indices.numel());
     if (data_.has_value()) {
@@ -101,7 +101,7 @@ c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
     }
   } else if (csc_ != nullptr) {
     std::shared_ptr<CSC> csc_ptr;
-    std::tie(csc_ptr, select_index) = CSCIndptrRowwiseSlicing(csc_, row_index);
+    std::tie(csc_ptr, select_index) = CSCIndicesSlicing(csc_, row_index);
     ret->SetCSC(csc_ptr);
     ret->SetNumEdges(csc_ptr->indices.numel());
     if (data_.has_value()) {
