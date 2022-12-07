@@ -8,6 +8,7 @@
 
 namespace gs {
 namespace impl {
+//////////////////////// GraphDivCUDA //////////////////////////
 template <typename IdType, typename DType>
 __global__ void _SegmentDivKernel(IdType* indptr, IdType* e_ids, DType* data,
                                   DType* divisor, DType* out_data,
@@ -25,6 +26,39 @@ __global__ void _SegmentDivKernel(IdType* indptr, IdType* e_ids, DType* data,
   }
 }
 
+template <typename IdType, typename DType>
+torch::Tensor GraphDiv(torch::Tensor indptr,
+                       torch::optional<torch::Tensor> e_ids,
+                       torch::optional<torch::Tensor> data,
+                       torch::Tensor divisor) {
+  auto size = indptr.numel() - 1;
+  auto data_ptr = (data.has_value()) ? data.value().data_ptr<DType>() : nullptr;
+  auto e_ids_ptr =
+      (e_ids.has_value()) ? e_ids.value().data_ptr<IdType>() : nullptr;
+  auto options = (data.has_value())
+                     ? data.value().options()
+                     : torch::dtype(torch::kFloat32).device(torch::kCUDA);
+  thrust::device_ptr<IdType> item_prefix(
+      static_cast<IdType*>(indptr.data_ptr<IdType>()));
+  int64_t n_edges = item_prefix[size];
+  auto out_data = torch::zeros(n_edges, options);
+
+  dim3 block(32, 16);
+  dim3 grid((size + block.x - 1) / block.x);
+  _SegmentDivKernel<IdType, DType><<<grid, block>>>(
+      indptr.data_ptr<IdType>(), e_ids_ptr, data_ptr, divisor.data_ptr<DType>(),
+      out_data.data_ptr<DType>(), size);
+  return out_data;
+}
+
+torch::Tensor GraphDivCUDA(torch::Tensor indptr,
+                           torch::optional<torch::Tensor> e_ids,
+                           torch::optional<torch::Tensor> data,
+                           torch::Tensor divisor) {
+  return GraphDiv<int64_t, float>(indptr, e_ids, data, divisor);
+}
+
+//////////////////////// GraphSumCUDA //////////////////////////
 /**
  * @brief SpMV for graphSum
  */
@@ -77,7 +111,7 @@ torch::Tensor GraphSum(torch::Tensor indptr,
     _SegmentSumKernel<IdType, DType><<<nblks, nthrs>>>(
         indptr.data_ptr<IdType>(), permuted_data.data_ptr<DType>(), size, powk,
         out_len, segment_sum.data_ptr<DType>());
-        
+
   } else {
     using it = thrust::counting_iterator<IdType>;
     thrust::for_each(
@@ -96,38 +130,7 @@ torch::Tensor GraphSumCUDA(torch::Tensor indptr,
   return GraphSum<int64_t, float>(indptr, e_ids, data, powk);
 }
 
-template <typename IdType, typename DType>
-torch::Tensor GraphDiv(torch::Tensor indptr,
-                       torch::optional<torch::Tensor> e_ids,
-                       torch::optional<torch::Tensor> data,
-                       torch::Tensor divisor) {
-  auto size = indptr.numel() - 1;
-  auto data_ptr = (data.has_value()) ? data.value().data_ptr<DType>() : nullptr;
-  auto e_ids_ptr =
-      (e_ids.has_value()) ? e_ids.value().data_ptr<IdType>() : nullptr;
-  auto options = (data.has_value())
-                     ? data.value().options()
-                     : torch::dtype(torch::kFloat32).device(torch::kCUDA);
-  thrust::device_ptr<IdType> item_prefix(
-      static_cast<IdType*>(indptr.data_ptr<IdType>()));
-  int64_t n_edges = item_prefix[size];
-  auto out_data = torch::zeros(n_edges, options);
-
-  dim3 block(32, 16);
-  dim3 grid((size + block.x - 1) / block.x);
-  _SegmentDivKernel<IdType, DType><<<grid, block>>>(
-      indptr.data_ptr<IdType>(), e_ids_ptr, data_ptr, divisor.data_ptr<DType>(),
-      out_data.data_ptr<DType>(), size);
-  return out_data;
-}
-
-torch::Tensor GraphDivCUDA(torch::Tensor indptr,
-                           torch::optional<torch::Tensor> e_ids,
-                           torch::optional<torch::Tensor> data,
-                           torch::Tensor divisor) {
-  return GraphDiv<int64_t, float>(indptr, e_ids, data, divisor);
-}
-
+//////////////////////// GraphNormalizeCUDA //////////////////////////
 template <typename IdType, typename DType>
 torch::Tensor GraphNormalize(torch::Tensor indptr,
                              torch::optional<torch::Tensor> e_ids,
