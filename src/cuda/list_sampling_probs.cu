@@ -14,14 +14,12 @@ std::tuple<torch::Tensor, torch::Tensor> _ListSamplingProbs(torch::Tensor data,
                                                             int64_t num_picks,
                                                             bool replace) {
   int num_items = data.numel();
-  assert(data.numel() == probs.numel());
   torch::TensorOptions index_options =
       torch::TensorOptions().dtype(torch::kInt64).device(torch::kCUDA);
 
-  if (num_items <= num_picks and !replace) {
+  if (num_items <= num_picks && !replace) {
     // todo (ping), do we need clone here?
-    return std::make_tuple(data.clone(),
-                           torch::arange(num_items, index_options));
+    return std::make_tuple(data, torch::arange(num_items, index_options));
   }
 
   torch::Tensor select;
@@ -34,14 +32,14 @@ std::tuple<torch::Tensor, torch::Tensor> _ListSamplingProbs(torch::Tensor data,
     index = torch::empty(num_picks, index_options);
 
     // prefix_sum
-    cub_inclusiveSum<FloatType>(probs.data_ptr<FloatType>(), num_items);
+    cub_inclusiveSum<FloatType>(prefix_probs.data_ptr<FloatType>(), num_items);
 
     uint64_t random_seed = 7777;
     using it = thrust::counting_iterator<IdType>;
     thrust::for_each(
         it(0), it(num_picks),
         [_in = data.data_ptr<IdType>(), _index = index.data_ptr<int64_t>(),
-         _prefix_probs = probs.data_ptr<FloatType>(),
+         _prefix_probs = prefix_probs.data_ptr<FloatType>(),
          _out = select.data_ptr<IdType>(), num_items,
          random_seed] __device__(IdType i) mutable {
           curandState rng;
@@ -96,6 +94,7 @@ std::tuple<torch::Tensor, torch::Tensor> ListSamplingProbsCUDA(
     torch::Tensor data, torch::Tensor probs, int64_t num_picks, bool replace) {
   CHECK(data.dtype() == torch::kInt64);
   CHECK(probs.dtype() == torch::kFloat);
+  assert(data.numel() == probs.numel());
   return _ListSamplingProbs<int64_t, float>(data, probs, num_picks, replace);
 }
 
