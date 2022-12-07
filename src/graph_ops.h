@@ -7,10 +7,10 @@
 
 namespace gs {
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCIndptrSlicing(
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor node_ids);
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCIndicesSlicing(
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCRowSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor node_ids);
 
 std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSampling(

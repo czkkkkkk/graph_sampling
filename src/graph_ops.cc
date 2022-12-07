@@ -44,7 +44,7 @@ std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
   }
 }
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCIndicesSlicing(
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCRowSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor node_ids) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
@@ -58,7 +58,7 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCIndicesSlicing(
   }
 }
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCIndptrSlicing(
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor node_ids) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
