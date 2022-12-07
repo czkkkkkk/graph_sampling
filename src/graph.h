@@ -27,6 +27,7 @@ class Graph : public torch::CustomClassHolder {
   void SetCSR(std::shared_ptr<CSR> csr);
   void SetCOO(std::shared_ptr<COO> coo);
   void SetData(torch::Tensor data);
+  void SetNumEdges(int64_t num_edges);
   void CSC2CSR();
   void CSR2CSC();
   std::shared_ptr<CSC> GetCSC();
@@ -35,6 +36,7 @@ class Graph : public torch::CustomClassHolder {
   torch::optional<torch::Tensor> GetData();
   int64_t GetNumRows();
   int64_t GetNumCols();
+  int64_t GetNumEdges();
   c10::intrusive_ptr<Graph> ColumnwiseSlicing(torch::Tensor column_index);
   c10::intrusive_ptr<Graph> RowwiseSlicing(torch::Tensor row_index);
   c10::intrusive_ptr<Graph> ColumnwiseSampling(int64_t fanout, bool replace);
@@ -61,12 +63,15 @@ class Graph : public torch::CustomClassHolder {
   Relabel();
   std::vector<torch::Tensor> MetaData();
   torch::Tensor RandomWalk(torch::Tensor seeds, int64_t walk_length);
+  void SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
+             torch::Tensor out, int64_t lhs_target, int64_t rhs_target);
 
   // todo: return global_e_id
  private:
   bool is_subgraph_;
   int64_t num_cols_;  // total number of cols in a matrix
   int64_t num_rows_;  // total number of rows in a matrix
+  int64_t num_edges_;
   std::shared_ptr<CSC> csc_;
   std::shared_ptr<CSR> csr_;
   std::shared_ptr<COO> coo_;
