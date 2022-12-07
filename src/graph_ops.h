@@ -13,7 +13,7 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSlicing(
 std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCRowSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor node_ids);
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSampling(
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSampling(
     std::shared_ptr<CSC> csc, int64_t fanout, bool replace);
 
 std::pair<std::shared_ptr<CSC>, torch::Tensor>

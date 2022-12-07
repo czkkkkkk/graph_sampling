@@ -125,8 +125,7 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSampling(int64_t fanout,
   std::shared_ptr<CSC> csc_ptr;
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(true, col_ids_, row_ids_, num_cols_, num_rows_)));
-  std::tie(csc_ptr, select_index) =
-      CSCColumnwiseSampling(csc_, fanout, replace);
+  std::tie(csc_ptr, select_index) = CSCColSampling(csc_, fanout, replace);
   ret->SetCSC(csc_ptr);
   ret->SetNumEdges(csc_ptr->indices.numel());
   if (data_.has_value()) {
