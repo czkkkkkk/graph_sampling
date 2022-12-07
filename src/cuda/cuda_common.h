@@ -12,4 +12,19 @@
 #define WARP_SIZE 32
 #define MIN(x, y) ((x < y) ? x : y)
 
+#define CUDA_CALL(func)                                      \
+  {                                                          \
+    cudaError_t e = (func);                                  \
+    CHECK(e == cudaSuccess || e == cudaErrorCudartUnloading) \
+        << "CUDA: " << cudaGetErrorString(e);                \
+  }
+
+#define CUDA_KERNEL_CALL(kernel, nblks, nthrs, ...)               \
+  {                                                               \
+    (kernel)<<<(nblks), (nthrs)>>>(__VA_ARGS__);                  \
+    cudaError_t e = cudaGetLastError();                           \
+    CHECK(e == cudaSuccess || e == cudaErrorCudartUnloading)      \
+        << "CUDA kernel launch error: " << cudaGetErrorString(e); \
+  }
+
 #endif
