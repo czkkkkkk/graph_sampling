@@ -13,15 +13,8 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndptrSlicingCUDA(
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndicesSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-CSCColumnwiseSamplingCUDA(torch::Tensor indptr, torch::Tensor indices,
-                          int64_t fanout, bool replace);
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-CSCColumnwiseFusedSlicingAndSamplingCUDA(torch::Tensor indptr,
-                                         torch::Tensor indices,
-                                         torch::Tensor column_ids,
-                                         int64_t fanout, bool replace);
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColSamplingCUDA(
+    torch::Tensor indptr, torch::Tensor indices, int64_t fanout, bool replace);
 
 torch::Tensor TensorUniqueCUDA(torch::Tensor input);
 

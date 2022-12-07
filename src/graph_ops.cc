@@ -1,8 +1,8 @@
 #include "./graph_ops.h"
 
 #include "cuda/fusion/random_walk.h"
+#include "cuda/fusion/slice_sampling.h"
 #include "cuda/graph_ops.h"
-#include "cuda/heterograph_ops.h"
 
 namespace gs {
 
@@ -77,8 +77,7 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSampling(
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     std::tie(sub_indptr, sub_indices, select_index) =
-        impl::CSCColumnwiseSamplingCUDA(csc->indptr, csc->indices, fanout,
-                                        replace);
+        impl::CSCColSamplingCUDA(csc->indptr, csc->indices, fanout, replace);
     return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
             select_index};
   } else {
@@ -95,14 +94,14 @@ CSCColumnwiseFusedSlicingAndSampling(std::shared_ptr<CSC> csc,
     torch::Tensor sub_indptr, sub_indices, select_index;
     if (fanout == 1 && replace) {
       std::tie(sub_indptr, sub_indices, select_index) =
-          impl::CSCColumnwiseSamplingOneKeepDimCUDA(csc->indptr, csc->indices,
-                                                    node_ids);
+          impl::fusion::FusedCSCColSlicingSamplingOneKeepDimCUDA(
+              csc->indptr, csc->indices, node_ids);
       return {
           std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
           select_index};
     } else {
       std::tie(sub_indptr, sub_indices, select_index) =
-          impl::CSCColumnwiseFusedSlicingAndSamplingCUDA(
+          impl::fusion::FusedCSCColSlicingSamplingCUDA(
               csc->indptr, csc->indices, node_ids, fanout, replace);
       return {
           std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
