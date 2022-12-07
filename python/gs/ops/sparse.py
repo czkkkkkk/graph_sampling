@@ -39,10 +39,6 @@ def infer_broadcast_shape(op, shp1, shp2):
         if shp1[-1] != shp2[-1]:
             raise "Dot operator is only available for arrays with the same size on last dimension, but got {} and {}.".format(
                 shp1, shp2)
-    if op == "copy_lhs":
-        return shp1
-    if op == "copy_rhs":
-        return shp2
     # operands are padded to have the same dimensionality with leading 1's.
     if len(shp1) > len(shp2):
         pad_shp2 = (1,) * (len(shp1) - len(shp2)) + shp2
@@ -74,8 +70,7 @@ def _gsddmm(gidx, op, lhs, rhs, lhs_target='u', rhs_target='v'):
     gidx : Backend C++ Graph
         The input graph index.
     op : str
-        Binary operator, could be ``add``, ``sub``, ``mul``, ``div``, ``dot``,
-        ``copy_lhs``, ``copy_rhs``.
+        Binary operator, could be ``add``, ``sub``, ``mul``, ``div``, ``dot``.
     lhs : tensor or None
         Left hand operand.
     rhs : tensor or None
@@ -96,39 +91,29 @@ def _gsddmm(gidx, op, lhs, rhs, lhs_target='u', rhs_target='v'):
     -----
     This function does not handle gradients.
     """
-    use_lhs = op != 'copy_rhs'
-    use_rhs = op != 'copy_lhs'
-    if use_lhs and use_rhs:
-        if lhs.dtype != rhs.dtype:
-            raise "The operands data type don't match: {} and {}, please convert them to the same type.".format(
-                lhs.dtype, rhs.dtype)
+    if lhs.device != rhs.device:
+        raise "The operands data device don't match: {} and {}, please move them to the same device.".format(
+            lhs.device, rhs.device)
+    if lhs.dtype != rhs.dtype:
+        raise "The operands data type don't match: {} and {}, please convert them to the same type.".format(
+            lhs.dtype, rhs.dtype)
     # deal with scalar features.
     expand_lhs, expand_rhs = False, False
-    if use_lhs:
-        if lhs.dim() == 1:
-            lhs = torch.unsqueeze(lhs, -1)
-            expand_lhs = True
-    if use_rhs:
-        if rhs.dim() == 1:
-            rhs = torch.unsqueeze(rhs, -1)
-            expand_rhs = True
+    if lhs.dim() == 1:
+        lhs = torch.unsqueeze(lhs, -1)
+        expand_lhs = True
+    if rhs.dim() == 1:
+        rhs = torch.unsqueeze(rhs, -1)
+        expand_rhs = True
     lhs_target = target_mapping[lhs_target]
     rhs_target = target_mapping[rhs_target]
 
-    device = lhs.device if use_lhs else rhs.device
-    dtype = lhs.dtype if use_lhs else rhs.dtype
-    lhs_shp = lhs.shape if use_lhs else (0,)
-    rhs_shp = rhs.shape if use_rhs else (0,)
     out_shp = (gidx._CAPI_get_num_edges(), ) +\
-        infer_broadcast_shape(op, lhs_shp[1:], rhs_shp[1:])
-    out = torch.zeros(out_shp, dtype=dtype, device=device)
+        infer_broadcast_shape(op, lhs.shape[1:], rhs.shape[1:])
+    out = torch.zeros(out_shp, dtype=lhs.device, device=lhs.dtype)
     if gidx._CAPI_get_num_edges() > 0:
-        gidx._CAPI_sddmm(op,
-                         lhs if use_lhs else torch.Tensor(),
-                         rhs if use_rhs else torch.Tensor(),
-                         out,
-                         lhs_target, rhs_target)
-    if (expand_lhs or not use_lhs) and (expand_rhs or not use_rhs):
+        gidx._CAPI_sddmm(op, lhs, rhs, out, lhs_target, rhs_target)
+    if expand_lhs and expand_rhs:
         out = torch.squeeze(out, -1)
     return out
 

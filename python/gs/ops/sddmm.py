@@ -2,7 +2,7 @@ from itertools import product
 from .sparse import *
 import sys
 
-__all__ = ['gsddmm', 'copy_u', 'copy_v', 'copy_e']
+__all__ = ['gsddmm']
 
 
 def reshape_lhs_rhs(lhs_data, rhs_data):
@@ -50,8 +50,7 @@ def gsddmm(g, op, lhs_data, rhs_data, lhs_target='u', rhs_target='v'):
     g : gs.Matrix
         The input graph.
     op : str
-        Binary operator, could be ``add``, ``sub``, ``mul``, ``div``, ``dot``,
-        ``copy_lhs``, ``copy_rhs``.
+        Binary operator, could be ``add``, ``sub``, ``mul``, ``div``, ``dot``.
     lhs_data : tensor or None
         The left operand, could be None if it's not required by op.
     rhs_data : tensor or None
@@ -66,8 +65,7 @@ def gsddmm(g, op, lhs_data, rhs_data, lhs_target='u', rhs_target='v'):
     tensor
         The result tensor.
     """
-    if op not in ['copy_lhs', 'copy_rhs']:
-        lhs_data, rhs_data = reshape_lhs_rhs(lhs_data, rhs_data)
+    lhs_data, rhs_data = reshape_lhs_rhs(lhs_data, rhs_data)
     return gsddmm_internal(
         g._graph, op, lhs_data, rhs_data, lhs_target, rhs_target)
 
@@ -125,56 +123,6 @@ def _register_sddmm_func():
                 func = _gen_sddmm_func(lhs, rhs, binary_op)
                 setattr(sys.modules[__name__], func.__name__, func)
                 __all__.append(func.__name__)
-
-
-def copy_u(g, x):
-    r"""Generalized SDDMM function that copies source node features to edges.
-
-    Parameters
-    ----------
-    g : DGLHeteroGraph
-        The input graph.
-    x : tensor
-        The source node features.
-
-    Returns
-    -------
-    tensor
-        The result tensor.
-
-    Notes
-    -----
-    This function supports autograd (computing input gradients given the output gradient).
-    """
-    return gsddmm(g, 'copy_lhs', x, None)
-
-
-def copy_v(g, x):
-    r"""Generalized SDDMM function that copies destination node features to edges.
-
-    Parameters
-    ----------
-    g : DGLHeteroGraph
-        The input graph.
-    x : tensor
-        The destination node features.
-
-    Returns
-    -------
-    tensor
-        The result tensor.
-
-    Notes
-    -----
-    This function supports autograd (computing input gradients given the output gradient).
-    """
-    return gsddmm(g, 'copy_rhs', None, x)
-
-
-# pylint: disable=unused-argument
-def copy_e(g, x):
-    r"""Generalized SDDMM function that copies destination node features to edges."""
-    return x
 
 
 _register_sddmm_func()
