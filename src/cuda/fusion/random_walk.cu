@@ -1,10 +1,11 @@
 #include <curand_kernel.h>
-#include <nvToolsExt.h>
-#include "cuda_common.h"
+#include "../cuda_common.h"
+#include "../utils.h"
 #include "random_walk.h"
-#include "utils.h"
+
 namespace gs {
 namespace impl {
+namespace fusion {
 template <int BLOCK_SIZE>
 __global__ void _RandomWalkKernel(const int64_t* seed_data,
                                   const int64_t num_seeds,
@@ -45,7 +46,7 @@ __global__ void _RandomWalkKernel(const int64_t* seed_data,
   }
 }
 
-torch::Tensor RandomWalkFusedCUDA(torch::Tensor seeds, int64_t walk_length,
+torch::Tensor FusedRandomWalkCUDA(torch::Tensor seeds, int64_t walk_length,
                                   int64_t* indices, int64_t* indptr) {
   const int64_t* seed_data = seeds.data_ptr<int64_t>();
   const int64_t num_seeds = seeds.numel();
@@ -62,5 +63,6 @@ torch::Tensor RandomWalkFusedCUDA(torch::Tensor seeds, int64_t walk_length,
                         indices, indptr, out_traces_data);
   return out_traces_tensor.reshape({seeds.numel(), -1});
 }
-}
-}
+}  // namespace fusion
+}  // namespace impl
+}  // namespace gs

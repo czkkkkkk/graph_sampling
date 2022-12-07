@@ -1,8 +1,8 @@
 
 #include "./hetero_graph.h"
 #include <thrust/device_vector.h>
+#include "cuda/fusion/metapath_random_walk.h"
 #include "cuda/graph_ops.h"
-#include "cuda/heterograph_ops.h"
 
 namespace gs {
 
@@ -67,7 +67,7 @@ torch::Tensor HeteroGraph::MetapathRandomWalkFused(
   torch::Tensor metapath_tensor =
       torch::from_blob(metapath_mapped.data(), path_length, opts)
           .to(torch::kCUDA);
-  torch::Tensor paths = impl::MetapathRandomWalkFusedCUDA(
+  torch::Tensor paths = impl::fusion::FusedMetapathRandomWalkCUDA(
       seeds, metapath_tensor,
       thrust::raw_pointer_cast(this->hg_cache_.all_indices.data()),
       thrust::raw_pointer_cast(this->hg_cache_.all_indptr.data()));

@@ -1,8 +1,8 @@
 #include "./graph_ops.h"
 
+#include "cuda/fusion/random_walk.h"
 #include "cuda/graph_ops.h"
 #include "cuda/heterograph_ops.h"
-#include "cuda/random_walk.h"
 
 namespace gs {
 
@@ -170,7 +170,7 @@ torch::Tensor GraphNormalize(std::shared_ptr<CSC> csc,
 
 torch::Tensor RandomWalkFused(std::shared_ptr<CSC> csc, torch::Tensor seeds,
                               int64_t walk_length) {
-  torch::Tensor paths = impl::RandomWalkFusedCUDA(
+  torch::Tensor paths = impl::fusion::FusedRandomWalkCUDA(
       seeds, walk_length, csc->indices.data_ptr<int64_t>(),
       csc->indptr.data_ptr<int64_t>());
   return paths;

@@ -36,6 +36,7 @@ list(APPEND GS_EXTERNAL_LIB glog::glog)
 file(GLOB GS_SRC
   src/*.cc
   src/cuda/*.cu
+  src/cuda/fusion/*.cu
 )
 
 add_library(gs SHARED ${GS_SRC})
