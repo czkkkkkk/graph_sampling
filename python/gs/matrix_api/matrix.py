@@ -23,6 +23,12 @@ class Matrix(object):
     def get_data(self) -> Optional[torch.Tensor]:
         return self._graph._CAPI_get_data()
 
+    def get_num_rows(self):
+        return self._graph._CAPI_get_num_rows()
+
+    def get_num_cols(self):
+        return self._graph._CAPI_get_num_cols()
+
     def load_dgl_graph(self, g, weight=None):
         # import csc
         if not isinstance(g, DGLHeteroGraph):
