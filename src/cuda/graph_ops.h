@@ -23,7 +23,6 @@ CSCColumnwiseFusedSlicingAndSamplingCUDA(torch::Tensor indptr,
                                          torch::Tensor column_ids,
                                          int64_t fanout, bool replace);
 
-
 torch::Tensor TensorUniqueCUDA(torch::Tensor input);
 
 // RelabelCUDA leverages vector<Tensor> mapping_tensor to create the hashmap
@@ -51,7 +50,7 @@ torch::Tensor GraphNormalizeCUDA(torch::Tensor indptr,
 std::pair<torch::Tensor, torch::Tensor> GraphCSC2COOCUDA(torch::Tensor indptr,
                                                          torch::Tensor indices);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphCOO2CSRCUDA(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphCOO2CSCCUDA(
     torch::Tensor row, torch::Tensor col, int64_t num_rows);
 
 }  // namespace impl

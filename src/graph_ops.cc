@@ -28,10 +28,10 @@ std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
     torch::optional<torch::Tensor> sorted_e_ids = torch::nullopt;
     if (COO2CSC) {
       std::tie(indptr, indices, sort_index) =
-          impl::GraphCOO2CSRCUDA(coo->col, coo->row, num_items);
+          impl::GraphCOO2CSCCUDA(coo->row, coo->col, num_items);
     } else {
       std::tie(indptr, indices, sort_index) =
-          impl::GraphCOO2CSRCUDA(coo->row, coo->col, num_items);
+          impl::GraphCOO2CSCCUDA(coo->col, coo->row, num_items);
     }
 
     sorted_e_ids = coo->e_ids.has_value()
