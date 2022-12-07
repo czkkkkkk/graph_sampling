@@ -150,7 +150,7 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(true, col_ids, row_ids_, num_cols_, num_rows_)));
   std::tie(csc_ptr, select_index) =
-      CSCColumnwiseFusedSlicingAndSampling(csc_, column_index, fanout, replace);
+      FusedCSCColSlicingAndSampling(csc_, column_index, fanout, replace);
   ret->SetCSC(csc_ptr);
   ret->SetNumEdges(csc_ptr->indices.numel());
   if (data_.has_value()) {
@@ -191,7 +191,7 @@ void Graph::CreateSparseFormat(int64_t axis) {
 }
 
 torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length) {
-  return RandomWalkFused(this->csc_, seeds, walk_length);
+  return FusedRandomWalk(this->csc_, seeds, walk_length);
 }
 
 torch::Tensor Graph::Sum(int64_t axis, int64_t powk) {

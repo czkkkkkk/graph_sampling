@@ -17,7 +17,7 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSampling(
     std::shared_ptr<CSC> csc, int64_t fanout, bool replace);
 
 std::pair<std::shared_ptr<CSC>, torch::Tensor>
-CSCColumnwiseFusedSlicingAndSampling(std::shared_ptr<CSC> csc,
+FusedCSCColSlicingAndSampling(std::shared_ptr<CSC> csc,
                                      torch::Tensor node_ids, int64_t fanout,
                                      bool replace);
 
@@ -42,7 +42,7 @@ std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc, bool CSC2COO);
 std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
                                   bool COO2CSC);
 
-torch::Tensor RandomWalkFused(std::shared_ptr<CSC> csc, torch::Tensor seeds,
+torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
                               int64_t walk_length);
 
 }  // namespace gs

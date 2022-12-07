@@ -87,10 +87,9 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSampling(
   }
 }
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor>
-CSCColumnwiseFusedSlicingAndSampling(std::shared_ptr<CSC> csc,
-                                     torch::Tensor node_ids, int64_t fanout,
-                                     bool replace) {
+std::pair<std::shared_ptr<CSC>, torch::Tensor> FusedCSCColSlicingAndSampling(
+    std::shared_ptr<CSC> csc, torch::Tensor node_ids, int64_t fanout,
+    bool replace) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     if (fanout == 1 && replace) {
@@ -168,7 +167,7 @@ torch::Tensor GraphNormalize(std::shared_ptr<CSC> csc,
   }
 }
 
-torch::Tensor RandomWalkFused(std::shared_ptr<CSC> csc, torch::Tensor seeds,
+torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
                               int64_t walk_length) {
   torch::Tensor paths = impl::fusion::FusedRandomWalkCUDA(
       seeds, walk_length, csc->indices.data_ptr<int64_t>(),
