@@ -89,21 +89,21 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSampling(
 
 std::pair<std::shared_ptr<CSC>, torch::Tensor>
 CSCColumnwiseFusedSlicingAndSampling(std::shared_ptr<CSC> csc,
-                                     torch::Tensor column_ids, int64_t fanout,
+                                     torch::Tensor node_ids, int64_t fanout,
                                      bool replace) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     if (fanout == 1 && replace) {
       std::tie(sub_indptr, sub_indices, select_index) =
           impl::CSCColumnwiseSamplingOneKeepDimCUDA(csc->indptr, csc->indices,
-                                                    column_ids);
+                                                    node_ids);
       return {
           std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
           select_index};
     } else {
       std::tie(sub_indptr, sub_indices, select_index) =
           impl::CSCColumnwiseFusedSlicingAndSamplingCUDA(
-              csc->indptr, csc->indices, column_ids, fanout, replace);
+              csc->indptr, csc->indices, node_ids, fanout, replace);
       return {
           std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
           select_index};

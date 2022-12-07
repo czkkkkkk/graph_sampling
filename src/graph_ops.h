@@ -18,7 +18,7 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSampling(
 
 std::pair<std::shared_ptr<CSC>, torch::Tensor>
 CSCColumnwiseFusedSlicingAndSampling(std::shared_ptr<CSC> csc,
-                                     torch::Tensor column_ids, int64_t fanout,
+                                     torch::Tensor node_ids, int64_t fanout,
                                      bool replace);
 
 torch::Tensor TensorUnique(torch::Tensor node_ids);
