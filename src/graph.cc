@@ -370,16 +370,16 @@ torch::Tensor Graph::GetCOORows(bool is_original) {
   torch::Tensor coo_rows;
   if (coo_ != nullptr) {
     coo_rows = coo_->row;
-  } else if (csc_ != nullptr and !csc_->e_ids.has_value()) {
+  } else if (csc_ != nullptr && !csc_->e_ids.has_value()) {
     coo_rows = csc_->indices;
-  } else if (csr_ != nullptr and !csr_->e_ids.has_value()) {
+  } else if (csr_ != nullptr && !csr_->e_ids.has_value()) {
     SetCOO(GraphCSC2COO(csr_, false));
     coo_rows = coo_->row;
   } else {
     LOG(ERROR) << "Error in GetCOORows!";
   }
 
-  return (is_original and row_ids_.has_value())
+  return (is_original && row_ids_.has_value())
              ? row_ids_.value().index({coo_rows})
              : coo_rows;
 };
@@ -388,15 +388,15 @@ torch::Tensor Graph::GetCOOCols(bool is_original) {
   torch::Tensor coo_cols;
   if (coo_ != nullptr) {
     coo_cols = coo_->col;
-  } else if (csc_ != nullptr and !csc_->e_ids.has_value()) {
+  } else if (csc_ != nullptr && !csc_->e_ids.has_value()) {
     SetCOO(GraphCSC2COO(csc_, true));
     coo_cols = coo_->col;
-  } else if (csr_ != nullptr and !csr_->e_ids.has_value()) {
+  } else if (csr_ != nullptr && !csr_->e_ids.has_value()) {
     coo_cols = csr_->indices;
   } else {
     LOG(ERROR) << "Error in GetCOOCols!";
   }
-  return (is_original and col_ids_.has_value())
+  return (is_original && col_ids_.has_value())
              ? col_ids_.value().index({coo_cols})
              : coo_cols;
 };
