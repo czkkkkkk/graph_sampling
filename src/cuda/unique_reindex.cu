@@ -83,16 +83,9 @@ inline std::vector<torch::Tensor> Unique(torch::Tensor total_tensor) {
   int dir_size = UpPower(num_items);
 
   IdType MAX = std::numeric_limits<IdType>::max();
-  torch::Tensor key_tensor = torch::full(
-      {
-          dir_size,
-      },
-      -1, total_tensor.options());
-  torch::Tensor index_tensor = torch::full(
-      {
-          dir_size,
-      },
-      MAX, total_tensor.options());
+  torch::Tensor key_tensor = torch::full(dir_size, -1, total_tensor.options());
+  torch::Tensor index_tensor =
+      torch::full(dir_size, MAX, total_tensor.options());
 
   // insert
   using it = thrust::counting_iterator<IdType>;
@@ -109,7 +102,7 @@ inline std::vector<torch::Tensor> Unique(torch::Tensor total_tensor) {
   torch::Tensor item_prefix_tensor =
       torch::empty(num_items + 1, total_tensor.options());
   thrust::device_ptr<IdType> item_prefix(
-      static_cast<IdType*>(item_prefix_tensor.data_ptr<int64_t>()));
+      static_cast<IdType*>(item_prefix_tensor.data_ptr<IdType>()));
   thrust::for_each(it(0), it(num_items),
                    [key = key_tensor.data_ptr<IdType>(),
                     index = index_tensor.data_ptr<IdType>(),
@@ -124,19 +117,11 @@ inline std::vector<torch::Tensor> Unique(torch::Tensor total_tensor) {
 
   // unique
   int tot = item_prefix[num_items];
-  torch::Tensor unique_tensor = torch::empty(
-      {
-          tot,
-      },
-      total_tensor.options());
+  torch::Tensor unique_tensor = torch::empty(tot, total_tensor.options());
 
   torch::Tensor value_tensor;
   if (need_cached) {
-    value_tensor = torch::full(
-        {
-            dir_size,
-        },
-        -1, total_tensor.options());
+    value_tensor = torch::full(dir_size, -1, total_tensor.options());
   }
 
   thrust::for_each(
