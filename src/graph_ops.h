@@ -10,10 +10,10 @@ namespace gs {
 std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor column_ids);
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCRowwiseSlicing(
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCIndptrRowwiseSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor row_ids);
 
-std::pair<std::shared_ptr<CSR>, torch::Tensor> CSRRowwiseSlicing(
+std::pair<std::shared_ptr<CSR>, torch::Tensor> CSCIndicesRowwiseSlicing(
     std::shared_ptr<CSR> csr, torch::Tensor row_ids);
 
 std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSampling(
@@ -40,13 +40,10 @@ torch::Tensor GraphDiv(std::shared_ptr<CSC> csc,
 torch::Tensor GraphNormalize(std::shared_ptr<CSC> csc,
                              torch::optional<torch::Tensor> data);
 
-std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc);
+std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc, bool CSC2COO);
 
-std::shared_ptr<COO> GraphCSR2COO(std::shared_ptr<CSR> csr);
-
-std::shared_ptr<CSR> GraphCOO2CSR(std::shared_ptr<COO> coo, int64_t num_rows);
-
-std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_cols);
+std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
+                                  bool COO2CSC);
 
 torch::Tensor RandomWalkFused(std::shared_ptr<CSC> csc, torch::Tensor seeds,
                               int64_t walk_length);

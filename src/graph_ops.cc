@@ -6,10 +6,14 @@
 
 namespace gs {
 
-std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc) {
+std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc, bool CSC2COO) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor row, col;
-    std::tie(row, col) = impl::GraphCSC2COOCUDA(csc->indptr, csc->indices);
+    if (CSC2COO) {
+      std::tie(row, col) = impl::GraphCSC2COOCUDA(csc->indptr, csc->indices);
+    } else {
+      std::tie(col, row) = impl::GraphCSC2COOCUDA(csc->indptr, csc->indices);
+    }
     return std::make_shared<COO>(COO{row, col, csc->e_ids});
   } else {
     LOG(FATAL) << "Not implemented warning";
@@ -17,39 +21,19 @@ std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc) {
   }
 }
 
-std::shared_ptr<COO> GraphCSR2COO(std::shared_ptr<CSR> csr) {
-  if (csr->indptr.device().type() == torch::kCUDA) {
-    torch::Tensor row, col;
-    std::tie(col, row) = impl::GraphCSC2COOCUDA(csr->indptr, csr->indices);
-    return std::make_shared<COO>(COO{row, col, csr->e_ids});
-  } else {
-    LOG(FATAL) << "Not implemented warning";
-    return std::make_shared<COO>(COO{});
-  }
-}
-
-std::shared_ptr<CSR> GraphCOO2CSR(std::shared_ptr<COO> coo, int64_t num_rows) {
+std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
+                                  bool COO2CSC) {
   if (coo->row.device().type() == torch::kCUDA) {
     torch::Tensor indptr, indices, sort_index;
     torch::optional<torch::Tensor> sorted_e_ids = torch::nullopt;
-    std::tie(indptr, indices, sort_index) =
-        impl::GraphCOO2CSRCUDA(coo->row, coo->col, num_rows);
-    sorted_e_ids = coo->e_ids.has_value()
-                       ? coo->e_ids.value().index({sort_index})
-                       : sort_index;
-    return std::make_shared<CSR>(CSR{indptr, indices, sorted_e_ids});
-  } else {
-    LOG(FATAL) << "Not implemented warning";
-    return std::make_shared<CSR>(CSR{});
-  }
-}
+    if (COO2CSC) {
+      std::tie(indptr, indices, sort_index) =
+          impl::GraphCOO2CSRCUDA(coo->col, coo->row, num_items);
+    } else {
+      std::tie(indptr, indices, sort_index) =
+          impl::GraphCOO2CSRCUDA(coo->row, coo->col, num_items);
+    }
 
-std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_cols) {
-  if (coo->row.device().type() == torch::kCUDA) {
-    torch::Tensor indptr, indices, sort_index;
-    torch::optional<torch::Tensor> sorted_e_ids = torch::nullopt;
-    std::tie(indptr, indices, sort_index) =
-        impl::GraphCOO2CSRCUDA(coo->col, coo->row, num_cols);
     sorted_e_ids = coo->e_ids.has_value()
                        ? coo->e_ids.value().index({sort_index})
                        : sort_index;
@@ -74,7 +58,7 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSlicing(
   }
 }
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCRowwiseSlicing(
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCIndptrRowwiseSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor row_ids) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
@@ -88,17 +72,17 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCRowwiseSlicing(
   }
 }
 
-std::pair<std::shared_ptr<CSR>, torch::Tensor> CSRRowwiseSlicing(
-    std::shared_ptr<CSR> csr, torch::Tensor row_ids) {
-  if (csr->indptr.device().type() == torch::kCUDA) {
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCIndicesRowwiseSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor row_ids) {
+  if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     std::tie(sub_indptr, sub_indices, select_index) =
-        impl::OnIndptrSlicingCUDA(csr->indptr, csr->indices, row_ids);
-    return {std::make_shared<CSR>(CSR{sub_indptr, sub_indices, torch::nullopt}),
+        impl::OnIndptrSlicingCUDA(csc->indptr, csc->indices, row_ids);
+    return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
             select_index};
   } else {
     LOG(FATAL) << "Not implemented warning";
-    return {std::make_shared<CSR>(CSR{}), torch::Tensor()};
+    return {std::make_shared<CSC>(CSC{}), torch::Tensor()};
   }
 }
 
@@ -116,6 +100,7 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColumnwiseSampling(
     return {std::make_shared<CSC>(CSC{}), torch::Tensor()};
   }
 }
+
 std::pair<std::shared_ptr<CSC>, torch::Tensor>
 CSCColumnwiseFusedSlicingAndSampling(std::shared_ptr<CSC> csc,
                                      torch::Tensor column_ids, int64_t fanout,
