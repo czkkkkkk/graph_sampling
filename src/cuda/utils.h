@@ -19,12 +19,11 @@ void cub_exclusiveSum(IdType* arrays, const IdType array_length) {
   size_t temp_storage_bytes = 0;
   cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
                                 arrays, array_length);
-
-  c10::Allocator* cuda_allocator = c10::cuda::CUDACachingAllocator::get();
-  c10::DataPtr _temp_data = cuda_allocator->allocate(temp_storage_bytes);
-  d_temp_storage = _temp_data.get();
+  d_temp_storage =
+      c10::cuda::CUDACachingAllocator::raw_alloc(temp_storage_bytes);
   cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
                                 arrays, array_length);
+  c10::cuda::CUDACachingAllocator::raw_delete(d_temp_storage);
 }
 
 template <typename IdType>
@@ -34,11 +33,11 @@ void cub_inclusiveSum(IdType* arrays, int32_t array_length) {
   cub::DeviceScan::InclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
                                 arrays, array_length);
 
-  c10::Allocator* cuda_allocator = c10::cuda::CUDACachingAllocator::get();
-  c10::DataPtr _temp_data = cuda_allocator->allocate(temp_storage_bytes);
-  d_temp_storage = _temp_data.get();
+  d_temp_storage =
+      c10::cuda::CUDACachingAllocator::raw_alloc(temp_storage_bytes);
   cub::DeviceScan::InclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
                                 arrays, array_length);
+  c10::cuda::CUDACachingAllocator::raw_delete(d_temp_storage);
 }
 
 template <typename KeyType, typename ValueType>
@@ -47,18 +46,15 @@ void cub_sortPairs(KeyType* d_keys_in, KeyType* d_keys_out,
                    int32_t num_items) {
   void* d_temp_storage = NULL;
   size_t temp_storage_bytes = 0;
-
   cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, d_keys_in,
                                   d_keys_out, d_values_in, d_values_out,
                                   num_items);
-
-  c10::Allocator* cuda_allocator = c10::cuda::CUDACachingAllocator::get();
-  c10::DataPtr _temp_data = cuda_allocator->allocate(temp_storage_bytes);
-  d_temp_storage = _temp_data.get();
-
+  d_temp_storage =
+      c10::cuda::CUDACachingAllocator::raw_alloc(temp_storage_bytes);
   cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, d_keys_in,
                                   d_keys_out, d_values_in, d_values_out,
                                   num_items);
+  c10::cuda::CUDACachingAllocator::raw_delete(d_temp_storage);
 }
 
 template <typename KeyType, typename ValueType>
@@ -71,14 +67,13 @@ void cub_sortPairsDescending(KeyType* d_keys_in, KeyType* d_keys_out,
                                             d_keys_in, d_keys_out, d_values_in,
                                             d_values_out, num_items);
   // Allocate temporary storage
-  c10::Allocator* cuda_allocator = c10::cuda::CUDACachingAllocator::get();
-  c10::DataPtr _temp_data = cuda_allocator->allocate(temp_storage_bytes);
-  d_temp_storage = _temp_data.get();
-
+  d_temp_storage =
+      c10::cuda::CUDACachingAllocator::raw_alloc(temp_storage_bytes);
   // Run sorting operation
   cub::DeviceRadixSort::SortPairsDescending(d_temp_storage, temp_storage_bytes,
                                             d_keys_in, d_keys_out, d_values_in,
                                             d_values_out, num_items);
+  c10::cuda::CUDACachingAllocator::raw_delete(d_temp_storage);
 }
 
 template <typename IdType, typename DType>
@@ -90,11 +85,13 @@ void cub_segmentedSum(DType* d_in, DType* d_out, IdType* d_offsets,
                                   d_out, num_segments, d_offsets,
                                   d_offsets + 1);
   // Allocate temporary storage
-  cudaMalloc(&d_temp_storage, temp_storage_bytes);
+  d_temp_storage =
+      c10::cuda::CUDACachingAllocator::raw_alloc(temp_storage_bytes);
   // Run sum-reduction
   cub::DeviceSegmentedReduce::Sum(d_temp_storage, temp_storage_bytes, d_in,
                                   d_out, num_segments, d_offsets,
                                   d_offsets + 1);
+  c10::cuda::CUDACachingAllocator::raw_delete(d_temp_storage);
 }
 
 /*! \brief Calculate the number of threads needed given the dimension length.

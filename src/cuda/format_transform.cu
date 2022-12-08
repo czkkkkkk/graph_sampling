@@ -32,7 +32,7 @@ __global__ void _RepeatKernel(const IdType* pos, IdType* out, int64_t n_col,
   }
 }
 
-std::pair<torch::Tensor, torch::Tensor> GraphCSC2COOCUDA(
+std::pair<torch::Tensor, torch::Tensor> CSC2COOCUDA(
     torch::Tensor indptr, torch::Tensor indices) {
   auto coo_size = indices.numel();
   auto col = torch::zeros(coo_size, indptr.options());
@@ -99,10 +99,10 @@ __global__ void _SortedSearchKernelUpperBound(const IdType* hay,
   }
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> GraphCOO2CSRCUDA(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COO2CSCCUDA(
     torch::Tensor row, torch::Tensor col, int64_t num_rows) {
   torch::Tensor sort_row, sort_col, sort_index;
-  std::tie(sort_row, sort_col, sort_index) = COOSort<int64_t>(row, col);
+  std::tie(sort_row, sort_col, sort_index) = COOSort<int64_t>(col, row);
 
   auto row_size = num_rows;
   auto indptr = torch::zeros(row_size + 1, sort_row.options());

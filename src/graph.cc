@@ -64,7 +64,7 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_index) {
                               : column_index;
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(true, col_ids, row_ids_, column_index.numel(), num_rows_)));
-  std::tie(csc_ptr, select_index) = CSCColumnwiseSlicing(csc_, column_index);
+  std::tie(csc_ptr, select_index) = CSCColSlicing(csc_, column_index);
   ret->SetCSC(csc_ptr);
   ret->SetNumEdges(csc_ptr->indices.numel());
   if (data_.has_value()) {
@@ -87,7 +87,7 @@ c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
       new Graph(true, col_ids_, row_ids, num_cols_, row_index.numel())));
   if (csr_ != nullptr) {
     std::shared_ptr<CSR> csr_ptr;
-    std::tie(csr_ptr, select_index) = CSRRowwiseSlicing(csr_, row_index);
+    std::tie(csr_ptr, select_index) = CSCColSlicing(csr_, row_index);
     ret->SetCSR(csr_ptr);
     ret->SetNumEdges(csr_ptr->indices.numel());
     if (data_.has_value()) {
@@ -101,7 +101,7 @@ c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
     }
   } else if (csc_ != nullptr) {
     std::shared_ptr<CSC> csc_ptr;
-    std::tie(csc_ptr, select_index) = CSCRowwiseSlicing(csc_, row_index);
+    std::tie(csc_ptr, select_index) = CSCRowSlicing(csc_, row_index);
     ret->SetCSC(csc_ptr);
     ret->SetNumEdges(csc_ptr->indices.numel());
     if (data_.has_value()) {
@@ -125,8 +125,7 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSampling(int64_t fanout,
   std::shared_ptr<CSC> csc_ptr;
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(true, col_ids_, row_ids_, num_cols_, num_rows_)));
-  std::tie(csc_ptr, select_index) =
-      CSCColumnwiseSampling(csc_, fanout, replace);
+  std::tie(csc_ptr, select_index) = CSCColSampling(csc_, fanout, replace);
   ret->SetCSC(csc_ptr);
   ret->SetNumEdges(csc_ptr->indices.numel());
   if (data_.has_value()) {
@@ -151,7 +150,7 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(true, col_ids, row_ids_, num_cols_, num_rows_)));
   std::tie(csc_ptr, select_index) =
-      CSCColumnwiseFusedSlicingAndSampling(csc_, column_index, fanout, replace);
+      FusedCSCColSlicingAndSampling(csc_, column_index, fanout, replace);
   ret->SetCSC(csc_ptr);
   ret->SetNumEdges(csc_ptr->indices.numel());
   if (data_.has_value()) {
@@ -167,17 +166,17 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
 }
 
 void Graph::CSC2CSR() {
-  SetCOO(GraphCSC2COO(csc_));
+  SetCOO(GraphCSC2COO(csc_, true));
   int64_t num_rows =
       (row_ids_.has_value()) ? row_ids_.value().numel() : num_rows_;
-  SetCSR(GraphCOO2CSR(coo_, num_rows));
+  SetCSR(GraphCOO2CSC(coo_, num_rows, false));
 }
 
 void Graph::CSR2CSC() {
-  SetCOO(GraphCSR2COO(csr_));
+  SetCOO(GraphCSC2COO(csr_, false));
   int64_t num_cols =
       (col_ids_.has_value()) ? col_ids_.value().numel() : num_cols_;
-  SetCSC(GraphCOO2CSC(coo_, num_cols));
+  SetCSC(GraphCOO2CSC(coo_, num_cols, true));
 }
 
 void Graph::CreateSparseFormat(int64_t axis) {
@@ -192,9 +191,8 @@ void Graph::CreateSparseFormat(int64_t axis) {
 }
 
 torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length) {
-  return RandomWalkFused(this->csc_, seeds, walk_length);
+  return FusedRandomWalk(this->csc_, seeds, walk_length);
 }
-
 
 torch::Tensor Graph::Sum(int64_t axis, int64_t powk) {
   torch::Tensor out_data;
@@ -255,7 +253,7 @@ torch::Tensor Graph::AllValidNode() {
     row_ids = (row_ids_.has_value()) ? row_ids_.value() : coo_->row;
   } else if (csr_ != nullptr) {
     // turn csr2coo
-    SetCOO(GraphCSR2COO(csr_));
+    SetCOO(GraphCSC2COO(csr_, false));
     row_ids = (row_ids_.has_value()) ? row_ids_.value() : coo_->row;
   } else {
     LOG(ERROR) << "Error in AllValidNode!";
@@ -299,7 +297,7 @@ Graph::Relabel() {
 
   } else if (csr_ != nullptr or coo_ != nullptr) {
     if (coo_ == nullptr) {
-      SetCOO(GraphCSR2COO(csr_));
+      SetCOO(GraphCSC2COO(csr_, false));
     }
     torch::Tensor row_ids =
         (row_ids_.has_value()) ? row_ids_.value() : coo_->row;
@@ -372,16 +370,16 @@ torch::Tensor Graph::GetCOORows(bool is_original) {
   torch::Tensor coo_rows;
   if (coo_ != nullptr) {
     coo_rows = coo_->row;
-  } else if (csc_ != nullptr and !csc_->e_ids.has_value()) {
+  } else if (csc_ != nullptr && !csc_->e_ids.has_value()) {
     coo_rows = csc_->indices;
-  } else if (csr_ != nullptr and !csr_->e_ids.has_value()) {
-    SetCOO(GraphCSR2COO(csr_));
+  } else if (csr_ != nullptr && !csr_->e_ids.has_value()) {
+    SetCOO(GraphCSC2COO(csr_, false));
     coo_rows = coo_->row;
   } else {
     LOG(ERROR) << "Error in GetCOORows!";
   }
 
-  return (is_original and row_ids_.has_value())
+  return (is_original && row_ids_.has_value())
              ? row_ids_.value().index({coo_rows})
              : coo_rows;
 };
@@ -390,15 +388,15 @@ torch::Tensor Graph::GetCOOCols(bool is_original) {
   torch::Tensor coo_cols;
   if (coo_ != nullptr) {
     coo_cols = coo_->col;
-  } else if (csc_ != nullptr and !csc_->e_ids.has_value()) {
-    SetCOO(GraphCSC2COO(csc_));
+  } else if (csc_ != nullptr && !csc_->e_ids.has_value()) {
+    SetCOO(GraphCSC2COO(csc_, true));
     coo_cols = coo_->col;
-  } else if (csr_ != nullptr and !csr_->e_ids.has_value()) {
+  } else if (csr_ != nullptr && !csr_->e_ids.has_value()) {
     coo_cols = csr_->indices;
   } else {
     LOG(ERROR) << "Error in GetCOOCols!";
   }
-  return (is_original and col_ids_.has_value())
+  return (is_original && col_ids_.has_value())
              ? col_ids_.value().index({coo_cols})
              : coo_cols;
 };
