@@ -54,7 +54,7 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCRowSlicing(
     return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
             select_index};
   } else {
-    std::cerr << "Not implemented warning";
+    LOG(FATAL) << "Not implemented warning";
     return {std::make_shared<CSC>(CSC{}), torch::Tensor()};
   }
 }
