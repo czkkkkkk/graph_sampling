@@ -13,7 +13,8 @@
 
 // `Dir` true, produce largest values.
 // `Dir` false, produce smallest values.
-namespace dgs {
+namespace gs {
+namespace impl {
 namespace warpselect {
 
 template <typename K, typename V, bool Dir, typename Comp, int NumWarpQ,
@@ -254,6 +255,6 @@ struct WarpSelect<K, V, Dir, Comp, 1, NumThreadQ, ThreadsPerBlock> {
   const V _initV;
 };
 }  // namespace warpselect
-}  // namespace dgs
-
+}  // namespace impl
+}  // namespace gs
 #endif

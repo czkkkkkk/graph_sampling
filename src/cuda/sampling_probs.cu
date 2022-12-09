@@ -41,11 +41,12 @@ __global__ void _CSRRowWiseSampleKernel(
       warpselect_out_index + warp_id * WARP_SIZE;
 
   // init warpselect
-  dgs::warpselect::WarpSelect<FloatType, IdType,
-                              true,  // produce largest values
-                              dgs::warpselect::Comparator<FloatType>, NumWarpQ,
-                              NumThreadQ, WARP_SIZE * BLOCK_WARPS>
-      heap(dgs::warpselect::_Limits<FloatType>::getMin(), -1, num_picks);
+  gs::impl::warpselect::WarpSelect<FloatType, IdType,
+                                   true,  // produce largest values
+                                   gs::impl::warpselect::Comparator<FloatType>,
+                                   NumWarpQ, NumThreadQ,
+                                   WARP_SIZE * BLOCK_WARPS>
+      heap(gs::impl::warpselect::_Limits<FloatType>::getMin(), -1, num_picks);
 
   int64_t out_row = blockIdx.x * TILE_SIZE + threadIdx.y;
   const int64_t last_row =
@@ -60,7 +61,7 @@ __global__ void _CSRRowWiseSampleKernel(
     // in weighted rowwise sampling without replacement
     if (deg > num_picks) {
       heap.reset();
-      int limit = dgs::warpselect::roundDown(deg, WARP_SIZE);
+      int limit = gs::impl::warpselect::roundDown(deg, WARP_SIZE);
       IdType i = laneid;
 
       for (; i < limit; i += WARP_SIZE) {

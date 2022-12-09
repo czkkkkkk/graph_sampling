@@ -2,7 +2,8 @@
 #define GS_CUDA_WARPSELECT_MERGE_NETWORK_WARP_H_
 #include "Utils.cuh"
 
-namespace dgs {
+namespace gs {
+namespace impl {
 namespace warpselect {
 
 template <typename K, typename V, int L, bool Dir, typename Comp,
@@ -262,6 +263,6 @@ inline __device__ void warpSortAnyRegisters(K k[N], V v[N]) {
 }
 
 }  // namespace warpselect
-}  // namespace dgs
-
+}  // namespace impl
+}  // namespace gs
 #endif

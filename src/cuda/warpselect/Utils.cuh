@@ -2,7 +2,8 @@
 #define GS_CUDA_WARPSELECT_UTILS_H_
 #include "Pair.cuh"
 
-namespace dgs {
+namespace gs {
+namespace impl {
 namespace warpselect {
 
 constexpr int kWarpSize = 32;
@@ -106,6 +107,7 @@ inline __device__ Pair<T, U> shfl_xor(const Pair<T, U> &pair, int laneMask,
                     shfl_xor(pair.v, laneMask, width));
 }
 }  // namespace warpselect
-}  // namespace dgs
+}  // namespace impl
+}  // namespace gs
 
 #endif

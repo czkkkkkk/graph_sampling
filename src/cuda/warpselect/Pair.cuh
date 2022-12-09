@@ -3,7 +3,8 @@
 #include <cuda.h>
 #include "Utils.cuh"
 
-namespace dgs {
+namespace gs {
+namespace impl {
 namespace warpselect {
 
 /// A simple pair type for CUDA device usage
@@ -34,6 +35,6 @@ struct Pair {
 };
 
 }  // namespace warpselect
-}  // namespace dgs
-
+}  // namespace impl
+}  // namespace gs
 #endif

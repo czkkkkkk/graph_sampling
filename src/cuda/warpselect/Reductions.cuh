@@ -6,7 +6,8 @@
 #include "Pair.cuh"
 #include "Utils.cuh"
 
-namespace dgs {
+namespace gs {
+namespace impl {
 namespace warpselect {
 
 template <typename T>
@@ -78,7 +79,7 @@ __device__ inline T warpReduceAll(T val, Op op) {
 }
 
 }  // namespace warpselect
-}  // namespace dgs
-
+}  // namespace impl
+}  // namespace gs
 
 #endif
