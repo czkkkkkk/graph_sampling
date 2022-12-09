@@ -26,14 +26,14 @@ class Graph : public torch::CustomClassHolder {
   void SetCSC(std::shared_ptr<CSC> csc);
   void SetCSR(std::shared_ptr<CSR> csr);
   void SetCOO(std::shared_ptr<COO> coo);
-  void SetData(torch::Tensor data);
+  void SetData(torch::Tensor data, std::string order = "default");
   void SetNumEdges(int64_t num_edges);
   void CSC2CSR();
   void CSR2CSC();
   std::shared_ptr<CSC> GetCSC();
   std::shared_ptr<CSR> GetCSR();
   std::shared_ptr<COO> GetCOO();
-  torch::optional<torch::Tensor> GetData();
+  torch::optional<torch::Tensor> GetData(std::string order = "default");
   int64_t GetNumRows();
   int64_t GetNumCols();
   int64_t GetNumEdges();
