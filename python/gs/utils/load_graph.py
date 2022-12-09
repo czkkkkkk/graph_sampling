@@ -18,8 +18,8 @@ def load_reddit():
     return g, feat, labels, n_classes, splitted_idx
 
 
-def load_ogbn_products():
-    data = DglNodePropPredDataset(name="ogbn-products", root="../datasets")
+def load_ogb(name, root):
+    data = DglNodePropPredDataset(name=name, root=root)
     splitted_idx = data.get_idx_split()
     g, labels = data[0]
     feat = g.ndata['feat']

@@ -17,11 +17,11 @@ class Matrix(object):
         # Graph bind to a C++ object
         self._graph = graph
 
-    def set_data(self, data):
-        self._graph._CAPI_set_data(data)
+    def set_data(self, data, order: str = 'default'):
+        self._graph._CAPI_set_data(data, order)
 
-    def get_data(self) -> Optional[torch.Tensor]:
-        return self._graph._CAPI_get_data()
+    def get_data(self, order: str = 'default') -> Optional[torch.Tensor]:
+        return self._graph._CAPI_get_data(order)
 
     def get_num_rows(self):
         return self._graph._CAPI_get_num_rows()
@@ -67,8 +67,11 @@ class Matrix(object):
     def columnwise_slicing(self, t):
         return Matrix(self._graph._CAPI_columnwise_slicing(t))
 
-    def columnwise_sampling(self, fanout, replace=True):
-        return Matrix(self._graph._CAPI_columnwise_sampling(fanout, replace))
+    def columnwise_sampling(self, fanout, replace=True, bias=None):
+        if bias is None:
+            return Matrix(self._graph._CAPI_columnwise_sampling(fanout, replace))
+        else:
+            return Matrix(self._graph._CAPI_columnwise_sampling_with_probs(bias, fanout, replace))
 
     def sum(self, axis, powk=1) -> torch.Tensor:
         return self._graph._CAPI_sum(axis, powk)
