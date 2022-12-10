@@ -140,6 +140,28 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSampling(int64_t fanout,
   return ret;
 }
 
+c10::intrusive_ptr<Graph> Graph::ColumnwiseSamplingProbs(
+    torch::Tensor edge_probs, int64_t fanout, bool replace) {
+  torch::Tensor select_index, out_data;
+  std::shared_ptr<CSC> csc_ptr;
+  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
+      new Graph(true, col_ids_, row_ids_, num_cols_, num_rows_)));
+  std::tie(csc_ptr, select_index) =
+      CSCColSamplingProbs(csc_, edge_probs, fanout, replace);
+  ret->SetCSC(csc_ptr);
+  ret->SetNumEdges(csc_ptr->indices.numel());
+  if (data_.has_value()) {
+    if (csc_->e_ids.has_value()) {
+      out_data =
+          data_.value().index({csc_->e_ids.value().index({select_index})});
+    } else {
+      out_data = data_.value().index({select_index});
+    }
+    ret->SetData(out_data);
+  }
+  return ret;
+}
+
 c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
     torch::Tensor column_index, int64_t fanout, bool replace) {
   torch::Tensor select_index, out_data;

@@ -18,6 +18,8 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_columnwise_slicing", &Graph::ColumnwiseSlicing)
       .def("_CAPI_rowwise_slicing", &Graph::RowwiseSlicing)
       .def("_CAPI_columnwise_sampling", &Graph::ColumnwiseSampling)
+      .def("_CAPI_columnwise_sampling_with_probs",
+           &Graph::ColumnwiseSamplingProbs)
       .def("_CAPI_fused_columnwise_slicing_sampling",
            &Graph::ColumnwiseFusedSlicingAndSampling)
       .def("_CAPI_load_csc", &Graph::LoadCSC)

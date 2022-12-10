@@ -16,6 +16,10 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndicesSlicingCUDA(
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColSamplingCUDA(
     torch::Tensor indptr, torch::Tensor indices, int64_t fanout, bool replace);
 
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColSamplingProbsCUDA(
+    torch::Tensor indptr, torch::Tensor indices, torch::Tensor probs,
+    int64_t fanout, bool replace);
+
 torch::Tensor CSCSumCUDA(torch::Tensor indptr,
                          torch::optional<torch::Tensor> e_ids,
                          torch::optional<torch::Tensor> data, int64_t powk);

@@ -16,10 +16,13 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCRowSlicing(
 std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSampling(
     std::shared_ptr<CSC> csc, int64_t fanout, bool replace);
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor>
-FusedCSCColSlicingAndSampling(std::shared_ptr<CSC> csc,
-                                     torch::Tensor node_ids, int64_t fanout,
-                                     bool replace);
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSamplingProbs(
+    std::shared_ptr<CSC> csc, torch::Tensor edge_probs, int64_t fanout,
+    bool replace);
+
+std::pair<std::shared_ptr<CSC>, torch::Tensor> FusedCSCColSlicingAndSampling(
+    std::shared_ptr<CSC> csc, torch::Tensor node_ids, int64_t fanout,
+    bool replace);
 
 torch::Tensor TensorUnique(torch::Tensor node_ids);
 
