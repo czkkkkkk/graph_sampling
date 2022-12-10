@@ -56,7 +56,7 @@ class Matrix(object):
         if e_ids is not None:
             block.edata['_ID'] = e_ids
 
-        data = self._graph._CAPI_get_data()
+        data = self._graph._CAPI_get_data('default')
         if data is not None:
             if e_ids is not None:
                 data = data[e_ids]
