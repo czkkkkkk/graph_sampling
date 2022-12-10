@@ -47,11 +47,12 @@ std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
 }
 
 std::pair<std::shared_ptr<CSC>, torch::Tensor> FusedCSCColRowSlicing(
-    std::shared_ptr<CSC> csc, torch::Tensor seeds) {
+    std::shared_ptr<CSC> csc, torch::Tensor column_ids, torch::Tensor row_ids) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     std::tie(sub_indptr, sub_indices, select_index) =
-        impl::fusion::CSCColRowSlicingCUDA(csc->indptr, csc->indices, seeds);
+        impl::fusion::CSCColRowSlicingCUDA(csc->indptr, csc->indices,
+                                           column_ids, row_ids);
     return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
             select_index};
   } else {

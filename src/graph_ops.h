@@ -8,8 +8,8 @@
 namespace gs {
 
 std::pair<std::shared_ptr<CSC>, torch::Tensor> FusedCSCColRowSlicing(
-    std::shared_ptr<CSC> csc, torch::Tensor seeds);
-    
+    std::shared_ptr<CSC> csc, torch::Tensor column_ids, torch::Tensor row_ids);
+
 std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor node_ids);
 

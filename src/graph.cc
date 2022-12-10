@@ -54,16 +54,19 @@ void Graph::SetCOO(std::shared_ptr<COO> coo) { coo_ = coo; }
 
 void Graph::SetData(torch::Tensor data) { data_ = data; }
 
-c10::intrusive_ptr<Graph> Graph::FusedBidirSlicing(torch::Tensor seeds) {
+c10::intrusive_ptr<Graph> Graph::FusedBidirSlicing(torch::Tensor column_seeds,
+                                                   torch::Tensor row_seeds) {
   torch::Tensor select_index, out_data;
   std::shared_ptr<CSC> csc_ptr;
-  torch::Tensor col_ids =
-      (col_ids_.has_value()) ? col_ids_.value().index({seeds}) : seeds;
+  torch::Tensor col_ids = (col_ids_.has_value())
+                              ? col_ids_.value().index({column_seeds})
+                              : column_seeds;
   torch::Tensor row_ids =
-      (row_ids_.has_value()) ? row_ids_.value().index({seeds}) : seeds;
-  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
-      new Graph(true, col_ids, row_ids, seeds.numel(), seeds.numel())));
-  std::tie(csc_ptr, select_index) = FusedCSCColRowSlicing(csc_, seeds);
+      (row_ids_.has_value()) ? row_ids_.value().index({row_seeds}) : row_seeds;
+  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(
+      true, col_ids, row_ids, column_seeds.numel(), row_seeds.numel())));
+  std::tie(csc_ptr, select_index) =
+      FusedCSCColRowSlicing(csc_, col_ids, row_ids);
   ret->SetCSC(csc_ptr);
   if (data_.has_value()) {
     if (csc_->e_ids.has_value()) {

@@ -7,7 +7,8 @@ namespace gs {
 namespace impl {
 namespace fusion {
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColRowSlicingCUDA(
-    torch::Tensor indptr, torch::Tensor indices, torch::Tensor seeds);
+    torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids,
+    torch::Tensor row_ids);
 
 }
 
