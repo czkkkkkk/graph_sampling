@@ -63,7 +63,7 @@ c10::intrusive_ptr<Graph> Graph::FusionSlicing(torch::Tensor seeds) {
       (row_ids_.has_value()) ? row_ids_.value().index({seeds}) : seeds;
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(true, col_ids, row_ids, seeds.numel(), seeds.numel())));
-  std::tie(csc_ptr, select_index) = CSCFusionSlicing(csc_, seeds);
+  std::tie(csc_ptr, select_index) = FusedCSCColRowSlicing(csc_, seeds);
   ret->SetCSC(csc_ptr);
   if (data_.has_value()) {
     if (csc_->e_ids.has_value()) {

@@ -1,6 +1,6 @@
 #include "./graph_ops.h"
 
-#include "cuda/fusion/fusion_graph_ops.h"
+#include "cuda/fusion/column_row_slicing.h"
 #include "cuda/fusion/random_walk.h"
 #include "cuda/fusion/slice_sampling.h"
 #include "cuda/graph_ops.h"
@@ -46,12 +46,12 @@ std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
   }
 }
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCFusionSlicing(
+std::pair<std::shared_ptr<CSC>, torch::Tensor> FusedCSCColRowSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor seeds) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     std::tie(sub_indptr, sub_indices, select_index) =
-        impl::fusion::SlicingCUDA(csc->indptr, csc->indices, seeds);
+        impl::fusion::CSCColRowSlicingCUDA(csc->indptr, csc->indices, seeds);
     return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
             select_index};
   } else {

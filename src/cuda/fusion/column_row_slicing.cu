@@ -1,7 +1,7 @@
 #include "../atomic.h"
 #include "../cuda_common.h"
 #include "../utils.h"
-#include "fusion_graph_ops.h"
+#include "column_row_slicing.h"
 
 namespace gs {
 namespace impl {
@@ -215,7 +215,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _RowColSlicingCUDA(
   return {out_indptr, out_indices.index({select_index}), select_index};
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> SlicingCUDA(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColRowSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor seeds) {
   return _RowColSlicingCUDA<int64_t>(indptr, indices, seeds);
 };
