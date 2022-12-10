@@ -27,8 +27,7 @@ std::tuple<torch::Tensor, torch::Tensor> _ListSampling(torch::Tensor data,
 
   if (num_items <= num_picks and !replace) {
     // todo (ping), do we need clone here?
-    return std::make_tuple(data.clone(),
-                           torch::arange(num_items, index_options));
+    return std::make_tuple(data, torch::arange(num_items, index_options));
   }
 
   torch::Tensor select;

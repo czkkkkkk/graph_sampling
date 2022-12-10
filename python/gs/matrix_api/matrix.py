@@ -23,6 +23,12 @@ class Matrix(object):
     def get_data(self) -> Optional[torch.Tensor]:
         return self._graph._CAPI_get_data()
 
+    def get_num_rows(self):
+        return self._graph._CAPI_get_num_rows()
+
+    def get_num_cols(self):
+        return self._graph._CAPI_get_num_cols()
+
     def load_dgl_graph(self, g, weight=None):
         # import csc
         if not isinstance(g, DGLHeteroGraph):
@@ -46,6 +52,9 @@ class Matrix(object):
                                           torch.tensor([]),
                                           num_src=num_row,
                                           num_dst=num_col)
+
+        if e_ids is not None:
+            block.edata['_ID'] = e_ids
 
         data = self._graph._CAPI_get_data()
         if data is not None:

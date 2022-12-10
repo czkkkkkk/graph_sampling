@@ -1,7 +1,8 @@
 #include "./graph.h"
 
 #include <sstream>
-
+#include "./bcast.h"
+#include "./cuda/sddmm.h"
 #include "./graph_ops.h"
 
 namespace gs {
@@ -12,6 +13,7 @@ void Graph::LoadCSC(torch::Tensor indptr, torch::Tensor indices) {
   csc_->indices = indices;
   num_cols_ = indptr.numel() - 1;
   num_rows_ = indptr.numel() - 1;
+  num_edges_ = indices.numel();
   LOG(INFO) << "Loaded CSC with " << indptr.numel() - 1 << " nodes and "
             << indices.numel() << " edges";
 }
@@ -27,6 +29,7 @@ void Graph::LoadCSCWithColIds(torch::Tensor column_ids, torch::Tensor indptr,
   csc_->indices = indices;
   num_cols_ = column_ids.numel();
   num_rows_ = indices.max().item<int64_t>() + 1;
+  num_edges_ = indices.numel();
 }
 
 std::shared_ptr<CSC> Graph::GetCSC() { return csc_; }
@@ -40,6 +43,8 @@ torch::optional<torch::Tensor> Graph::GetData() { return data_; }
 int64_t Graph::GetNumCols() { return num_cols_; }
 
 int64_t Graph::GetNumRows() { return num_rows_; }
+
+int64_t Graph::GetNumEdges() { return num_edges_; }
 
 void Graph::SetCSC(std::shared_ptr<CSC> csc) { csc_ = csc; }
 
@@ -72,6 +77,8 @@ c10::intrusive_ptr<Graph> Graph::FusionSlicing(torch::Tensor seeds) {
   return ret;
 }
 
+void Graph::SetNumEdges(int64_t num_edges) { num_edges_ = num_edges; }
+
 c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_index) {
   torch::Tensor select_index, out_data;
   std::shared_ptr<CSC> csc_ptr;
@@ -80,8 +87,9 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_index) {
                               : column_index;
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(true, col_ids, row_ids_, column_index.numel(), num_rows_)));
-  std::tie(csc_ptr, select_index) = CSCColumnwiseSlicing(csc_, column_index);
+  std::tie(csc_ptr, select_index) = CSCColSlicing(csc_, column_index);
   ret->SetCSC(csc_ptr);
+  ret->SetNumEdges(csc_ptr->indices.numel());
   if (data_.has_value()) {
     if (csc_->e_ids.has_value()) {
       out_data =
@@ -102,8 +110,9 @@ c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
       new Graph(true, col_ids_, row_ids, num_cols_, row_index.numel())));
   if (csr_ != nullptr) {
     std::shared_ptr<CSR> csr_ptr;
-    std::tie(csr_ptr, select_index) = CSRRowwiseSlicing(csr_, row_index);
+    std::tie(csr_ptr, select_index) = CSCColSlicing(csr_, row_index);
     ret->SetCSR(csr_ptr);
+    ret->SetNumEdges(csr_ptr->indices.numel());
     if (data_.has_value()) {
       if (csr_->e_ids.has_value()) {
         out_data =
@@ -115,8 +124,9 @@ c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
     }
   } else if (csc_ != nullptr) {
     std::shared_ptr<CSC> csc_ptr;
-    std::tie(csc_ptr, select_index) = CSCRowwiseSlicing(csc_, row_index);
+    std::tie(csc_ptr, select_index) = CSCRowSlicing(csc_, row_index);
     ret->SetCSC(csc_ptr);
+    ret->SetNumEdges(csc_ptr->indices.numel());
     if (data_.has_value()) {
       if (csc_->e_ids.has_value()) {
         out_data =
@@ -138,9 +148,31 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSampling(int64_t fanout,
   std::shared_ptr<CSC> csc_ptr;
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(true, col_ids_, row_ids_, num_cols_, num_rows_)));
-  std::tie(csc_ptr, select_index) =
-      CSCColumnwiseSampling(csc_, fanout, replace);
+  std::tie(csc_ptr, select_index) = CSCColSampling(csc_, fanout, replace);
   ret->SetCSC(csc_ptr);
+  ret->SetNumEdges(csc_ptr->indices.numel());
+  if (data_.has_value()) {
+    if (csc_->e_ids.has_value()) {
+      out_data =
+          data_.value().index({csc_->e_ids.value().index({select_index})});
+    } else {
+      out_data = data_.value().index({select_index});
+    }
+    ret->SetData(out_data);
+  }
+  return ret;
+}
+
+c10::intrusive_ptr<Graph> Graph::ColumnwiseSamplingProbs(
+    torch::Tensor edge_probs, int64_t fanout, bool replace) {
+  torch::Tensor select_index, out_data;
+  std::shared_ptr<CSC> csc_ptr;
+  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
+      new Graph(true, col_ids_, row_ids_, num_cols_, num_rows_)));
+  std::tie(csc_ptr, select_index) =
+      CSCColSamplingProbs(csc_, edge_probs, fanout, replace);
+  ret->SetCSC(csc_ptr);
+  ret->SetNumEdges(csc_ptr->indices.numel());
   if (data_.has_value()) {
     if (csc_->e_ids.has_value()) {
       out_data =
@@ -163,8 +195,9 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(true, col_ids, row_ids_, num_cols_, num_rows_)));
   std::tie(csc_ptr, select_index) =
-      CSCColumnwiseFusedSlicingAndSampling(csc_, column_index, fanout, replace);
+      FusedCSCColSlicingAndSampling(csc_, column_index, fanout, replace);
   ret->SetCSC(csc_ptr);
+  ret->SetNumEdges(csc_ptr->indices.numel());
   if (data_.has_value()) {
     if (csc_->e_ids.has_value()) {
       out_data =
@@ -178,17 +211,17 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
 }
 
 void Graph::CSC2CSR() {
-  SetCOO(GraphCSC2COO(csc_));
+  SetCOO(GraphCSC2COO(csc_, true));
   int64_t num_rows =
       (row_ids_.has_value()) ? row_ids_.value().numel() : num_rows_;
-  SetCSR(GraphCOO2CSR(coo_, num_rows));
+  SetCSR(GraphCOO2CSC(coo_, num_rows, false));
 }
 
 void Graph::CSR2CSC() {
-  SetCOO(GraphCSR2COO(csr_));
+  SetCOO(GraphCSC2COO(csr_, false));
   int64_t num_cols =
       (col_ids_.has_value()) ? col_ids_.value().numel() : num_cols_;
-  SetCSC(GraphCOO2CSC(coo_, num_cols));
+  SetCSC(GraphCOO2CSC(coo_, num_cols, true));
 }
 
 void Graph::CreateSparseFormat(int64_t axis) {
@@ -203,7 +236,7 @@ void Graph::CreateSparseFormat(int64_t axis) {
 }
 
 torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length) {
-  return RandomWalkFused(this->csc_, seeds, walk_length);
+  return FusedRandomWalk(this->csc_, seeds, walk_length);
 }
 
 torch::Tensor Graph::Sum(int64_t axis, int64_t powk) {
@@ -229,6 +262,7 @@ c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis) {
   }
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);
+  ret->SetNumEdges(num_edges_);
   ret->SetData(out_data);
   return ret;
 }
@@ -245,6 +279,7 @@ c10::intrusive_ptr<Graph> Graph::Normalize(int64_t axis) {
   }
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);
+  ret->SetNumEdges(num_edges_);
   ret->SetData(out_data);
   return ret;
 }
@@ -263,7 +298,7 @@ torch::Tensor Graph::AllValidNode() {
     row_ids = (row_ids_.has_value()) ? row_ids_.value() : coo_->row;
   } else if (csr_ != nullptr) {
     // turn csr2coo
-    SetCOO(GraphCSR2COO(csr_));
+    SetCOO(GraphCSC2COO(csr_, false));
     row_ids = (row_ids_.has_value()) ? row_ids_.value() : coo_->row;
   } else {
     LOG(ERROR) << "Error in AllValidNode!";
@@ -307,7 +342,7 @@ Graph::Relabel() {
 
   } else if (csr_ != nullptr or coo_ != nullptr) {
     if (coo_ == nullptr) {
-      SetCOO(GraphCSR2COO(csr_));
+      SetCOO(GraphCSC2COO(csr_, false));
     }
     torch::Tensor row_ids =
         (row_ids_.has_value()) ? row_ids_.value() : coo_->row;
@@ -364,7 +399,7 @@ torch::Tensor Graph::GetValidRows() {
   if (row_ids_.has_value()) {
     return row_ids_.value();
   } else {
-    return TensorUnique(GetCOORows(true));
+    return std::get<0>(torch::_unique(GetCOORows(true)));
   }
 }
 
@@ -372,7 +407,7 @@ torch::Tensor Graph::GetValidCols() {
   if (col_ids_.has_value()) {
     return col_ids_.value();
   } else {
-    return TensorUnique(GetCOOCols(true));
+    return std::get<0>(torch::_unique(GetCOOCols(true)));
   }
 }
 
@@ -380,16 +415,16 @@ torch::Tensor Graph::GetCOORows(bool is_original) {
   torch::Tensor coo_rows;
   if (coo_ != nullptr) {
     coo_rows = coo_->row;
-  } else if (csc_ != nullptr and !csc_->e_ids.has_value()) {
+  } else if (csc_ != nullptr && !csc_->e_ids.has_value()) {
     coo_rows = csc_->indices;
-  } else if (csr_ != nullptr and !csr_->e_ids.has_value()) {
-    SetCOO(GraphCSR2COO(csr_));
+  } else if (csr_ != nullptr && !csr_->e_ids.has_value()) {
+    SetCOO(GraphCSC2COO(csr_, false));
     coo_rows = coo_->row;
   } else {
     LOG(ERROR) << "Error in GetCOORows!";
   }
 
-  return (is_original and row_ids_.has_value())
+  return (is_original && row_ids_.has_value())
              ? row_ids_.value().index({coo_rows})
              : coo_rows;
 };
@@ -398,15 +433,15 @@ torch::Tensor Graph::GetCOOCols(bool is_original) {
   torch::Tensor coo_cols;
   if (coo_ != nullptr) {
     coo_cols = coo_->col;
-  } else if (csc_ != nullptr and !csc_->e_ids.has_value()) {
-    SetCOO(GraphCSC2COO(csc_));
+  } else if (csc_ != nullptr && !csc_->e_ids.has_value()) {
+    SetCOO(GraphCSC2COO(csc_, true));
     coo_cols = coo_->col;
-  } else if (csr_ != nullptr and !csr_->e_ids.has_value()) {
+  } else if (csr_ != nullptr && !csr_->e_ids.has_value()) {
     coo_cols = csr_->indices;
   } else {
     LOG(ERROR) << "Error in GetCOOCols!";
   }
-  return (is_original and col_ids_.has_value())
+  return (is_original && col_ids_.has_value())
              ? col_ids_.value().index({coo_cols})
              : coo_cols;
 };
@@ -432,6 +467,25 @@ std::vector<torch::Tensor> Graph::MetaData() {
   } else {
     LOG(FATAL) << "Error in MetaData: no CSC nor CSR.";
     return {coo_->row, coo_->col};
+  }
+}
+
+/*! \brief Generalized Sampled Dense-Dense Matrix Multiplication. */
+void Graph::SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
+                  torch::Tensor out, int64_t lhs_target, int64_t rhs_target) {
+  const auto& bcast = CalcBcastOff(op, lhs, rhs);
+  if (csc_ != nullptr) {
+    auto csr_ptr =
+        std::make_shared<CSR>(CSR{csc_->indptr, csc_->indices, csc_->e_ids});
+    lhs_target = lhs_target == 1 ? lhs_target : (2 - lhs_target);
+    rhs_target = rhs_target == 1 ? rhs_target : (2 - rhs_target);
+    impl::SDDMMCSR(op, bcast, csr_ptr, lhs, rhs, out, lhs_target, rhs_target);
+  } else if (csr_ != nullptr) {
+    impl::SDDMMCSR(op, bcast, csr_, lhs, rhs, out, lhs_target, rhs_target);
+  } else if (coo_ != nullptr) {
+    impl::SDDMMCOO(op, bcast, coo_, lhs, rhs, out, lhs_target, rhs_target);
+  } else {
+    LOG(FATAL) << "SDDMM only supports CSR and COO formats";
   }
 }
 
