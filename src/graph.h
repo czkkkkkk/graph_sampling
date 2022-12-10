@@ -37,7 +37,7 @@ class Graph : public torch::CustomClassHolder {
   int64_t GetNumRows();
   int64_t GetNumCols();
   int64_t GetNumEdges();
-  c10::intrusive_ptr<Graph> FusionSlicing(torch::Tensor seeds);
+  c10::intrusive_ptr<Graph> FusedBidirSlicing(torch::Tensor seeds);
   c10::intrusive_ptr<Graph> ColumnwiseSlicing(torch::Tensor column_index);
   c10::intrusive_ptr<Graph> RowwiseSlicing(torch::Tensor row_index);
   c10::intrusive_ptr<Graph> ColumnwiseSampling(int64_t fanout, bool replace);

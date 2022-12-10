@@ -30,7 +30,7 @@ TEST(FusedRowColSlicing, test1)
     torch::Tensor seeds = torch::arange(0, 5, options);
 
     auto subA1 = A.ColumnwiseSlicing(seeds)->RowwiseSlicing(seeds);
-    auto subA2 = A.FusionSlicing(seeds);
+    auto subA2 = A.FusedBidirSlicing(seeds);
 
     EXPECT_TRUE(subA1->GetCSC()->indptr.equal(subA2->GetCSC()->indptr));
     EXPECT_TRUE(subA1->GetCSC()->indptr.equal(subA2->GetCSC()->indptr));

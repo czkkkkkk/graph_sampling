@@ -54,7 +54,7 @@ void Graph::SetCOO(std::shared_ptr<COO> coo) { coo_ = coo; }
 
 void Graph::SetData(torch::Tensor data) { data_ = data; }
 
-c10::intrusive_ptr<Graph> Graph::FusionSlicing(torch::Tensor seeds) {
+c10::intrusive_ptr<Graph> Graph::FusedBidirSlicing(torch::Tensor seeds) {
   torch::Tensor select_index, out_data;
   std::shared_ptr<CSC> csc_ptr;
   torch::Tensor col_ids =
