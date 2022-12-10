@@ -360,8 +360,9 @@ Graph::Relabel() {
   torch::Tensor col_ids = col_ids_.value();
 
   if (csc_ != nullptr) {
-    torch::Tensor row_ids =
-        (row_ids_.has_value()) ? row_ids_.value() : csc_->indices;
+    torch::Tensor row_ids = (row_ids_.has_value())
+                                ? row_ids_.value().index({csc_->indices})
+                                : csc_->indices;
     torch::Tensor row_indices = row_ids_.has_value()
                                     ? row_ids_.value().index({csc_->indices})
                                     : csc_->indices;
@@ -387,8 +388,9 @@ Graph::Relabel() {
     if (coo_ == nullptr) {
       SetCOO(GraphCSC2COO(csr_, false));
     }
-    torch::Tensor row_ids =
-        (row_ids_.has_value()) ? row_ids_.value() : coo_->row;
+    torch::Tensor row_ids = (row_ids_.has_value())
+                                ? row_ids_.value().index({coo_->row})
+                                : coo_->row;
 
     torch::Tensor coo_col = col_ids.index({coo_->col});
     torch::Tensor coo_row = (row_ids_.has_value())

@@ -16,16 +16,18 @@ def matrix_sampler(A: gs.Matrix, seeds, fanouts, features, W_1, W_2, sample_a, u
     ret_loss_tuple = None
     for fanout in fanouts:
         subA = A[:, seeds]
+        neighbors = subA.row_ids()
+        subA = subA[neighbors, :]
 
         if use_uva:
-            u_feats = gather_pinned_tensor_rows(features, subA.row_ids())
+            u_feats = gather_pinned_tensor_rows(features, neighbors)
             v_feats = gather_pinned_tensor_rows(features, seeds)
         else:
-            u_feats = features[subA.row_ids()]
+            u_feats = features[neighbors]
             v_feats = features[seeds]
 
         att1 = torch.sum(gs.ops.u_mul_v(subA, u_feats @ W_1,
-                         v_feats @ W_2), dim=1).unsqueeze(1)
+                         v_feats @ W_1), dim=1).unsqueeze(1)
         att2 = torch.sum(gs.ops.u_mul_v(subA, u_feats @ W_2,
                          v_feats @ W_2), dim=1).unsqueeze(1)
         att3 = subA.normalize(axis=0).get_data().unsqueeze(1)
