@@ -1,5 +1,6 @@
 #include "./graph_ops.h"
 
+#include "cuda/fusion/column_row_slicing.h"
 #include "cuda/fusion/random_walk.h"
 #include "cuda/fusion/slice_sampling.h"
 #include "cuda/graph_ops.h"
@@ -42,6 +43,21 @@ std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
   } else {
     LOG(FATAL) << "Not implemented warning";
     return std::make_shared<CSC>(CSC{});
+  }
+}
+
+std::pair<std::shared_ptr<CSC>, torch::Tensor> FusedCSCColRowSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor column_ids, torch::Tensor row_ids) {
+  if (csc->indptr.device().type() == torch::kCUDA) {
+    torch::Tensor sub_indptr, sub_indices, select_index;
+    std::tie(sub_indptr, sub_indices, select_index) =
+        impl::fusion::CSCColRowSlicingCUDA(csc->indptr, csc->indices,
+                                           column_ids, row_ids);
+    return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
+            select_index};
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return {std::make_shared<CSC>(CSC{}), torch::Tensor()};
   }
 }
 
