@@ -13,7 +13,7 @@ from model import *
 def matrix_sampler(A: gs.Matrix, seeds, fanouts, features, W_1, W_2, sample_a, use_uva):
     blocks = []
     output_nodes = seeds
-    ret_A = None
+    ret_loss_tuple = None
     for fanout in fanouts:
         subA = A[:, seeds]
 
@@ -35,24 +35,23 @@ def matrix_sampler(A: gs.Matrix, seeds, fanouts, features, W_1, W_2, sample_a, u
         subA.set_data(att)
 
         subA = subA.columnwise_sampling(fanout, replace=True, bias=att)
-        ret_A = subA
+        ret_loss_tuple = (subA.get_data(order='col'),
+                          subA.row_indices(), seeds.numel(), fanout)
         block = subA.to_dgl_block()
         seeds = block.srcdata['_ID']
         blocks.insert(0, block)
     input_nodes = seeds
-    return input_nodes, output_nodes, blocks, ret_A
+    return input_nodes, output_nodes, blocks, ret_loss_tuple
 
 
-def matrix_sampler_loss(A: gs.Matrix, loss_up, features, fanout, use_uva):
+def sampler_loss(loss_tuple, loss_up, features, use_uva):
     # Loss for sampling probability parameters
-    # batch_sampler: nodes from upper layer sampled their neighbors
-    # batch_sampled: nodes from lower layer were sampled by their parents
     # log probability for "batch_sampler" to sample "batch_sampled"
-    logp = torch.log(A.get_data(order='col')).view(A.get_num_cols(), fanout, -1)
-    sampled_node = A.row_indices()
+    data, sampled_nodes, num_cols, fanout = loss_tuple
+    logp = torch.log(data).view(num_cols, fanout, -1)
     sampled_feats = gather_pinned_tensor_rows(
-        features, sampled_node) if use_uva else features[sampled_node]
-    sampled_feats = sampled_feats.view(A.get_num_cols(), fanout, -1)
+        features, sampled_nodes) if use_uva else features[sampled_nodes]
+    sampled_feats = sampled_feats.view(num_cols, fanout, -1)
     X = logp * sampled_feats
     X = X.mean(dim=1)
     # Chain rule
@@ -119,7 +118,7 @@ def train(dataset, args):
         tic = time.time()
         for it, seeds in enumerate(tqdm.tqdm(train_seedloader)):
             seeds = seeds.to('cuda')
-            input_nodes, output_nodes, blocks, first_A = compiled_func(
+            input_nodes, output_nodes, blocks, loss_tuple = compiled_func(
                 m, seeds, fanouts, features, model.sample_W, model.sample_W2, model.sample_a, use_uva)
             torch.cuda.synchronize()
             sample_time += time.time() - tic
@@ -147,8 +146,8 @@ def train(dataset, args):
             # Gradient of intermediate tensor
             chain_grad = model.X1.grad
             # Compute intermediate loss for sampling probability parameters
-            sample_loss = matrix_sampler_loss(
-                first_A, chain_grad.detach(), features, fanouts[-1], use_uva)
+            sample_loss = sampler_loss(
+                loss_tuple, chain_grad.detach(), features, use_uva)
             sample_loss.backward()
             opt.step()
             total_train_loss += train_loss.item()
