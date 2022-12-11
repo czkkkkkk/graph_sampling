@@ -13,6 +13,9 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColSlicingCUDA(
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCRowSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids);
 
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COORowSlicingCUDA(
+    torch::Tensor coo_row, torch::Tensor coo_col, torch::Tensor row_ids);
+
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColSamplingCUDA(
     torch::Tensor indptr, torch::Tensor indices, int64_t fanout, bool replace);
 
