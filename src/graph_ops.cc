@@ -66,7 +66,7 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCRowSlicing(
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     std::tie(sub_indptr, sub_indices, select_index) =
-        impl::OnIndicesSlicingCUDA(csc->indptr, csc->indices, node_ids);
+        impl::CSCRowSlicingCUDA(csc->indptr, csc->indices, node_ids);
     return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
             select_index};
   } else {
@@ -80,7 +80,7 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSlicing(
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     std::tie(sub_indptr, sub_indices, select_index) =
-        impl::OnIndptrSlicingCUDA(csc->indptr, csc->indices, node_ids);
+        impl::CSCColSlicingCUDA(csc->indptr, csc->indices, node_ids);
     return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
             select_index};
   } else {

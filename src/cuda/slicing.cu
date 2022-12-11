@@ -5,7 +5,7 @@
 
 namespace gs {
 namespace impl {
-////////////////////////////// indptr slicing ///////////////////////////
+////////////////////////////// CSCColSlicingCUDA ///////////////////////////
 template <typename IdType, bool WITH_COO>
 __global__ void _GetSubIndicesKernel(IdType* out_indices, IdType* select_index,
                                      IdType* out_row, IdType* indptr,
@@ -74,7 +74,7 @@ _OnIndptrSlicing(torch::Tensor indptr, torch::Tensor indices,
   return {sub_indptr, coo_col, sub_indices, select_index};
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndptrSlicingCUDA(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids) {
   torch::Tensor out_indptr, out_coo_col, out_indices, out_selected_index;
   std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
@@ -82,7 +82,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndptrSlicingCUDA(
   return {out_indptr, out_indices, out_selected_index};
 }
 
-////////////////////////////// indices slicing //////////////////////////
+////////////////////////////// CSCRowSlicingCUDA //////////////////////////
 inline __host__ __device__ int UpPower(int key) {
   int ret = 1 << static_cast<uint32_t>(std::log2(key) + 1);
   return ret;
@@ -287,7 +287,7 @@ _OnIndicesSlicing(torch::Tensor indptr, torch::Tensor indices,
     }
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndicesSlicingCUDA(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCRowSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids) {
   torch::Tensor out_indptr, out_coo_col, out_indices, out_selected_index;
   std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =

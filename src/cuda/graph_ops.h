@@ -7,10 +7,10 @@
 namespace gs {
 namespace impl {
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndptrSlicingCUDA(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndicesSlicingCUDA(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCRowSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColSamplingCUDA(
