@@ -20,24 +20,30 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColSamplingProbsCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor probs,
     int64_t fanout, bool replace);
 
-torch::Tensor CSCSumCUDA(torch::Tensor indptr,
-                         torch::optional<torch::Tensor> e_ids,
-                         torch::optional<torch::Tensor> data, int64_t powk);
+void CSCSumCUDA(torch::Tensor indptr, torch::optional<torch::Tensor> e_ids,
+                torch::optional<torch::Tensor> n_ids, torch::Tensor data,
+                torch::Tensor out_data, int64_t powk);
+
+void COOSumCUDA(torch::Tensor target, torch::optional<torch::Tensor> e_ids,
+                torch::Tensor data, torch::Tensor out_data, int64_t powk);
 
 torch::Tensor CSCDivCUDA(torch::Tensor indptr,
                          torch::optional<torch::Tensor> e_ids,
                          torch::optional<torch::Tensor> data,
                          torch::Tensor divisor);
 
-torch::Tensor CSCNormalizeCUDA(torch::Tensor indptr,
-                               torch::optional<torch::Tensor> e_ids,
-                               torch::optional<torch::Tensor> data);
-
 std::pair<torch::Tensor, torch::Tensor> CSC2COOCUDA(torch::Tensor indptr,
                                                     torch::Tensor indices);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COO2CSCCUDA(
     torch::Tensor row, torch::Tensor col, int64_t num_rows);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COO2DCSCCUDA(
+    torch::Tensor row, torch::Tensor col, torch::Tensor ids);
+
+std::pair<torch::Tensor, torch::Tensor> DCSC2COOCUDA(torch::Tensor indptr,
+                                                     torch::Tensor indices,
+                                                     torch::Tensor ids);
 
 }  // namespace impl
 }  // namespace gs

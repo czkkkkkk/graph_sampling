@@ -3,66 +3,19 @@
 #include <curand_kernel.h>
 #include "atomic.h"
 #include "cuda_common.h"
+#include "macro.h"
 #include "utils.h"
 
 namespace gs {
 namespace impl {
-//////////////////////// CSCDivCUDA //////////////////////////
-template <typename IdType, typename DType>
-__global__ void _SegmentDivKernel(IdType* indptr, IdType* e_ids, DType* data,
-                                  DType* divisor, DType* out_data,
-                                  int64_t size) {
-  int64_t row = blockIdx.x * blockDim.y + threadIdx.y;
-
-  while (row < size) {
-    IdType start = indptr[row];
-    IdType n_edges = indptr[row + 1] - start;
-    for (int idx = threadIdx.x; idx < n_edges; idx += blockDim.x) {
-      IdType pos = (e_ids == nullptr) ? start + idx : e_ids[start + idx];
-      out_data[pos] = ((data == nullptr) ? 1.0 : data[pos]) / divisor[row];
-    }
-    row += gridDim.x * blockDim.y;
-  }
-}
-
-template <typename IdType, typename DType>
-torch::Tensor CSCDiv(torch::Tensor indptr, torch::optional<torch::Tensor> e_ids,
-                     torch::optional<torch::Tensor> data,
-                     torch::Tensor divisor) {
-  auto size = indptr.numel() - 1;
-  auto data_ptr = (data.has_value()) ? data.value().data_ptr<DType>() : nullptr;
-  auto e_ids_ptr =
-      (e_ids.has_value()) ? e_ids.value().data_ptr<IdType>() : nullptr;
-  auto options = (data.has_value())
-                     ? data.value().options()
-                     : torch::dtype(torch::kFloat32).device(torch::kCUDA);
-  thrust::device_ptr<IdType> item_prefix(
-      static_cast<IdType*>(indptr.data_ptr<IdType>()));
-  int64_t n_edges = item_prefix[size];
-  auto out_data = torch::zeros(n_edges, options);
-
-  dim3 block(32, 16);
-  dim3 grid((size + block.x - 1) / block.x);
-  _SegmentDivKernel<IdType, DType><<<grid, block>>>(
-      indptr.data_ptr<IdType>(), e_ids_ptr, data_ptr, divisor.data_ptr<DType>(),
-      out_data.data_ptr<DType>(), size);
-  return out_data;
-}
-
-torch::Tensor CSCDivCUDA(torch::Tensor indptr,
-                         torch::optional<torch::Tensor> e_ids,
-                         torch::optional<torch::Tensor> data,
-                         torch::Tensor divisor) {
-  return CSCDiv<int64_t, float>(indptr, e_ids, data, divisor);
-}
-
 //////////////////////// CSCSumCUDA //////////////////////////
 /**
  * @brief SpMV for CSCSum
  */
-template <typename IdType, typename DType>
-__global__ void _SegmentSumKernel(IdType* indptr, DType* data, int num_rows,
-                                  int powk, int out_len, DType* out) {
+template <typename IdType, typename DType, bool UseEMap, bool UseNMap>
+__global__ void _SegmentSumKernel(IdType* indptr, IdType* EMap, IdType* NMap,
+                                  DType* data, int num_rows, int powk,
+                                  int out_len, DType* out) {
   // SPMM with CSR.
   int ty = blockIdx.x * blockDim.y + threadIdx.y;
   const IdType stride_y = blockDim.y * gridDim.x;
@@ -72,10 +25,38 @@ __global__ void _SegmentSumKernel(IdType* indptr, DType* data, int num_rows,
     while (tx < out_len) {
       DType local_accum = 0;
       for (IdType i = indptr[ty]; i < indptr[ty + 1]; ++i) {
-        DType tmp = powk == 1 ? data[i] : __powf(data[i], powk);
+        const IdType data_idx = UseEMap ? EMap[i] : i;
+        const DType* dataoff = data + data_idx * out_len;
+        DType tmp = powk == 1 ? dataoff[tx] : __powf(dataoff[tx], powk);
         local_accum += tmp;
       }
-      out[ty * out_len + tx] = local_accum;
+      int out_pos = UseNMap ? NMap[ty * out_len + tx] : ty * out_len + tx;
+      out[out_pos] = local_accum;
+      tx += stride_x;
+    }
+    ty += stride_y;
+  }
+}
+
+/**
+ * @brief SpMMCOO for graphSum
+ */
+template <typename IdType, typename DType, bool UseEMap>
+__global__ void _SegmentSumCOOKernel(IdType* target, IdType* EMap, DType* data,
+                                     int64_t E, int powk, int out_len,
+                                     DType* out) {
+  // SPMM with COO.
+  int ty = blockIdx.y * blockDim.y + threadIdx.y;
+  const IdType stride_y = blockDim.y * gridDim.y;
+  const int64_t stride_x = blockDim.x * gridDim.x;
+  while (ty < E) {
+    int tx = blockIdx.y * blockDim.x + threadIdx.x;
+    const IdType data_idx = UseEMap ? EMap[ty] : ty;
+    const DType* dataoff = data + data_idx * out_len;
+    DType* outoff = out + target[ty] * out_len;
+    while (tx < out_len) {
+      DType val = powk == 1 ? dataoff[tx] : __powf(dataoff[tx], powk);
+      AtomicAdd(outoff + tx, val);
       tx += stride_x;
     }
     ty += stride_y;
@@ -83,65 +64,64 @@ __global__ void _SegmentSumKernel(IdType* indptr, DType* data, int num_rows,
 }
 
 template <typename IdType, typename DType>
-torch::Tensor CSCSum(torch::Tensor indptr, torch::optional<torch::Tensor> e_ids,
-                     torch::optional<torch::Tensor> data, int64_t powk) {
-  auto size = indptr.numel() - 1;
-  auto options = (data.has_value())
-                     ? data.value().options()
-                     : torch::dtype(torch::kFloat32).device(torch::kCUDA);
-  torch::Tensor segment_sum = torch::empty(size, options);
+void CSCSum(torch::Tensor indptr, torch::optional<torch::Tensor> e_ids,
+            torch::optional<torch::Tensor> n_ids, torch::Tensor data,
+            torch::Tensor out_data, int64_t powk) {
+  auto num_element = out_data.numel();
+  auto use_n_map = n_ids.has_value(), use_e_map = e_ids.has_value();
+  auto n_ids_map = use_n_map ? n_ids.value().data_ptr<IdType>() : nullptr;
+  auto e_ids_map = use_e_map ? e_ids.value().data_ptr<IdType>() : nullptr;
 
-  if (data.has_value()) {
-    auto permuted_data = (e_ids.has_value())
-                             ? data.value().index({e_ids.value()})
-                             : data.value();
+  // Aligning DGL
+  const int out_len = 1;
 
-    // Aligning DGL
-    const int out_len = 1;
-
-    const int ntx = 1;
-    const int nty = 256;
-    const int nby = (out_len + ntx - 1) / ntx;
-    const int nbx = (size + nty - 1) / nty;
-    const dim3 nblks(nbx, nby);
-    const dim3 nthrs(ntx, nty);
-    _SegmentSumKernel<IdType, DType><<<nblks, nthrs>>>(
-        indptr.data_ptr<IdType>(), permuted_data.data_ptr<DType>(), size, powk,
-        out_len, segment_sum.data_ptr<DType>());
-
-  } else {
-    using it = thrust::counting_iterator<IdType>;
-    thrust::for_each(
-        thrust::device, it(0), it(size),
-        [d_offsets = indptr.data_ptr<IdType>(),
-         out = segment_sum.data_ptr<DType>()] __device__(int i) mutable {
-          out[i] = static_cast<DType>(d_offsets[i + 1] - d_offsets[i]);
-        });
-  }
-  return segment_sum;
+  const int ntx = 1;
+  const int nty = 256;
+  const int nby = (out_len + ntx - 1) / ntx;
+  const int nbx = (num_element + nty - 1) / nty;
+  const dim3 nblks(nbx, nby);
+  const dim3 nthrs(ntx, nty);
+  SWITCH_Idx(use_e_map, use_n_map, {
+    CUDA_KERNEL_CALL((_SegmentSumKernel<IdType, DType, UseEMap, UseNMap>),
+                     nblks, nthrs, indptr.data_ptr<IdType>(), e_ids_map,
+                     n_ids_map, data.data_ptr<DType>(), num_element, powk,
+                     out_len, out_data.data_ptr<DType>());
+  });
 }
 
-torch::Tensor CSCSumCUDA(torch::Tensor indptr,
-                         torch::optional<torch::Tensor> e_ids,
-                         torch::optional<torch::Tensor> data, int64_t powk) {
-  return CSCSum<int64_t, float>(indptr, e_ids, data, powk);
+void CSCSumCUDA(torch::Tensor indptr, torch::optional<torch::Tensor> e_ids,
+                torch::optional<torch::Tensor> n_ids, torch::Tensor data,
+                torch::Tensor out_data, int64_t powk) {
+  CSCSum<int64_t, float>(indptr, e_ids, n_ids, data, out_data, powk);
 }
 
-//////////////////////// CSCNormalizeCUDA //////////////////////////
 template <typename IdType, typename DType>
-torch::Tensor CSCNormalize(torch::Tensor indptr,
-                           torch::optional<torch::Tensor> e_ids,
-                           torch::optional<torch::Tensor> data) {
-  torch::Tensor out_data, segment_sum;
-  segment_sum = CSCSum<IdType, DType>(indptr, e_ids, data, 1);
-  out_data = CSCDiv<IdType, DType>(indptr, e_ids, data, segment_sum);
-  return out_data;
+void COOSum(torch::Tensor target, torch::optional<torch::Tensor> e_ids,
+            torch::Tensor data, torch::Tensor out_data, int64_t powk) {
+  int64_t E = target.numel();
+  auto use_e_map = e_ids.has_value();
+  auto e_ids_map = use_e_map ? e_ids.value().data_ptr<IdType>() : nullptr;
+
+  // Aligning DGL
+  const int out_len = 1;
+
+  const int ntx = 1;
+  const int nty = 256;
+  const int nbx = (out_len + ntx - 1) / ntx;
+  const int nby = (E + nty - 1) / nty;
+  const dim3 nblks(nbx, nby);
+  const dim3 nthrs(ntx, nty);
+  SWITCH_Idx(use_e_map, false, {
+    CUDA_KERNEL_CALL((_SegmentSumCOOKernel<IdType, DType, UseEMap>), nblks,
+                     nthrs, target.data_ptr<IdType>(), e_ids_map,
+                     data.data_ptr<DType>(), E, powk, out_len,
+                     out_data.data_ptr<DType>());
+  });
 }
 
-torch::Tensor CSCNormalizeCUDA(torch::Tensor indptr,
-                               torch::optional<torch::Tensor> e_ids,
-                               torch::optional<torch::Tensor> data) {
-  return CSCNormalize<int64_t, float>(indptr, e_ids, data);
+void COOSumCUDA(torch::Tensor target, torch::optional<torch::Tensor> e_ids,
+                torch::Tensor data, torch::Tensor out_data, int64_t powk) {
+  COOSum<int64_t, float>(target, e_ids, data, out_data, powk);
 }
 }  // namespace impl
 }  // namespace gs
