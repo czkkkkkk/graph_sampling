@@ -104,30 +104,31 @@ __global__ void SDDMMCooTreeReduceKernel(
 }
 
 /**
- * @brief CUDA kernel of g-SDDMM on Csr format.
+ * @brief CUDA kernel of g-SDDMM on CSC format.
  * @note it uses edge parallel strategy, different threadblocks (on y-axis)
  *       is responsible for the computation on different edges. Threadblocks
  *       on the x-axis are responsible for the computation on different
  *       positions in feature dimension. To efficiently find the source node idx
- *       and destination node index of an given edge on Csr format, it uses
+ *       and destination node index of an given edge on CSC format, it uses
  *       binary search (time complexity O(log N)).
  */
 template <typename Idx, typename DType, typename BinaryOp,
-          bool UseBcast = false, bool UseIdx = false, int LhsTarget = 0,
-          int RhsTarget = 2>
-__global__ void SDDMMCsrKernel(
+          bool UseBcast = false, bool UseIdx = false, bool UseNMap = false,
+          int LhsTarget = 0, int RhsTarget = 2>
+__global__ void SDDMMCSCKernel(
     const DType* __restrict__ lhs, const DType* __restrict__ rhs,
     DType* __restrict__ out, const Idx* __restrict__ indptr,
     const Idx* __restrict__ indices, const Idx* __restrict__ edge_map,
-    int64_t N, int64_t E, int64_t reduce_size,
+    const Idx* __restrict__ nid_map, int64_t N, int64_t E, int64_t reduce_size,
     const int64_t* __restrict__ lhs_off, const int64_t* __restrict__ rhs_off,
     int64_t lhs_len, int64_t rhs_len, int64_t out_len) {
-  // SDDMM with Csr.
+  // SDDMM with CSC.
   Idx ty = blockIdx.y * blockDim.y + threadIdx.y;
   const Idx stride_y = blockDim.y * gridDim.y;
   while (ty < E) {
-    const Idx src = cub::UpperBound(indptr, N, ty) - 1;
-    const Idx dst = _ldg(indices + ty);
+    const Idx src = _ldg(indices + ty);
+    const Idx dst = UseNMap ? _ldg(nid_map + cub::UpperBound(indptr, N, ty) - 1)
+                            : cub::UpperBound(indptr, N, ty) - 1;
     const Idx eid = UseIdx ? _ldg(edge_map + ty) : ty;
     int64_t tx = blockIdx.x * blockDim.x + threadIdx.x;
     const int64_t stride_x = blockDim.x * gridDim.x;
@@ -210,26 +211,29 @@ void SDDMMCOOCUDA(const BcastOff& bcast, std::shared_ptr<COO> coo,
 }
 
 /**
- * @brief CUDA implementation of g-SDDMM on Csr format.
+ * @brief CUDA implementation of g-SDDMM on CSC format.
  * @param bcast Broadcast information.
- * @param csr The Csr matrix.
+ * @param csc The CSC Graph.
  * @param lhs The left hand side operand feature.
  * @param rhs The right hand size operand feature.
  * @param out The result feature on edges.
  */
 template <typename Idx, typename DType, typename Op, int LhsTarget = 0,
           int RhsTarget = 2>
-void SDDMMCSRCUDA(const BcastOff& bcast, std::shared_ptr<CSR> csr,
-                  torch::Tensor lhs, torch::Tensor rhs, torch::Tensor out) {
-  const bool use_idx = csr->e_ids.has_value();
+void SDDMMCSCCUDA(const BcastOff& bcast, std::shared_ptr<CSC> csc,
+                  torch::optional<torch::Tensor> n_ids, torch::Tensor lhs,
+                  torch::Tensor rhs, torch::Tensor out) {
+  const bool use_idx = csc->e_ids.has_value();
+  const bool use_nid = n_ids.has_value();
 
-  const Idx* indptr = csr->indptr.data_ptr<Idx>();
-  const Idx* indices = csr->indices.data_ptr<Idx>();
-  const Idx* edge_map = use_idx ? csr->e_ids.value().data_ptr<Idx>() : nullptr;
+  const Idx* indptr = csc->indptr.data_ptr<Idx>();
+  const Idx* indices = csc->indices.data_ptr<Idx>();
+  const Idx* edge_map = use_idx ? csc->e_ids.value().data_ptr<Idx>() : nullptr;
+  const Idx* nid_map = use_nid ? n_ids.value().data_ptr<Idx>() : nullptr;
   const DType* lhs_data = lhs.data_ptr<DType>();
   const DType* rhs_data = rhs.data_ptr<DType>();
   DType* out_data = out.data_ptr<DType>();
-  int64_t N = csr->indptr.numel(), E = csr->indices.numel();
+  int64_t N = csc->indptr.numel(), E = csc->indices.numel();
 
   int64_t *lhs_off = nullptr, *rhs_off = nullptr;
   int64_t len = bcast.out_len, lhs_len = bcast.lhs_len, rhs_len = bcast.rhs_len;
@@ -243,25 +247,28 @@ void SDDMMCSRCUDA(const BcastOff& bcast, std::shared_ptr<CSR> csr,
   const dim3 nthrs(ntx, nty);
 
   BCAST_IDX_CTX_SWITCH(bcast, use_idx, lhs_off, rhs_off, {
-    CUDA_KERNEL_CALL((SDDMMCsrKernel<Idx, DType, Op, UseBcast, UseIdx,
-                                     LhsTarget, RhsTarget>),
-                     nblks, nthrs, lhs_data, rhs_data, out_data, indptr,
-                     indices, edge_map, N, E, reduce_dim, lhs_off, rhs_off,
-                     lhs_len, rhs_len, len);
+    SWITCH_IDX(use_idx, use_nid, {
+      CUDA_KERNEL_CALL((SDDMMCSCKernel<Idx, DType, Op, UseBcast, UseIdx,
+                                       UseNMap, LhsTarget, RhsTarget>),
+                       nblks, nthrs, lhs_data, rhs_data, out_data, indptr,
+                       indices, edge_map, nid_map, N, E, reduce_dim, lhs_off,
+                       rhs_off, lhs_len, rhs_len, len);
+    });
   });
 }
 
 /**
- * @brief CUDA implementation of g-SDDMM on Csr format.
+ * @brief CUDA implementation of g-SDDMM on CSC format.
  */
-void SDDMMCSR(const std::string& op, const BcastOff& bcast,
-              std::shared_ptr<CSR> csr, torch::Tensor lhs, torch::Tensor rhs,
-              torch::Tensor out, int lhs_target, int rhs_target) {
+void SDDMMCSC(const std::string& op, const BcastOff& bcast,
+              std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
+              torch::Tensor lhs, torch::Tensor rhs, torch::Tensor out,
+              int lhs_target, int rhs_target) {
   SWITCH_BITS(32, DType, {
     SWITCH_OP(op, Op, {
       SWITCH_TARGET(lhs_target, rhs_target, LhsTarget, RhsTarget, {
-        SDDMMCSRCUDA<int64_t, DType, Op, LhsTarget, RhsTarget>(bcast, csr, lhs,
-                                                               rhs, out);
+        SDDMMCSCCUDA<int64_t, DType, Op, LhsTarget, RhsTarget>(
+            bcast, csc, n_ids, lhs, rhs, out);
       });
     });
   });
