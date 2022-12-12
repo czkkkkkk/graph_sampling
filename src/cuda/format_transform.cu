@@ -20,28 +20,42 @@ namespace impl {
  * then,
  * out = [0, 1, 1, 2]
  */
-template <typename IdType>
-__global__ void _RepeatKernel(const IdType* pos, IdType* out, int64_t n_col,
-                              int64_t length) {
+template <typename IdType, bool UseNMap>
+__global__ void _RepeatKernel(const IdType* pos, const IdType* NIDMap,
+                              IdType* out, int64_t n_col, int64_t length) {
   IdType tx = static_cast<IdType>(blockIdx.x) * blockDim.x + threadIdx.x;
   const int stride_x = gridDim.x * blockDim.x;
   while (tx < length) {
     IdType i = cub::UpperBound(pos, n_col, tx) - 1;
-    out[tx] = i;
+    out[tx] = UseNMap ? NIDMap[i] : i;
     tx += stride_x;
   }
 }
 
-std::pair<torch::Tensor, torch::Tensor> CSC2COOCUDA(
-    torch::Tensor indptr, torch::Tensor indices) {
+std::pair<torch::Tensor, torch::Tensor> CSC2COOCUDA(torch::Tensor indptr,
+                                                    torch::Tensor indices) {
   auto coo_size = indices.numel();
   auto col = torch::zeros(coo_size, indptr.options());
 
   dim3 block(128);
   dim3 grid((coo_size + block.x - 1) / block.x);
-  _RepeatKernel<int64_t><<<grid, block>>>(indptr.data_ptr<int64_t>(),
-                                          col.data_ptr<int64_t>(),
-                                          indptr.numel(), coo_size);
+  _RepeatKernel<int64_t, false>
+      <<<grid, block>>>(indptr.data_ptr<int64_t>(), nullptr,
+                        col.data_ptr<int64_t>(), indptr.numel(), coo_size);
+  return {indices, col};
+}
+
+std::pair<torch::Tensor, torch::Tensor> DCSC2COOCUDA(torch::Tensor indptr,
+                                                     torch::Tensor indices,
+                                                     torch::Tensor ids) {
+  auto coo_size = indices.numel();
+  auto col = torch::zeros(coo_size, indptr.options());
+
+  dim3 block(128);
+  dim3 grid((coo_size + block.x - 1) / block.x);
+  _RepeatKernel<int64_t, true>
+      <<<grid, block>>>(indptr.data_ptr<int64_t>(), ids.data_ptr<int64_t>(),
+                        col.data_ptr<int64_t>(), indptr.numel(), coo_size);
   return {indices, col};
 }
 
@@ -104,14 +118,43 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COO2CSCCUDA(
   torch::Tensor sort_row, sort_col, sort_index;
   std::tie(sort_row, sort_col, sort_index) = COOSort<int64_t>(col, row);
 
-  auto row_size = num_rows;
-  auto indptr = torch::zeros(row_size + 1, sort_row.options());
+  auto indptr = torch::zeros(num_rows + 1, sort_row.options());
 
   dim3 block(128);
-  dim3 grid((row_size + block.x - 1) / block.x);
+  dim3 grid((num_rows + block.x - 1) / block.x);
   _SortedSearchKernelUpperBound<int64_t>
       <<<grid, block>>>(sort_row.data_ptr<int64_t>(), sort_row.numel(),
-                        row_size, indptr.data_ptr<int64_t>() + 1);
+                        num_rows, indptr.data_ptr<int64_t>() + 1);
+  return std::make_tuple(indptr, sort_col, sort_index);
+}
+
+template <typename IdType>
+__global__ void _SortedSearchKernelUpperBoundWithMapping(const IdType* hay,
+                                                         int64_t hay_size,
+                                                         int64_t num_needles,
+                                                         IdType* pos,
+                                                         IdType* map) {
+  IdType tx = static_cast<IdType>(blockIdx.x) * blockDim.x + threadIdx.x;
+  const int stride_x = gridDim.x * blockDim.x;
+  while (tx < num_needles) {
+    pos[tx] = cub::UpperBound(hay, hay_size, map[tx]);
+    tx += stride_x;
+  }
+}
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COO2DCSCCUDA(
+    torch::Tensor row, torch::Tensor col, torch::Tensor ids) {
+  torch::Tensor sort_row, sort_col, sort_index;
+  std::tie(sort_row, sort_col, sort_index) = COOSort<int64_t>(col, row);
+
+  auto id_size = ids.numel();
+  auto indptr = torch::zeros(id_size + 1, sort_row.options());
+
+  dim3 block(128);
+  dim3 grid((id_size + block.x - 1) / block.x);
+  _SortedSearchKernelUpperBoundWithMapping<int64_t><<<grid, block>>>(
+      sort_row.data_ptr<int64_t>(), sort_row.numel(), id_size,
+      indptr.data_ptr<int64_t>() + 1, ids.data_ptr<int64_t>());
   return std::make_tuple(indptr, sort_col, sort_index);
 }
 
