@@ -71,7 +71,6 @@ std::shared_ptr<CSC> GraphCOO2DCSC(std::shared_ptr<COO> coo, torch::Tensor ids,
   }
 }
 
-
 std::pair<std::shared_ptr<CSC>, torch::Tensor> FusedCSCColRowSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor column_ids, torch::Tensor row_ids) {
   if (csc->indptr.device().type() == torch::kCUDA) {
@@ -115,7 +114,7 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSlicing(
   }
 }
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSlicing(
+std::pair<std::shared_ptr<CSC>, torch::Tensor> DCSCColSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor nid_map, torch::Tensor node_ids) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
@@ -208,8 +207,8 @@ std::tuple<torch::Tensor, std::vector<torch::Tensor>> BatchTensorRelabel(
   return std::make_tuple(frontier, relabel_result);
 }
 
-void GraphSum(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
-              torch::Tensor data, torch::Tensor out_data, int64_t powk) {
+void CSCGraphSum(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
+                 torch::Tensor data, torch::Tensor out_data, int64_t powk) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     impl::CSCSumCUDA(csc->indptr, csc->e_ids, n_ids, data, out_data, powk);
   } else {
@@ -217,8 +216,8 @@ void GraphSum(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
   }
 }
 
-void GraphSum(std::shared_ptr<COO> coo, torch::Tensor data,
-              torch::Tensor out_data, int64_t powk, int target_side) {
+void COOGraphSum(std::shared_ptr<COO> coo, torch::Tensor data,
+                 torch::Tensor out_data, int64_t powk, int target_side) {
   if (coo->col.device().type() == torch::kCUDA) {
     auto target = (target_side == 0) ? coo->col : coo->row;
     impl::COOSumCUDA(target, coo->e_ids, data, out_data, powk);
@@ -227,9 +226,9 @@ void GraphSum(std::shared_ptr<COO> coo, torch::Tensor data,
   }
 }
 
-void GraphDiv(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
-              torch::Tensor data, torch::Tensor divisor,
-              torch::Tensor out_data) {
+void CSCGraphDiv(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
+                 torch::Tensor data, torch::Tensor divisor,
+                 torch::Tensor out_data) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     const auto& bcast = CalcBcastOff("div", data, divisor);
     impl::SDDMMCSC("div", bcast, csc, n_ids, data, divisor, out_data, 1, 2);
@@ -238,8 +237,9 @@ void GraphDiv(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
   }
 }
 
-void GraphDiv(std::shared_ptr<COO> coo, torch::Tensor data,
-              torch::Tensor divisor, torch::Tensor out_data, int target_side) {
+void COOGraphDiv(std::shared_ptr<COO> coo, torch::Tensor data,
+                 torch::Tensor divisor, torch::Tensor out_data,
+                 int target_side) {
   if (coo->col.device().type() == torch::kCUDA) {
     const auto& bcast = CalcBcastOff("div", data, divisor);
     int rhs_target = (target_side == 0) ? 0 : 2;
@@ -249,9 +249,9 @@ void GraphDiv(std::shared_ptr<COO> coo, torch::Tensor data,
   }
 }
 
-void GraphNormalize(std::shared_ptr<CSC> csc,
-                    torch::optional<torch::Tensor> n_ids, torch::Tensor data,
-                    torch::Tensor out_data) {
+void CSCGraphNormalize(std::shared_ptr<CSC> csc,
+                       torch::optional<torch::Tensor> n_ids, torch::Tensor data,
+                       torch::Tensor out_data) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     auto segmented_sum = torch::zeros(csc->indptr.numel() - 1, data.options());
     impl::CSCSumCUDA(csc->indptr, csc->e_ids, torch::nullopt, data,
@@ -264,8 +264,9 @@ void GraphNormalize(std::shared_ptr<CSC> csc,
   }
 }
 
-void GraphNormalize(std::shared_ptr<COO> coo, torch::Tensor data,
-                    torch::Tensor out_data, int64_t side_len, int target_side) {
+void COOGraphNormalize(std::shared_ptr<COO> coo, torch::Tensor data,
+                       torch::Tensor out_data, int64_t side_len,
+                       int target_side) {
   if (coo->col.device().type() == torch::kCUDA) {
     auto segmented_sum = torch::zeros(side_len, data.options());
     auto target = (target_side == 0) ? coo->row : coo->col;

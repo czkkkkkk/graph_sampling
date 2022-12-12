@@ -96,7 +96,7 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_index) {
       new Graph(true, col_ids, row_ids_, column_index.numel(), num_rows_)));
   if (val_col_ids_.has_value()) {
     std::tie(csc_ptr, select_index) =
-        CSCColSlicing(csc_, val_col_ids_.value(), column_index);
+        DCSCColSlicing(csc_, val_col_ids_.value(), column_index);
   } else {
     std::tie(csc_ptr, select_index) = CSCColSlicing(csc_, column_index);
   }
@@ -124,7 +124,7 @@ c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
     std::shared_ptr<CSR> csr_ptr;
     if (val_row_ids_.has_value()) {
       std::tie(csr_ptr, select_index) =
-          CSCColSlicing(csr_, val_row_ids_.value(), row_index);
+          DCSCColSlicing(csr_, val_row_ids_.value(), row_index);
     } else {
       std::tie(csr_ptr, select_index) = CSCColSlicing(csr_, row_index);
     }
@@ -282,9 +282,9 @@ torch::Tensor Graph::Sum(int64_t axis, int64_t powk) {
   torch::Tensor out_data = torch::zeros(out_size, in_data.options());
 
   if (axis == 0) {
-    GraphSum(csc_, val_col_ids_, in_data, out_data, powk);
+    CSCGraphSum(csc_, val_col_ids_, in_data, out_data, powk);
   } else if (axis == 1) {
-    GraphSum(csr_, val_row_ids_, in_data, out_data, powk);
+    CSCGraphSum(csr_, val_row_ids_, in_data, out_data, powk);
   }
   return out_data;
 }
@@ -300,9 +300,9 @@ c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis) {
                         torch::dtype(torch::kFloat32).device(torch::kCUDA));
   torch::Tensor out_data = torch::zeros(num_edges_, in_data.options());
   if (axis == 0) {
-    GraphDiv(csc_, val_col_ids_, in_data, divisor, out_data);
+    CSCGraphDiv(csc_, val_col_ids_, in_data, divisor, out_data);
   } else if (axis == 1) {
-    GraphDiv(csr_, val_row_ids_, in_data, divisor, out_data);
+    CSCGraphDiv(csr_, val_row_ids_, in_data, divisor, out_data);
   }
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);
@@ -322,9 +322,9 @@ c10::intrusive_ptr<Graph> Graph::Normalize(int64_t axis) {
                         torch::dtype(torch::kFloat32).device(torch::kCUDA));
   torch::Tensor out_data = torch::zeros(num_edges_, in_data.options());
   if (axis == 0) {
-    GraphNormalize(csc_, val_col_ids_, in_data, out_data);
+    CSCGraphNormalize(csc_, val_col_ids_, in_data, out_data);
   } else if (axis == 1) {
-    GraphNormalize(csr_, row_ids_, in_data, out_data);
+    CSCGraphNormalize(csr_, row_ids_, in_data, out_data);
   }
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);

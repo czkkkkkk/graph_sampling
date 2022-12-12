@@ -13,7 +13,7 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> FusedCSCColRowSlicing(
 std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor node_ids);
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSlicing(
+std::pair<std::shared_ptr<CSC>, torch::Tensor> DCSCColSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor nid_map, torch::Tensor node_ids);
 
 std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCRowSlicing(
@@ -36,25 +36,27 @@ std::tuple<torch::Tensor, std::vector<torch::Tensor>> BatchTensorRelabel(
     std::vector<torch::Tensor> mapping_tensors,
     std::vector<torch::Tensor> to_be_relabeled_tensors);
 
-void GraphSum(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
-              torch::Tensor data, torch::Tensor out_data, int64_t powk);
+void CSCGraphSum(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
+                 torch::Tensor data, torch::Tensor out_data, int64_t powk);
 
-void GraphSum(std::shared_ptr<COO> coo, torch::Tensor data,
-              torch::Tensor out_data, int64_t powk, int target_side);
+void COOGraphSum(std::shared_ptr<COO> coo, torch::Tensor data,
+                 torch::Tensor out_data, int64_t powk, int target_side);
 
-void GraphDiv(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
-              torch::Tensor data, torch::Tensor divisor,
-              torch::Tensor out_data);
+void CSCGraphDiv(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
+                 torch::Tensor data, torch::Tensor divisor,
+                 torch::Tensor out_data);
 
-void GraphDiv(std::shared_ptr<COO> coo, torch::Tensor data,
-              torch::Tensor divisor, torch::Tensor out_data, int target_side);
+void COOGraphDiv(std::shared_ptr<COO> coo, torch::Tensor data,
+                 torch::Tensor divisor, torch::Tensor out_data,
+                 int target_side);
 
-void GraphNormalize(std::shared_ptr<CSC> csc,
-                    torch::optional<torch::Tensor> n_ids, torch::Tensor data,
-                    torch::Tensor out_data);
+void CSCGraphNormalize(std::shared_ptr<CSC> csc,
+                       torch::optional<torch::Tensor> n_ids, torch::Tensor data,
+                       torch::Tensor out_data);
 
-void GraphNormalize(std::shared_ptr<COO> coo, torch::Tensor data,
-                    torch::Tensor out_data, int64_t side_len, int target_side);
+void COOGraphNormalize(std::shared_ptr<COO> coo, torch::Tensor data,
+                       torch::Tensor out_data, int64_t side_len,
+                       int target_side);
 
 std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc, bool CSC2COO);
 
