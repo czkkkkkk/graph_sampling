@@ -77,7 +77,8 @@ class Graph : public torch::CustomClassHolder {
   std::vector<torch::Tensor> MetaData();
   torch::Tensor RandomWalk(torch::Tensor seeds, int64_t walk_length);
   void SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
-             torch::Tensor out, int64_t lhs_target, int64_t rhs_target);
+             torch::Tensor out, int64_t lhs_target, int64_t rhs_target,
+             int64_t on_format);
 
   // todo: return global_e_id
  private:

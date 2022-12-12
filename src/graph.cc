@@ -587,16 +587,20 @@ std::vector<torch::Tensor> Graph::MetaData() {
 
 /*! \brief Generalized Sampled Dense-Dense Matrix Multiplication. */
 void Graph::SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
-                  torch::Tensor out, int64_t lhs_target, int64_t rhs_target) {
+                  torch::Tensor out, int64_t lhs_target, int64_t rhs_target,
+                  int64_t on_format) {
   const auto& bcast = CalcBcastOff(op, lhs, rhs);
-  if (coo_ != nullptr) {
+  if (on_format == _COO) {
+    CreateCOO();
     impl::SDDMMCOO(op, bcast, coo_, lhs, rhs, out, lhs_target, rhs_target);
-  } else if (csr_ != nullptr) {
+  } else if (on_format == _CSR) {
+    CreateCSR();
     lhs_target = lhs_target == 1 ? lhs_target : (2 - lhs_target);
     rhs_target = rhs_target == 1 ? rhs_target : (2 - rhs_target);
     impl::SDDMMCSC(op, bcast, csr_, val_row_ids_, lhs, rhs, out, lhs_target,
                    rhs_target);
-  } else if (csc_ != nullptr) {
+  } else if (on_format == _CSC) {
+    CreateCSC();
     impl::SDDMMCSC(op, bcast, csc_, val_row_ids_, lhs, rhs, out, lhs_target,
                    rhs_target);
   } else {
