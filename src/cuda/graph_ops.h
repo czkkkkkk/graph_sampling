@@ -10,6 +10,10 @@ namespace impl {
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndptrSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids);
 
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndptrSlicingCUDA(
+    torch::Tensor indptr, torch::Tensor indices, torch::Tensor nid_map,
+    torch::Tensor column_ids);
+
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndicesSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids);
 

@@ -130,6 +130,20 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSlicing(
   }
 }
 
+std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor nid_map, torch::Tensor node_ids) {
+  if (csc->indptr.device().type() == torch::kCUDA) {
+    torch::Tensor sub_indptr, sub_indices, select_index;
+    std::tie(sub_indptr, sub_indices, select_index) =
+        impl::OnIndptrSlicingCUDA(csc->indptr, csc->indices, nid_map, node_ids);
+    return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
+            select_index};
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return {std::make_shared<CSC>(CSC{}), torch::Tensor()};
+  }
+}
+
 std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSampling(
     std::shared_ptr<CSC> csc, int64_t fanout, bool replace) {
   if (csc->indptr.device().type() == torch::kCUDA) {

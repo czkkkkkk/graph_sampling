@@ -56,6 +56,8 @@ void Graph::SetCOO(std::shared_ptr<COO> coo) { coo_ = coo; }
 
 void Graph::SetData(torch::Tensor data) { data_ = data; }
 
+void Graph::SetValidCols(torch::Tensor val_cols) { val_col_ids_ = val_cols; }
+
 c10::intrusive_ptr<Graph> Graph::FusedBidirSlicing(torch::Tensor column_seeds,
                                                    torch::Tensor row_seeds) {
   torch::Tensor select_index, out_data;
@@ -92,7 +94,12 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_index) {
                               : column_index;
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(true, col_ids, row_ids_, column_index.numel(), num_rows_)));
-  std::tie(csc_ptr, select_index) = CSCColSlicing(csc_, column_index);
+  if (val_col_ids_.has_value()) {
+    std::tie(csc_ptr, select_index) =
+        CSCColSlicing(csc_, val_col_ids_.value(), column_index);
+  } else {
+    std::tie(csc_ptr, select_index) = CSCColSlicing(csc_, column_index);
+  }
   ret->SetCSC(csc_ptr);
   ret->SetNumEdges(csc_ptr->indices.numel());
   if (data_.has_value()) {
@@ -115,7 +122,12 @@ c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
       new Graph(true, col_ids_, row_ids, num_cols_, num_rows)));
   if (csr_ != nullptr) {
     std::shared_ptr<CSR> csr_ptr;
-    std::tie(csr_ptr, select_index) = CSCColSlicing(csr_, row_index);
+    if (val_row_ids_.has_value()) {
+      std::tie(csr_ptr, select_index) =
+          CSCColSlicing(csr_, val_row_ids_.value(), row_index);
+    } else {
+      std::tie(csr_ptr, select_index) = CSCColSlicing(csr_, row_index);
+    }
     ret->SetCSR(csr_ptr);
     ret->SetNumEdges(csr_ptr->indices.numel());
     if (data_.has_value()) {
@@ -140,6 +152,9 @@ c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
         out_data = data_.value().index({select_index});
       }
       ret->SetData(out_data);
+    }
+    if (val_col_ids_.has_value()) {
+      ret->SetValidCols(val_col_ids_.value());
     }
   } else {
     LOG(FATAL) << "Error in RowwiseSlicing: no CSC nor CSR";
