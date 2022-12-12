@@ -10,11 +10,11 @@ namespace impl {
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndptrSlicingCUDA(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> DCSCColSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor nid_map,
     torch::Tensor column_ids);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndicesSlicingCUDA(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCRowSlicingCUDA(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COORowSlicingCUDA(
@@ -33,11 +33,6 @@ void CSCSumCUDA(torch::Tensor indptr, torch::optional<torch::Tensor> e_ids,
 
 void COOSumCUDA(torch::Tensor target, torch::optional<torch::Tensor> e_ids,
                 torch::Tensor data, torch::Tensor out_data, int64_t powk);
-
-torch::Tensor CSCDivCUDA(torch::Tensor indptr,
-                         torch::optional<torch::Tensor> e_ids,
-                         torch::optional<torch::Tensor> data,
-                         torch::Tensor divisor);
 
 std::pair<torch::Tensor, torch::Tensor> CSC2COOCUDA(torch::Tensor indptr,
                                                     torch::Tensor indices);

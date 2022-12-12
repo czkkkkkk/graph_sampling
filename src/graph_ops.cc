@@ -135,7 +135,7 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSlicing(
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     std::tie(sub_indptr, sub_indices, select_index) =
-        impl::OnIndptrSlicingCUDA(csc->indptr, csc->indices, nid_map, node_ids);
+        impl::DCSCColSlicingCUDA(csc->indptr, csc->indices, nid_map, node_ids);
     return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
             select_index};
   } else {
