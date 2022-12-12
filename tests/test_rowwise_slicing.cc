@@ -24,12 +24,12 @@ TEST(RowwiseSlicing, test2)
     Graph A(false);
     auto options = torch::TensorOptions().dtype(torch::kInt64).device(torch::kCUDA);
     torch::Tensor indptr = torch::cat({torch::zeros(10, options), torch::arange(0, 3, options) * 2});
-    torch::Tensor indices = torch::arange(1, 3, options).repeat({2});
+    torch::Tensor indices = torch::arange(5, 7, options).repeat({2});
     torch::Tensor expected_indices = torch::arange(10, 12, options);
     A.LoadCSC(indptr, indices);
     A.CSC2DCSR();
 
-    torch::Tensor row_ids = torch::arange(1, 2, options);
+    torch::Tensor row_ids = torch::arange(5, 6, options);
     auto subA = A.RowwiseSlicing(row_ids);
     auto csr_ptr = subA->GetCSR();
 
