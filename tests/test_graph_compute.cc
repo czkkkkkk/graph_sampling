@@ -119,7 +119,7 @@ TEST(GraphDiv, test1)
     torch::Tensor expected = torch::ones(100, data_options) / 10;
     A.LoadCSC(indptr, indices);
 
-    auto graph_ptr = A.Divide(divisor, 0);
+    auto graph_ptr = A.Divide(divisor, 0, _CSC);
     auto result = graph_ptr->GetData().value();
 
     EXPECT_EQ(result.numel(), expected.numel());
@@ -137,7 +137,25 @@ TEST(GraphDiv, test2)
     torch::Tensor expected = torch::repeat_interleave(torch::ones(20, data_options) / divisor, 5);
     A.LoadCSC(indptr, indices);
 
-    auto graph_ptr = A.Divide(divisor, 0);
+    auto graph_ptr = A.Divide(divisor, 0, _CSC);
+    auto result = graph_ptr->GetData().value();
+
+    EXPECT_EQ(result.numel(), expected.numel());
+    EXPECT_TRUE(result.isclose(expected).all().item<bool>());
+}
+
+TEST(GraphDiv, test3)
+{
+    Graph A(false);
+    auto options = torch::TensorOptions().dtype(torch::kInt64).device(torch::kCUDA);
+    auto data_options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA);
+    torch::Tensor indptr = torch::arange(0, 21, options) * 5;
+    torch::Tensor indices = torch::arange(0, 100, options);
+    torch::Tensor divisor = torch::arange(1, 21, data_options);
+    torch::Tensor expected = torch::repeat_interleave(torch::ones(20, data_options) / divisor, 5);
+    A.LoadCSC(indptr, indices);
+
+    auto graph_ptr = A.Divide(divisor, 0, _COO);
     auto result = graph_ptr->GetData().value();
 
     EXPECT_EQ(result.numel(), expected.numel());
@@ -154,7 +172,7 @@ TEST(GraphNormalize, test1)
     torch::Tensor expected = torch::ones(100, data_options) / 5;
     A.LoadCSC(indptr, indices);
 
-    auto graph_ptr = A.Normalize(0);
+    auto graph_ptr = A.Normalize(0, _CSC);
     auto result = graph_ptr->GetData().value();
 
     EXPECT_EQ(result.numel(), expected.numel());
@@ -173,7 +191,26 @@ TEST(GraphNormalize, test2)
     A.LoadCSC(indptr, indices);
     A.SetData(data.repeat({20}));
 
-    auto graph_ptr = A.Normalize(0);
+    auto graph_ptr = A.Normalize(0, _CSC);
+    auto result = graph_ptr->GetData().value();
+
+    EXPECT_EQ(result.numel(), expected.numel());
+    EXPECT_TRUE(result.isclose(expected).all().item<bool>());
+}
+
+TEST(GraphNormalize, test3)
+{
+    Graph A(false);
+    auto options = torch::TensorOptions().dtype(torch::kInt64).device(torch::kCUDA);
+    auto data_options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA);
+    torch::Tensor indptr = torch::arange(0, 21, options) * 5;
+    torch::Tensor indices = torch::arange(0, 100, options);
+    torch::Tensor data = torch::arange(1, 6, data_options);
+    torch::Tensor expected = (data / data.sum()).repeat({20});
+    A.LoadCSC(indptr, indices);
+    A.SetData(data.repeat({20}));
+
+    auto graph_ptr = A.Normalize(0, _COO);
     auto result = graph_ptr->GetData().value();
 
     EXPECT_EQ(result.numel(), expected.numel());

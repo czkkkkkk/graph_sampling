@@ -341,45 +341,59 @@ torch::Tensor Graph::Sum(int64_t axis, int64_t powk, int64_t on_format) {
   return out_data;
 }
 
-c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis) {
+c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis,
+                                        int64_t on_format) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(is_subgraph_, col_ids_, row_ids_, num_cols_, num_rows_)));
-  CreateSparseFormat(axis);
   auto in_data =
       data_.has_value()
           ? data_.value()
           : torch::ones(num_edges_,
                         torch::dtype(torch::kFloat32).device(torch::kCUDA));
   torch::Tensor out_data = torch::zeros(num_edges_, in_data.options());
-  if (axis == 0) {
+  if (on_format == _COO) {
+    CreateCOO();
+    COOGraphDiv(coo_, in_data, divisor, out_data, axis);
+  } else if (axis == 0 && on_format == _CSC) {
+    CreateCSC();
     CSCGraphDiv(csc_, val_col_ids_, in_data, divisor, out_data);
-  } else if (axis == 1) {
+  } else if (axis == 1 && on_format == _CSR) {
+    CreateCSR();
     CSCGraphDiv(csr_, val_row_ids_, in_data, divisor, out_data);
   }
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);
+  ret->SetCOO(coo_);
   ret->SetNumEdges(num_edges_);
   ret->SetData(out_data);
   return ret;
 }
 
-c10::intrusive_ptr<Graph> Graph::Normalize(int64_t axis) {
+c10::intrusive_ptr<Graph> Graph::Normalize(int64_t axis, int64_t on_format) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(is_subgraph_, col_ids_, row_ids_, num_cols_, num_rows_)));
-  CreateSparseFormat(axis);
   auto in_data =
       data_.has_value()
           ? data_.value()
           : torch::ones(num_edges_,
                         torch::dtype(torch::kFloat32).device(torch::kCUDA));
   torch::Tensor out_data = torch::zeros(num_edges_, in_data.options());
-  if (axis == 0) {
+  if (on_format == _COO) {
+    CreateCOO();
+    if (axis == 0)
+      COOGraphNormalize(coo_, in_data, out_data, num_cols_, axis);
+    else
+      COOGraphNormalize(coo_, in_data, out_data, num_rows_, axis);
+  } else if (axis == 0 && on_format == _CSC) {
+    CreateCSC();
     CSCGraphNormalize(csc_, val_col_ids_, in_data, out_data);
-  } else if (axis == 1) {
+  } else if (axis == 1 && on_format == _CSR) {
+    CreateCSR();
     CSCGraphNormalize(csr_, row_ids_, in_data, out_data);
   }
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);
+  ret->SetCOO(coo_);
   ret->SetNumEdges(num_edges_);
   ret->SetData(out_data);
   return ret;

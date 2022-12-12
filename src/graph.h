@@ -55,8 +55,9 @@ class Graph : public torch::CustomClassHolder {
   c10::intrusive_ptr<Graph> ColumnwiseFusedSlicingAndSampling(
       torch::Tensor column_index, int64_t fanout, bool replace);
   torch::Tensor Sum(int64_t axis, int64_t powk, int64_t on_format);
-  c10::intrusive_ptr<Graph> Divide(torch::Tensor divisor, int64_t axis);
-  c10::intrusive_ptr<Graph> Normalize(int64_t axis);
+  c10::intrusive_ptr<Graph> Divide(torch::Tensor divisor, int64_t axis,
+                                   int64_t on_format);
+  c10::intrusive_ptr<Graph> Normalize(int64_t axis, int64_t on_format);
   // A "valid" node means that the node is required by the user or that it is
   // not an isolated node.
   torch::Tensor AllValidNode();
