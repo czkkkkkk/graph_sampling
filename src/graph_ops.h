@@ -39,13 +39,15 @@ void GraphSum(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
 void GraphSum(std::shared_ptr<COO> coo, torch::Tensor data,
               torch::Tensor out_data, int64_t powk, int target_side);
 
-void GraphDiv(std::shared_ptr<CSC> csc, torch::Tensor data,
-              torch::Tensor divisor, torch::Tensor out_data);
+void GraphDiv(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
+              torch::Tensor data, torch::Tensor divisor,
+              torch::Tensor out_data);
 
 void GraphDiv(std::shared_ptr<COO> coo, torch::Tensor data,
               torch::Tensor divisor, torch::Tensor out_data, int target_side);
 
-void GraphNormalize(std::shared_ptr<CSC> csc, torch::Tensor data,
+void GraphNormalize(std::shared_ptr<CSC> csc,
+                    torch::optional<torch::Tensor> n_ids, torch::Tensor data,
                     torch::Tensor out_data);
 
 void GraphNormalize(std::shared_ptr<COO> coo, torch::Tensor data,

@@ -285,9 +285,9 @@ c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis) {
                         torch::dtype(torch::kFloat32).device(torch::kCUDA));
   torch::Tensor out_data = torch::zeros(num_edges_, in_data.options());
   if (axis == 0) {
-    GraphDiv(csc_, in_data, divisor, out_data);
+    GraphDiv(csc_, val_col_ids_, in_data, divisor, out_data);
   } else if (axis == 1) {
-    GraphDiv(csr_, in_data, divisor, out_data);
+    GraphDiv(csr_, val_row_ids_, in_data, divisor, out_data);
   }
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);
@@ -307,9 +307,9 @@ c10::intrusive_ptr<Graph> Graph::Normalize(int64_t axis) {
                         torch::dtype(torch::kFloat32).device(torch::kCUDA));
   torch::Tensor out_data = torch::zeros(num_edges_, in_data.options());
   if (axis == 0) {
-    GraphNormalize(csc_, in_data, out_data);
+    GraphNormalize(csc_, val_col_ids_, in_data, out_data);
   } else if (axis == 1) {
-    GraphNormalize(csr_, in_data, out_data);
+    GraphNormalize(csr_, row_ids_, in_data, out_data);
   }
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);
@@ -513,9 +513,11 @@ void Graph::SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
   } else if (csr_ != nullptr) {
     lhs_target = lhs_target == 1 ? lhs_target : (2 - lhs_target);
     rhs_target = rhs_target == 1 ? rhs_target : (2 - rhs_target);
-    impl::SDDMMCSC(op, bcast, csr_, lhs, rhs, out, lhs_target, rhs_target);
+    impl::SDDMMCSC(op, bcast, csr_, val_row_ids_, lhs, rhs, out, lhs_target,
+                   rhs_target);
   } else if (csc_ != nullptr) {
-    impl::SDDMMCSC(op, bcast, csc_, lhs, rhs, out, lhs_target, rhs_target);
+    impl::SDDMMCSC(op, bcast, csc_, val_row_ids_, lhs, rhs, out, lhs_target,
+                   rhs_target);
   } else {
     LOG(FATAL) << "SDDMM only supports CSR and COO formats";
   }

@@ -104,7 +104,7 @@
     }                                                                  \
   } while (0)
 
-#define SWITCH_Idx(EDGE_MAP, NODE_MAP, ...) \
+#define SWITCH_IDX(EDGE_MAP, NODE_MAP, ...) \
   do {                                      \
     if ((EDGE_MAP)) {                       \
       constexpr bool UseEMap = true;        \
