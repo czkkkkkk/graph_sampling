@@ -1,9 +1,11 @@
 #include "./graph.h"
 
 #include <sstream>
-#include "./bcast.h"
-#include "./cuda/sddmm.h"
-#include "./graph_ops.h"
+#include "bcast.h"
+#include "cuda/graph_ops.h"
+#include "cuda/sddmm.h"
+#include "cuda/tensor_ops.h"
+#include "graph_ops.h"
 
 namespace gs {
 
@@ -107,10 +109,10 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_index) {
 
 c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
   torch::Tensor select_index, out_data;
-  torch::Tensor row_ids =
-      (row_ids_.has_value()) ? row_ids_.value().index({row_index}) : row_index;
+  torch::Tensor row_ids = row_index;
+  int64_t num_rows = row_index.numel();
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
-      new Graph(true, col_ids_, row_ids, num_cols_, row_index.numel())));
+      new Graph(true, col_ids_, row_ids, num_cols_, num_rows)));
   if (csr_ != nullptr) {
     std::shared_ptr<CSR> csr_ptr;
     std::tie(csr_ptr, select_index) = CSCColSlicing(csr_, row_index);
@@ -220,11 +222,23 @@ void Graph::CSC2CSR() {
   SetCSR(GraphCOO2CSC(coo_, num_rows, false));
 }
 
+void Graph::CSC2DCSR() {
+  SetCOO(GraphCSC2COO(csc_, true));
+  val_row_ids_ = std::get<0>(torch::_unique(coo_->row));
+  SetCSR(GraphCOO2DCSC(coo_, val_row_ids_.value(), false));
+}
+
 void Graph::CSR2CSC() {
   SetCOO(GraphCSC2COO(csr_, false));
   int64_t num_cols =
       (col_ids_.has_value()) ? col_ids_.value().numel() : num_cols_;
   SetCSC(GraphCOO2CSC(coo_, num_cols, true));
+}
+
+void Graph::CSR2DCSC() {
+  SetCOO(GraphCSC2COO(csr_, false));
+  val_col_ids_ = std::get<0>(torch::_unique(coo_->col));
+  SetCSR(GraphCOO2DCSC(coo_, val_col_ids_.value(), true));
 }
 
 void Graph::CreateSparseFormat(int64_t axis) {
@@ -243,12 +257,19 @@ torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length) {
 }
 
 torch::Tensor Graph::Sum(int64_t axis, int64_t powk) {
-  torch::Tensor out_data;
   CreateSparseFormat(axis);
+  auto in_data =
+      data_.has_value()
+          ? data_.value()
+          : torch::ones(num_edges_,
+                        torch::dtype(torch::kFloat32).device(torch::kCUDA));
+  auto out_size = (axis == 0) ? num_cols_ : num_rows_;
+  torch::Tensor out_data = torch::zeros(out_size, in_data.options());
+
   if (axis == 0) {
-    out_data = GraphSum(csc_, GetData(), powk);
+    GraphSum(csc_, val_col_ids_, in_data, out_data, powk);
   } else if (axis == 1) {
-    out_data = GraphSum(csr_, GetData(), powk);
+    GraphSum(csr_, val_row_ids_, in_data, out_data, powk);
   }
   return out_data;
 }
@@ -256,12 +277,17 @@ torch::Tensor Graph::Sum(int64_t axis, int64_t powk) {
 c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(is_subgraph_, col_ids_, row_ids_, num_cols_, num_rows_)));
-  torch::Tensor out_data;
   CreateSparseFormat(axis);
+  auto in_data =
+      data_.has_value()
+          ? data_.value()
+          : torch::ones(num_edges_,
+                        torch::dtype(torch::kFloat32).device(torch::kCUDA));
+  torch::Tensor out_data = torch::zeros(num_edges_, in_data.options());
   if (axis == 0) {
-    out_data = GraphDiv(csc_, GetData(), divisor);
+    GraphDiv(csc_, in_data, divisor, out_data);
   } else if (axis == 1) {
-    out_data = GraphDiv(csr_, GetData(), divisor);
+    GraphDiv(csr_, in_data, divisor, out_data);
   }
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);
@@ -273,12 +299,17 @@ c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis) {
 c10::intrusive_ptr<Graph> Graph::Normalize(int64_t axis) {
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(is_subgraph_, col_ids_, row_ids_, num_cols_, num_rows_)));
-  torch::Tensor out_data;
   CreateSparseFormat(axis);
+  auto in_data =
+      data_.has_value()
+          ? data_.value()
+          : torch::ones(num_edges_,
+                        torch::dtype(torch::kFloat32).device(torch::kCUDA));
+  torch::Tensor out_data = torch::zeros(num_edges_, in_data.options());
   if (axis == 0) {
-    out_data = GraphNormalize(csc_, GetData());
+    GraphNormalize(csc_, in_data, out_data);
   } else if (axis == 1) {
-    out_data = GraphNormalize(csr_, GetData());
+    GraphNormalize(csr_, in_data, out_data);
   }
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);
@@ -477,16 +508,14 @@ std::vector<torch::Tensor> Graph::MetaData() {
 void Graph::SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
                   torch::Tensor out, int64_t lhs_target, int64_t rhs_target) {
   const auto& bcast = CalcBcastOff(op, lhs, rhs);
-  if (csc_ != nullptr) {
-    auto csr_ptr =
-        std::make_shared<CSR>(CSR{csc_->indptr, csc_->indices, csc_->e_ids});
+  if (coo_ != nullptr) {
+    impl::SDDMMCOO(op, bcast, coo_, lhs, rhs, out, lhs_target, rhs_target);
+  } else if (csr_ != nullptr) {
     lhs_target = lhs_target == 1 ? lhs_target : (2 - lhs_target);
     rhs_target = rhs_target == 1 ? rhs_target : (2 - rhs_target);
-    impl::SDDMMCSR(op, bcast, csr_ptr, lhs, rhs, out, lhs_target, rhs_target);
-  } else if (csr_ != nullptr) {
-    impl::SDDMMCSR(op, bcast, csr_, lhs, rhs, out, lhs_target, rhs_target);
-  } else if (coo_ != nullptr) {
-    impl::SDDMMCOO(op, bcast, coo_, lhs, rhs, out, lhs_target, rhs_target);
+    impl::SDDMMCSC(op, bcast, csr_, lhs, rhs, out, lhs_target, rhs_target);
+  } else if (csc_ != nullptr) {
+    impl::SDDMMCSC(op, bcast, csc_, lhs, rhs, out, lhs_target, rhs_target);
   } else {
     LOG(FATAL) << "SDDMM only supports CSR and COO formats";
   }
