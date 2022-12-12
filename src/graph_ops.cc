@@ -71,21 +71,6 @@ std::shared_ptr<CSC> GraphCOO2DCSC(std::shared_ptr<COO> coo, torch::Tensor ids,
   }
 }
 
-std::shared_ptr<COO> GraphDCSC2COO(std::shared_ptr<CSC> csc, torch::Tensor ids,
-                                   bool DCSC2COO) {
-  if (csc->indptr.device().type() == torch::kCUDA) {
-    torch::Tensor row, col;
-    if (DCSC2COO) {
-      std::tie(row, col) = impl::DCSC2COOCUDA(csc->indptr, csc->indices, ids);
-    } else {
-      std::tie(col, row) = impl::DCSC2COOCUDA(csc->indptr, csc->indices, ids);
-    }
-    return std::make_shared<COO>(COO{row, col, csc->e_ids});
-  } else {
-    LOG(FATAL) << "Not implemented warning";
-    return std::make_shared<COO>(COO{});
-  }
-}
 
 std::pair<std::shared_ptr<CSC>, torch::Tensor> FusedCSCColRowSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor column_ids, torch::Tensor row_ids) {

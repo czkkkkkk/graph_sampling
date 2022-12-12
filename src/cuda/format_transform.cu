@@ -45,20 +45,6 @@ std::pair<torch::Tensor, torch::Tensor> CSC2COOCUDA(torch::Tensor indptr,
   return {indices, col};
 }
 
-std::pair<torch::Tensor, torch::Tensor> DCSC2COOCUDA(torch::Tensor indptr,
-                                                     torch::Tensor indices,
-                                                     torch::Tensor ids) {
-  auto coo_size = indices.numel();
-  auto col = torch::zeros(coo_size, indptr.options());
-
-  dim3 block(128);
-  dim3 grid((coo_size + block.x - 1) / block.x);
-  _RepeatKernel<int64_t, true>
-      <<<grid, block>>>(indptr.data_ptr<int64_t>(), ids.data_ptr<int64_t>(),
-                        col.data_ptr<int64_t>(), indptr.numel(), coo_size);
-  return {indices, col};
-}
-
 template <typename IdType>
 inline std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COOSort(
     torch::Tensor coo_key, torch::Tensor coo_value) {

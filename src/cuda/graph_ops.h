@@ -43,10 +43,6 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COO2CSCCUDA(
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COO2DCSCCUDA(
     torch::Tensor row, torch::Tensor col, torch::Tensor ids);
 
-std::pair<torch::Tensor, torch::Tensor> DCSC2COOCUDA(torch::Tensor indptr,
-                                                     torch::Tensor indices,
-                                                     torch::Tensor ids);
-
 }  // namespace impl
 }  // namespace gs
 
