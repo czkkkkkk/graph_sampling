@@ -28,11 +28,15 @@ class Graph : public torch::CustomClassHolder {
   void SetCOO(std::shared_ptr<COO> coo);
   void SetData(torch::Tensor data);
   void SetValidCols(torch::Tensor val_cols);
+  void SetValidRows(torch::Tensor val_rows);
   void SetNumEdges(int64_t num_edges);
   void CSC2CSR();
   void CSC2DCSR();
   void CSR2CSC();
   void CSR2DCSC();
+  void CreateCOO();
+  void CreateCSR();
+  void CreateCSC();
   std::shared_ptr<CSC> GetCSC();
   std::shared_ptr<CSR> GetCSR();
   std::shared_ptr<COO> GetCOO();
@@ -50,7 +54,7 @@ class Graph : public torch::CustomClassHolder {
                                                     bool replace);
   c10::intrusive_ptr<Graph> ColumnwiseFusedSlicingAndSampling(
       torch::Tensor column_index, int64_t fanout, bool replace);
-  torch::Tensor Sum(int64_t axis, int64_t powk);
+  torch::Tensor Sum(int64_t axis, int64_t powk, int64_t on_format);
   c10::intrusive_ptr<Graph> Divide(torch::Tensor divisor, int64_t axis);
   c10::intrusive_ptr<Graph> Normalize(int64_t axis);
   // A "valid" node means that the node is required by the user or that it is

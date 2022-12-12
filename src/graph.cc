@@ -58,6 +58,52 @@ void Graph::SetData(torch::Tensor data) { data_ = data; }
 
 void Graph::SetValidCols(torch::Tensor val_cols) { val_col_ids_ = val_cols; }
 
+void Graph::SetValidRows(torch::Tensor val_rows) { val_row_ids_ = val_rows; }
+
+void Graph::CreateCOO() {
+  if (coo_ != nullptr) return;
+  if (csc_ != nullptr)
+    SetCOO(GraphCSC2COO(csc_, true));
+  else
+    SetCOO(GraphCSC2COO(csr_, false));
+}
+
+void Graph::CreateCSR() {
+  if (csr_ != nullptr) return;
+  if (coo_ != nullptr) {
+    if (is_subgraph_) {
+      val_row_ids_ = std::get<0>(torch::_unique(coo_->row));
+      SetCSR(GraphCOO2DCSC(coo_, val_row_ids_.value(), false));
+    } else {
+      SetCSR(GraphCOO2CSC(coo_, num_rows_, false));
+    }
+  } else {
+    if (is_subgraph_) {
+      CSC2DCSR();
+    } else {
+      CSC2CSR();
+    }
+  }
+}
+
+void Graph::CreateCSC() {
+  if (csc_ != nullptr) return;
+  if (coo_ != nullptr) {
+    if (is_subgraph_) {
+      val_col_ids_ = std::get<0>(torch::_unique(coo_->col));
+      SetCSR(GraphCOO2DCSC(coo_, val_col_ids_.value(), true));
+    } else {
+      SetCSR(GraphCOO2CSC(coo_, num_cols_, true));
+    }
+  } else {
+    if (is_subgraph_) {
+      CSR2DCSC();
+    } else {
+      CSR2CSC();
+    }
+  }
+}
+
 c10::intrusive_ptr<Graph> Graph::FusedBidirSlicing(torch::Tensor column_seeds,
                                                    torch::Tensor row_seeds) {
   torch::Tensor select_index, out_data;
@@ -271,8 +317,7 @@ torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length) {
   return FusedRandomWalk(this->csc_, seeds, walk_length);
 }
 
-torch::Tensor Graph::Sum(int64_t axis, int64_t powk) {
-  CreateSparseFormat(axis);
+torch::Tensor Graph::Sum(int64_t axis, int64_t powk, int64_t on_format) {
   auto in_data =
       data_.has_value()
           ? data_.value()
@@ -281,10 +326,17 @@ torch::Tensor Graph::Sum(int64_t axis, int64_t powk) {
   auto out_size = (axis == 0) ? num_cols_ : num_rows_;
   torch::Tensor out_data = torch::zeros(out_size, in_data.options());
 
-  if (axis == 0) {
+  if (on_format == _COO) {
+    CreateCOO();
+    COOGraphSum(coo_, in_data, out_data, powk, axis);
+  } else if (axis == 0 && on_format == _CSC) {
+    CreateCSC();
     CSCGraphSum(csc_, val_col_ids_, in_data, out_data, powk);
-  } else if (axis == 1) {
+  } else if (axis == 1 && on_format == _CSR) {
+    CreateCSR();
     CSCGraphSum(csr_, val_row_ids_, in_data, out_data, powk);
+  } else {
+    LOG(FATAL) << "axis should be 0 or 1? on_format and axis do not match?";
   }
   return out_data;
 }

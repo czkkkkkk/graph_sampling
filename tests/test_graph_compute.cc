@@ -15,7 +15,7 @@ TEST(GraphSum, test1)
     torch::Tensor expected = torch::ones(20, data_options) * 5;
     A.LoadCSC(indptr, indices);
 
-    auto result = A.Sum(0, 1);
+    auto result = A.Sum(0, 1, _CSC);
 
     EXPECT_EQ(result.numel(), expected.numel());
     EXPECT_TRUE(result.equal(expected));
@@ -33,7 +33,7 @@ TEST(GraphSum, test2)
     A.LoadCSC(indptr, indices);
     A.SetData(data.repeat({20}));
 
-    auto result = A.Sum(0, 1);
+    auto result = A.Sum(0, 1, _CSC);
 
     EXPECT_EQ(result.numel(), expected.numel());
     EXPECT_TRUE(result.equal(expected));
@@ -49,7 +49,7 @@ TEST(GraphSum, test3)
     torch::Tensor expected = torch::ones(20, data_options) * 5;
     A.LoadCSC(indptr, indices);
 
-    auto result = A.Sum(0, 2);
+    auto result = A.Sum(0, 2, _CSC);
 
     EXPECT_EQ(result.numel(), expected.numel());
     EXPECT_TRUE(result.equal(expected));
@@ -67,7 +67,7 @@ TEST(GraphSum, test4)
     A.LoadCSC(indptr, indices);
     A.SetData(data.repeat({20}));
 
-    auto result = A.Sum(0, 2);
+    auto result = A.Sum(0, 2, _CSC);
 
     EXPECT_EQ(result.numel(), expected.numel());
     EXPECT_TRUE(result.equal(expected));
@@ -86,7 +86,24 @@ TEST(GraphSum, test5)
     A.SetData(data);
 
     A.CSC2CSR();
-    auto result = A.Sum(1, 1);
+    auto result = A.Sum(1, 1, _CSR);
+
+    EXPECT_TRUE(result.equal(expected));
+}
+
+TEST(GraphSum, test6)
+{
+    Graph A(false);
+    auto options = torch::TensorOptions().dtype(torch::kInt64).device(torch::kCUDA);
+    auto data_options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA);
+    torch::Tensor indptr = torch::cat({torch::zeros(10, options), torch::arange(0, 3, options) * 2});
+    torch::Tensor indices = torch::arange(1, 4, 2, options).repeat({2});
+    torch::Tensor data = torch::arange(3, 7, data_options);
+    torch::Tensor expected = torch::cat({torch::arange(0, 9, 8, options), torch::arange(0, 11, 10, options), torch::zeros(8, options)});
+    A.LoadCSC(indptr, indices);
+    A.SetData(data);
+
+    auto result = A.Sum(1, 1, _COO);
 
     EXPECT_TRUE(result.equal(expected));
 }
