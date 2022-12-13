@@ -195,23 +195,23 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
                                          int64_t on_format,
                                          int64_t output_format) {
   c10::intrusive_ptr<Graph> ret;
-  if (axis == 0)
+  if (axis == 0) {
+    auto new_col_ids =
+        col_ids_.has_value() ? col_ids_.value().index({n_ids}) : n_ids;
     ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
-        new Graph(true, n_ids, row_ids_, n_ids.numel(), num_rows_)));
-  else
+        new Graph(true, new_col_ids, row_ids_, n_ids.numel(), num_rows_)));
+  } else {
+    auto new_row_ids =
+        row_ids_.has_value() ? row_ids_.value().index({n_ids}) : n_ids;
     ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
-        new Graph(true, col_ids_, n_ids, num_cols_, n_ids.numel())));
+        new Graph(true, col_ids_, new_row_ids, num_cols_, n_ids.numel())));
+  }
 
   if (on_format == _COO) {
     CreateCOO();
     std::shared_ptr<COO> coo_ptr;
     torch::Tensor select_index, out_data;
-    auto global_ids = axis == 0 ? col_ids_ : row_ids_;
-    if (global_ids.has_value()) {
-      LOG(FATAL) << "Not implementation";
-    } else {
-      std::tie(coo_ptr, select_index) = COOColSlicing(coo_, n_ids, axis);
-    }
+    std::tie(coo_ptr, select_index) = COOColSlicing(coo_, n_ids, axis);
     ret->SetCOO(coo_ptr);
     ret->SetNumEdges(coo_ptr->row.numel());
     if (data_.has_value()) {
@@ -237,21 +237,11 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
       if (val_col_ids_.has_value())
         std::tie(tmp_ptr, select_index) =
             DCSCColSlicing(csc_, val_col_ids_.value(), n_ids, with_coo);
-      else if (col_ids_.has_value())
-        std::tie(tmp_ptr, select_index) =
-            DCSCColSlicing(csc_, col_ids_.value(), n_ids, with_coo);
       else
         std::tie(tmp_ptr, select_index) = CSCColSlicing(csc_, n_ids, with_coo);
-
     } else {
       // for row
-      if (row_ids_.has_value())
-        LOG(FATAL) << "Not implementation";
-      else {
-        std::tie(tmp_ptr, select_index) = CSCRowSlicing(csc_, n_ids, with_coo);
-        torch::cuda::synchronize();
-      }
-
+      std::tie(tmp_ptr, select_index) = CSCRowSlicing(csc_, n_ids, with_coo);
       if (val_col_ids_.has_value()) ret->SetValidCols(val_col_ids_.value());
     }
 
@@ -283,20 +273,13 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
     bool with_coo = output_format & _COO;
     if (axis == 0) {
       // for col
-      if (col_ids_.has_value())
-        LOG(FATAL) << "Not implementation";
-      else
-        std::tie(tmp_ptr, select_index) = CSCRowSlicing(csr_, n_ids, with_coo);
-
+      std::tie(tmp_ptr, select_index) = CSCRowSlicing(csr_, n_ids, with_coo);
       if (val_row_ids_.has_value()) ret->SetValidRows(val_row_ids_.value());
 
     } else {
       if (val_row_ids_.has_value())
         std::tie(tmp_ptr, select_index) =
             DCSCColSlicing(csr_, val_row_ids_.value(), n_ids, with_coo);
-      else if (row_ids_.has_value())
-        std::tie(tmp_ptr, select_index) =
-            DCSCColSlicing(csr_, row_ids_.value(), n_ids, with_coo);
       else
         std::tie(tmp_ptr, select_index) = CSCColSlicing(csr_, n_ids, with_coo);
     }
@@ -318,7 +301,7 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
       ret->SetData(out_data);
     }
   } else {
-    LOG(FATAL) << "Not implementation";
+    LOG(FATAL) << "Not implemented warning";
   }
   return ret;
 }
