@@ -20,9 +20,9 @@ struct COO {
   torch::optional<torch::Tensor> e_ids;
 };
 
-#define _CSR 0
-#define _CSC 1
-#define _COO 2
+#define _CSR 4
+#define _CSC 2
+#define _COO 1
 
 }  // namespace gs
 
