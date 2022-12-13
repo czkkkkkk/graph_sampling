@@ -139,7 +139,7 @@ c10::intrusive_ptr<Graph> Graph::FusedBidirSlicing(torch::Tensor column_seeds,
 
 void Graph::SetNumEdges(int64_t num_edges) { num_edges_ = num_edges; }
 
-// axis = 0 for col; axis = 1 for csr.
+// axis = 0 for col; axis = 1 for row.
 c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
                                          int64_t on_format,
                                          int64_t output_format) {
