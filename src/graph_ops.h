@@ -66,6 +66,9 @@ std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
 std::shared_ptr<CSC> GraphCOO2DCSC(std::shared_ptr<COO> coo, torch::Tensor ids,
                                    bool COO2DCSC);
 
+std::shared_ptr<COO> GraphDCSC2COO(std::shared_ptr<CSC> csc, torch::Tensor ids,
+                                   bool DCSC2COO);
+
 torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
                               int64_t walk_length);
 

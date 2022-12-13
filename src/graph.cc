@@ -62,10 +62,17 @@ void Graph::SetValidRows(torch::Tensor val_rows) { val_row_ids_ = val_rows; }
 
 void Graph::CreateCOO() {
   if (coo_ != nullptr) return;
-  if (csc_ != nullptr)
-    SetCOO(GraphCSC2COO(csc_, true));
-  else
-    SetCOO(GraphCSC2COO(csr_, false));
+  if (csc_ != nullptr) {
+    if (val_col_ids_.has_value())
+      SetCOO(GraphDCSC2COO(csc_, val_col_ids_.value(), true));
+    else
+      SetCOO(GraphCSC2COO(csc_, true));
+  } else {
+    if (val_row_ids_.has_value())
+      SetCOO(GraphDCSC2COO(csr_, val_row_ids_.value(), false));
+    else
+      SetCOO(GraphCSC2COO(csr_, false));
+  }
 }
 
 void Graph::CreateCSR() {
