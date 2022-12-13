@@ -13,7 +13,7 @@ TEST(RowwiseSlicing, test1)
     A.LoadCSC(indptr, indices);
 
     torch::Tensor row_ids = torch::arange(0, 100, 5, options).to(torch::kCUDA);
-    auto subA = A.RowwiseSlicing(row_ids);
+    auto subA = A.Slicing(row_ids, 1, _CSC, _CSC);
     auto csc_ptr = subA->GetCSC();
     EXPECT_TRUE(csc_ptr->indptr.equal(torch::arange(21).to(torch::kCUDA) * 1));
     EXPECT_TRUE(csc_ptr->indices.equal(torch::arange(20).to(torch::kCUDA)));
@@ -30,7 +30,7 @@ TEST(RowwiseSlicing, test2)
     A.CSC2DCSR();
 
     torch::Tensor row_ids = torch::arange(5, 6, options);
-    auto subA = A.RowwiseSlicing(row_ids);
+    auto subA = A.Slicing(row_ids, 1, _CSR, _CSR);
     auto csr_ptr = subA->GetCSR();
 
     EXPECT_EQ(csr_ptr->indptr.numel(), 2);

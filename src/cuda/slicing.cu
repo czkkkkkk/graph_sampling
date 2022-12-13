@@ -163,12 +163,18 @@ _OnIndptrSlicing(torch::Tensor indptr, torch::Tensor indices,
   return {sub_indptr, coo_col, sub_indices, select_index};
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColSlicingCUDA(
-    torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids) {
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+CSCColSlicingCUDA(torch::Tensor indptr, torch::Tensor indices,
+                  torch::Tensor column_ids, bool with_coo) {
   torch::Tensor out_indptr, out_coo_col, out_indices, out_selected_index;
-  std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
-      _OnIndptrSlicing<int64_t, false>(indptr, indices, column_ids);
-  return {out_indptr, out_indices, out_selected_index};
+  if (with_coo)
+    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
+        _OnIndptrSlicing<int64_t, true>(indptr, indices, column_ids);
+  else
+    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
+        _OnIndptrSlicing<int64_t, false>(indptr, indices, column_ids);
+
+  return {out_indptr, out_coo_col, out_indices, out_selected_index};
 }
 
 ///////////////////// indptr slicing with id mapping /////////////////////
@@ -272,14 +278,21 @@ _OnIndptrSlicingWithIdMapping(torch::Tensor indptr, torch::Tensor indices,
   return {sub_indptr, coo_col, sub_indices, select_index};
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> DCSCColSlicingCUDA(
-    torch::Tensor indptr, torch::Tensor indices, torch::Tensor nid_map,
-    torch::Tensor column_ids) {
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+DCSCColSlicingCUDA(torch::Tensor indptr, torch::Tensor indices,
+                   torch::Tensor nid_map, torch::Tensor column_ids,
+                   bool with_coo) {
   torch::Tensor out_indptr, out_coo_col, out_indices, out_selected_index;
-  std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
-      _OnIndptrSlicingWithIdMapping<int64_t, false>(indptr, indices, nid_map,
-                                                    column_ids);
-  return {out_indptr, out_indices, out_selected_index};
+  if (with_coo) {
+    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
+        _OnIndptrSlicingWithIdMapping<int64_t, true>(indptr, indices, nid_map,
+                                                     column_ids);
+  } else {
+    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
+        _OnIndptrSlicingWithIdMapping<int64_t, false>(indptr, indices, nid_map,
+                                                      column_ids);
+  }
+  return {out_indptr, out_coo_col, out_indices, out_selected_index};
 }
 
 ////////////////////////////// indices slicing //////////////////////////
@@ -395,12 +408,17 @@ _OnIndicesSlicing(torch::Tensor indptr, torch::Tensor indices,
             select_index};
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCRowSlicingCUDA(
-    torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids) {
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+CSCRowSlicingCUDA(torch::Tensor indptr, torch::Tensor indices,
+                  torch::Tensor row_ids, bool with_coo) {
   torch::Tensor out_indptr, out_coo_col, out_indices, out_selected_index;
-  std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
-      _OnIndicesSlicing<int64_t, false>(indptr, indices, row_ids);
-  return {out_indptr, out_indices, out_selected_index};
+  if (with_coo)
+    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
+        _OnIndicesSlicing<int64_t, true>(indptr, indices, row_ids);
+  else
+    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
+        _OnIndicesSlicing<int64_t, false>(indptr, indices, row_ids);
+  return {out_indptr, out_coo_col, out_indices, out_selected_index};
 };
 
 ////////////////////////////// COORowSlicingCUDA //////////////////////////

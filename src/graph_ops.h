@@ -10,14 +10,18 @@ namespace gs {
 std::pair<std::shared_ptr<CSC>, torch::Tensor> FusedCSCColRowSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor column_ids, torch::Tensor row_ids);
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSlicing(
-    std::shared_ptr<CSC> csc, torch::Tensor node_ids);
+std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCColSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor node_ids, bool with_coo);
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> DCSCColSlicing(
-    std::shared_ptr<CSC> csc, torch::Tensor nid_map, torch::Tensor node_ids);
+std::pair<std::shared_ptr<_TMP>, torch::Tensor> DCSCColSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor nid_map, torch::Tensor node_ids,
+    bool with_coo);
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCRowSlicing(
-    std::shared_ptr<CSC> csc, torch::Tensor node_ids);
+std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCRowSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor node_ids, bool with_coo);
+
+std::pair<std::shared_ptr<COO>, torch::Tensor> COOColSlicing(
+    std::shared_ptr<COO> coo, torch::Tensor node_ids, int64_t axis);
 
 std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSampling(
     std::shared_ptr<CSC> csc, int64_t fanout, bool replace);

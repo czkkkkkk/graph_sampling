@@ -139,64 +139,78 @@ c10::intrusive_ptr<Graph> Graph::FusedBidirSlicing(torch::Tensor column_seeds,
 
 void Graph::SetNumEdges(int64_t num_edges) { num_edges_ = num_edges; }
 
-c10::intrusive_ptr<Graph> Graph::ColumnwiseSlicing(torch::Tensor column_index) {
-  torch::Tensor select_index, out_data;
-  std::shared_ptr<CSC> csc_ptr;
-  torch::Tensor col_ids = (col_ids_.has_value())
-                              ? col_ids_.value().index({column_index})
-                              : column_index;
-  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
-      new Graph(true, col_ids, row_ids_, column_index.numel(), num_rows_)));
-  if (val_col_ids_.has_value()) {
-    std::tie(csc_ptr, select_index) =
-        DCSCColSlicing(csc_, val_col_ids_.value(), column_index);
-  } else {
-    std::tie(csc_ptr, select_index) = CSCColSlicing(csc_, column_index);
-  }
-  ret->SetCSC(csc_ptr);
-  ret->SetNumEdges(csc_ptr->indices.numel());
-  if (data_.has_value()) {
-    if (csc_->e_ids.has_value()) {
-      out_data =
-          data_.value().index({csc_->e_ids.value().index({select_index})});
-    } else {
-      out_data = data_.value().index({select_index});
-    }
-    ret->SetData(out_data);
-  }
-  return ret;
-}
+// axis = 0 for col; axis = 1 for csr.
+c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
+                                         int64_t on_format,
+                                         int64_t output_format) {
+  c10::intrusive_ptr<Graph> ret;
+  if (axis == 0)
+    ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
+        new Graph(true, n_ids, row_ids_, n_ids.numel(), num_rows_)));
+  else
+    ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
+        new Graph(true, col_ids_, n_ids, num_cols_, n_ids.numel())));
 
-c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
-  torch::Tensor select_index, out_data;
-  torch::Tensor row_ids = row_index;
-  int64_t num_rows = row_index.numel();
-  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
-      new Graph(true, col_ids_, row_ids, num_cols_, num_rows)));
-  if (csr_ != nullptr) {
-    std::shared_ptr<CSR> csr_ptr;
-    if (val_row_ids_.has_value()) {
-      std::tie(csr_ptr, select_index) =
-          DCSCColSlicing(csr_, val_row_ids_.value(), row_index);
+  if (on_format == _COO) {
+    CreateCOO();
+    std::shared_ptr<COO> coo_ptr;
+    torch::Tensor select_index, out_data;
+    auto global_ids = axis == 0 ? col_ids_ : row_ids_;
+    if (global_ids.has_value()) {
+      LOG(FATAL) << "Not implementation";
     } else {
-      std::tie(csr_ptr, select_index) = CSCColSlicing(csr_, row_index);
+      std::tie(coo_ptr, select_index) = COOColSlicing(coo_, n_ids, axis);
     }
-    ret->SetCSR(csr_ptr);
-    ret->SetNumEdges(csr_ptr->indices.numel());
+    ret->SetCOO(coo_ptr);
+    ret->SetNumEdges(coo_ptr->row.numel());
     if (data_.has_value()) {
-      if (csr_->e_ids.has_value()) {
+      if (coo_->e_ids.has_value())
         out_data =
-            data_.value().index({csr_->e_ids.value().index({select_index})});
-      } else {
+            data_.value().index({coo_->e_ids.value().index({select_index})});
+      else
         out_data = data_.value().index({select_index});
-      }
       ret->SetData(out_data);
     }
-  } else if (csc_ != nullptr) {
-    std::shared_ptr<CSC> csc_ptr;
-    std::tie(csc_ptr, select_index) = CSCRowSlicing(csc_, row_index);
-    ret->SetCSC(csc_ptr);
-    ret->SetNumEdges(csc_ptr->indices.numel());
+
+  } else if (on_format == _CSC) {
+    if (output_format == _CSR) {
+      LOG(FATAL) << "Error in Slicing, Not implementation [on_format = CSC, "
+                    "output_forat = CSR]";
+    }
+    CreateCSC();
+    torch::Tensor select_index, out_data;
+    std::shared_ptr<_TMP> tmp_ptr;
+    bool with_coo = output_format & _COO;
+    if (axis == 0) {
+      // for col
+      if (val_col_ids_.has_value())
+        std::tie(tmp_ptr, select_index) =
+            DCSCColSlicing(csc_, val_col_ids_.value(), n_ids, with_coo);
+      else if (col_ids_.has_value())
+        std::tie(tmp_ptr, select_index) =
+            DCSCColSlicing(csc_, col_ids_.value(), n_ids, with_coo);
+      else
+        std::tie(tmp_ptr, select_index) = CSCColSlicing(csc_, n_ids, with_coo);
+
+    } else {
+      // for row
+      if (row_ids_.has_value())
+        LOG(FATAL) << "Not implementation";
+      else {
+        std::tie(tmp_ptr, select_index) = CSCRowSlicing(csc_, n_ids, with_coo);
+        torch::cuda::synchronize();
+      }
+
+      if (val_col_ids_.has_value()) ret->SetValidCols(val_col_ids_.value());
+    }
+
+    if (output_format & _CSC)
+      ret->SetCSC(std::make_shared<CSC>(
+          CSC{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+    if (output_format & _COO)
+      ret->SetCOO(std::make_shared<COO>(COO{
+          tmp_ptr->coo_in_indices, tmp_ptr->coo_in_indptr, torch::nullopt}));
+    ret->SetNumEdges(tmp_ptr->coo_in_indices.numel());
     if (data_.has_value()) {
       if (csc_->e_ids.has_value()) {
         out_data =
@@ -206,11 +220,54 @@ c10::intrusive_ptr<Graph> Graph::RowwiseSlicing(torch::Tensor row_index) {
       }
       ret->SetData(out_data);
     }
-    if (val_col_ids_.has_value()) {
-      ret->SetValidCols(val_col_ids_.value());
+
+  } else if (on_format == _CSR) {
+    if (output_format == _CSC) {
+      LOG(FATAL) << "Error in Slicing, Not implementation [on_format = CSR, "
+                    "output_forat = CSC]";
+    }
+    CreateCSR();
+    torch::Tensor select_index, out_data;
+    std::shared_ptr<_TMP> tmp_ptr;
+    bool with_coo = output_format & _COO;
+    if (axis == 0) {
+      // for col
+      if (col_ids_.has_value())
+        LOG(FATAL) << "Not implementation";
+      else
+        std::tie(tmp_ptr, select_index) = CSCRowSlicing(csr_, n_ids, with_coo);
+
+      if (val_row_ids_.has_value()) ret->SetValidRows(val_row_ids_.value());
+
+    } else {
+      if (val_row_ids_.has_value())
+        std::tie(tmp_ptr, select_index) =
+            DCSCColSlicing(csr_, val_row_ids_.value(), n_ids, with_coo);
+      else if (row_ids_.has_value())
+        std::tie(tmp_ptr, select_index) =
+            DCSCColSlicing(csr_, row_ids_.value(), n_ids, with_coo);
+      else
+        std::tie(tmp_ptr, select_index) = CSCColSlicing(csr_, n_ids, with_coo);
+    }
+
+    if (output_format & _CSR)
+      ret->SetCSR(std::make_shared<CSR>(
+          CSR{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+    if (output_format & _COO)
+      ret->SetCOO(std::make_shared<COO>(COO{
+          tmp_ptr->coo_in_indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+    ret->SetNumEdges(tmp_ptr->coo_in_indices.numel());
+    if (data_.has_value()) {
+      if (csr_->e_ids.has_value()) {
+        out_data =
+            data_.value().index({csr_->e_ids.value().index({select_index})});
+      } else {
+        out_data = data_.value().index({select_index});
+      }
+      ret->SetData(out_data);
     }
   } else {
-    LOG(FATAL) << "Error in RowwiseSlicing: no CSC nor CSR";
+    LOG(FATAL) << "Not implementation";
   }
   return ret;
 }

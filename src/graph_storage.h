@@ -20,6 +20,12 @@ struct COO {
   torch::optional<torch::Tensor> e_ids;
 };
 
+struct _TMP {
+  torch::Tensor indptr;
+  torch::Tensor coo_in_indptr;
+  torch::Tensor coo_in_indices;
+};
+
 #define _CSR 4
 #define _CSC 2
 #define _COO 1
