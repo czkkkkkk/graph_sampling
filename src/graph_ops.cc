@@ -166,33 +166,34 @@ std::pair<std::shared_ptr<COO>, torch::Tensor> COOColSlicing(
   }
 }
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSampling(
-    std::shared_ptr<CSC> csc, int64_t fanout, bool replace) {
+std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCColSampling(
+    std::shared_ptr<CSC> csc, int64_t fanout, bool replace, bool with_coo) {
   if (csc->indptr.device().type() == torch::kCUDA) {
-    torch::Tensor sub_indptr, sub_indices, select_index;
-    std::tie(sub_indptr, sub_indices, select_index) =
-        impl::CSCColSamplingCUDA(csc->indptr, csc->indices, fanout, replace);
-    return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
+    torch::Tensor sub_indptr, sub_coo_col, sub_indices, select_index;
+    std::tie(sub_indptr, sub_coo_col, sub_indices, select_index) =
+        impl::CSCColSamplingCUDA(csc->indptr, csc->indices, fanout, replace,
+                                 with_coo);
+    return {std::make_shared<_TMP>(_TMP{sub_indptr, sub_coo_col, sub_indices}),
             select_index};
   } else {
     LOG(FATAL) << "Not implemented warning";
-    return {std::make_shared<CSC>(CSC{}), torch::Tensor()};
+    return {std::make_shared<_TMP>(_TMP{}), torch::Tensor()};
   }
 }
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> CSCColSamplingProbs(
+std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCColSamplingProbs(
     std::shared_ptr<CSC> csc, torch::Tensor edge_probs, int64_t fanout,
-    bool replace) {
+    bool replace, bool with_coo) {
   if (csc->indptr.device().type() == torch::kCUDA) {
-    torch::Tensor sub_indptr, sub_indices, select_index;
-    std::tie(sub_indptr, sub_indices, select_index) =
+    torch::Tensor sub_indptr, sub_coo_col, sub_indices, select_index;
+    std::tie(sub_indptr, sub_coo_col, sub_indices, select_index) =
         impl::CSCColSamplingProbsCUDA(csc->indptr, csc->indices, edge_probs,
-                                      fanout, replace);
-    return {std::make_shared<CSC>(CSC{sub_indptr, sub_indices, torch::nullopt}),
+                                      fanout, replace, with_coo);
+    return {std::make_shared<_TMP>(_TMP{sub_indptr, sub_coo_col, sub_indices}),
             select_index};
   } else {
     LOG(FATAL) << "Not implemented warning";
-    return {std::make_shared<CSC>(CSC{}), torch::Tensor()};
+    return {std::make_shared<_TMP>(_TMP{}), torch::Tensor()};
   }
 }
 

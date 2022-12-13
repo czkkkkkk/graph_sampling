@@ -272,45 +272,135 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
   return ret;
 }
 
-c10::intrusive_ptr<Graph> Graph::ColumnwiseSampling(int64_t fanout,
-                                                    bool replace) {
+c10::intrusive_ptr<Graph> Graph::Sampling(int64_t axis, int64_t fanout,
+                                          bool replace, int64_t on_format,
+                                          int64_t output_format) {
   torch::Tensor select_index, out_data;
-  std::shared_ptr<CSC> csc_ptr;
+  std::shared_ptr<_TMP> tmp_ptr;
+  bool with_coo = output_format & _COO;
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(true, col_ids_, row_ids_, num_cols_, num_rows_)));
-  std::tie(csc_ptr, select_index) = CSCColSampling(csc_, fanout, replace);
-  ret->SetCSC(csc_ptr);
-  ret->SetNumEdges(csc_ptr->indices.numel());
-  if (data_.has_value()) {
-    if (csc_->e_ids.has_value()) {
-      out_data =
-          data_.value().index({csc_->e_ids.value().index({select_index})});
-    } else {
-      out_data = data_.value().index({select_index});
+
+  if (axis == 0 && on_format == _CSC) {
+    if (output_format == _CSR)
+      LOG(FATAL) << "Error in Sampling, Not implementation [on_format = CSC, "
+                    "output_forat = CSR]";
+
+    CreateCSC();
+    std::tie(tmp_ptr, select_index) =
+        CSCColSampling(csc_, fanout, replace, with_coo);
+
+    if (output_format & _CSC)
+      ret->SetCSC(std::make_shared<CSC>(
+          CSC{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+    if (output_format & _COO)
+      ret->SetCOO(std::make_shared<COO>(COO{
+          tmp_ptr->coo_in_indices, tmp_ptr->coo_in_indptr, torch::nullopt}));
+    ret->SetNumEdges(tmp_ptr->coo_in_indices.numel());
+    if (data_.has_value()) {
+      if (csc_->e_ids.has_value()) {
+        out_data =
+            data_.value().index({csc_->e_ids.value().index({select_index})});
+      } else {
+        out_data = data_.value().index({select_index});
+      }
+      ret->SetData(out_data);
     }
-    ret->SetData(out_data);
+
+  } else if (axis == 1 && on_format == _CSR) {
+    if (output_format == _CSC)
+      LOG(FATAL) << "Error in Sampling, Not implementation [on_format = CSR, "
+                    "output_forat = CSC]";
+
+    CreateCSR();
+    std::tie(tmp_ptr, select_index) =
+        CSCColSampling(csr_, fanout, replace, with_coo);
+    if (output_format & _CSR)
+      ret->SetCSR(std::make_shared<CSR>(
+          CSR{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+    if (output_format & _COO)
+      ret->SetCOO(std::make_shared<COO>(COO{
+          tmp_ptr->coo_in_indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+    ret->SetNumEdges(tmp_ptr->coo_in_indices.numel());
+    if (data_.has_value()) {
+      if (csr_->e_ids.has_value()) {
+        out_data =
+            data_.value().index({csr_->e_ids.value().index({select_index})});
+      } else {
+        out_data = data_.value().index({select_index});
+      }
+      ret->SetData(out_data);
+    }
+
+  } else {
+    LOG(FATAL) << "No implementation!";
   }
   return ret;
 }
 
-c10::intrusive_ptr<Graph> Graph::ColumnwiseSamplingProbs(
-    torch::Tensor edge_probs, int64_t fanout, bool replace) {
+c10::intrusive_ptr<Graph> Graph::SamplingProbs(int64_t axis,
+                                               torch::Tensor edge_probs,
+                                               int64_t fanout, bool replace,
+                                               int64_t on_format,
+                                               int64_t output_format) {
   torch::Tensor select_index, out_data;
-  std::shared_ptr<CSC> csc_ptr;
+  std::shared_ptr<_TMP> tmp_ptr;
+  bool with_coo = output_format & _COO;
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(true, col_ids_, row_ids_, num_cols_, num_rows_)));
-  std::tie(csc_ptr, select_index) =
-      CSCColSamplingProbs(csc_, edge_probs, fanout, replace);
-  ret->SetCSC(csc_ptr);
-  ret->SetNumEdges(csc_ptr->indices.numel());
-  if (data_.has_value()) {
-    if (csc_->e_ids.has_value()) {
-      out_data =
-          data_.value().index({csc_->e_ids.value().index({select_index})});
-    } else {
-      out_data = data_.value().index({select_index});
+  if (axis == 0 && on_format == _CSC) {
+    if (output_format == _CSR)
+      LOG(FATAL) << "Error in Sampling, Not implementation [on_format = CSC, "
+                    "output_forat = CSR]";
+
+    CreateCSC();
+    std::tie(tmp_ptr, select_index) =
+        CSCColSamplingProbs(csc_, edge_probs, fanout, replace, with_coo);
+
+    if (output_format & _CSC)
+      ret->SetCSC(std::make_shared<CSC>(
+          CSC{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+    if (output_format & _COO)
+      ret->SetCOO(std::make_shared<COO>(COO{
+          tmp_ptr->coo_in_indices, tmp_ptr->coo_in_indptr, torch::nullopt}));
+    ret->SetNumEdges(tmp_ptr->coo_in_indices.numel());
+    if (data_.has_value()) {
+      if (csc_->e_ids.has_value()) {
+        out_data =
+            data_.value().index({csc_->e_ids.value().index({select_index})});
+      } else {
+        out_data = data_.value().index({select_index});
+      }
+      ret->SetData(out_data);
     }
-    ret->SetData(out_data);
+
+  } else if (axis == 1 && on_format == _CSR) {
+    if (output_format == _CSC)
+      LOG(FATAL) << "Error in Sampling, Not implementation [on_format = CSR, "
+                    "output_forat = CSC]";
+
+    CreateCSR();
+    std::tie(tmp_ptr, select_index) =
+        CSCColSamplingProbs(csr_, edge_probs, fanout, replace, with_coo);
+    if (output_format & _CSR)
+      ret->SetCSR(std::make_shared<CSR>(
+          CSR{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+    if (output_format & _COO)
+      ret->SetCOO(std::make_shared<COO>(COO{
+          tmp_ptr->coo_in_indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+    ret->SetNumEdges(tmp_ptr->coo_in_indices.numel());
+    if (data_.has_value()) {
+      if (csr_->e_ids.has_value()) {
+        out_data =
+            data_.value().index({csr_->e_ids.value().index({select_index})});
+      } else {
+        out_data = data_.value().index({select_index});
+      }
+      ret->SetData(out_data);
+    }
+
+  } else {
+    LOG(FATAL) << "No implementation!";
   }
   return ret;
 }

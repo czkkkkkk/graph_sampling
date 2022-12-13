@@ -17,9 +17,8 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_get_num_cols", &Graph::GetNumCols)
       .def("_CAPI_get_num_edges", &Graph::GetNumEdges)
       .def("_CAPI_slicing", &Graph::Slicing)
-      .def("_CAPI_columnwise_sampling", &Graph::ColumnwiseSampling)
-      .def("_CAPI_columnwise_sampling_with_probs",
-           &Graph::ColumnwiseSamplingProbs)
+      .def("_CAPI_sampling", &Graph::Sampling)
+      .def("_CAPI_sampling_with_probs", &Graph::SamplingProbs)
       .def("_CAPI_fused_columnwise_slicing_sampling",
            &Graph::ColumnwiseFusedSlicingAndSampling)
       .def("_CAPI_load_csc", &Graph::LoadCSC)

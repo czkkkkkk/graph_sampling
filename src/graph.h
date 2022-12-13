@@ -48,10 +48,13 @@ class Graph : public torch::CustomClassHolder {
                                               torch::Tensor row_seeds);
   c10::intrusive_ptr<Graph> Slicing(torch::Tensor n_ids, int64_t axis,
                                     int64_t on_format, int64_t output_format);
-  c10::intrusive_ptr<Graph> ColumnwiseSampling(int64_t fanout, bool replace);
-  c10::intrusive_ptr<Graph> ColumnwiseSamplingProbs(torch::Tensor edge_probs,
-                                                    int64_t fanout,
-                                                    bool replace);
+  c10::intrusive_ptr<Graph> Sampling(int64_t axis, int64_t fanout, bool replace,
+                                     int64_t on_format, int64_t output_format);
+  c10::intrusive_ptr<Graph> SamplingProbs(int64_t axis,
+                                          torch::Tensor edge_probs,
+                                          int64_t fanout, bool replace,
+                                          int64_t on_format,
+                                          int64_t output_format);
   c10::intrusive_ptr<Graph> ColumnwiseFusedSlicingAndSampling(
       torch::Tensor column_index, int64_t fanout, bool replace);
   torch::Tensor Sum(int64_t axis, int64_t powk, int64_t on_format);

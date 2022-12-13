@@ -263,14 +263,20 @@ _CSCColSamplingProbs(torch::Tensor indptr, torch::Tensor indices,
   return {sub_indptr, coo_col, sub_indices, select_index};
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColSamplingProbsCUDA(
-    torch::Tensor indptr, torch::Tensor indices, torch::Tensor probs,
-    int64_t fanout, bool replace) {
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+CSCColSamplingProbsCUDA(torch::Tensor indptr, torch::Tensor indices,
+                        torch::Tensor probs, int64_t fanout, bool replace,
+                        bool with_coo) {
   torch::Tensor out_indptr, out_coo_col, out_indices, out_selected_index;
-  std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
-      _CSCColSamplingProbs<int64_t, float, false>(indptr, indices, probs,
-                                                  fanout, replace);
-  return {out_indptr, out_indices, out_selected_index};
+  if (with_coo)
+    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
+        _CSCColSamplingProbs<int64_t, float, true>(indptr, indices, probs,
+                                                   fanout, replace);
+  else
+    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
+        _CSCColSamplingProbs<int64_t, float, false>(indptr, indices, probs,
+                                                    fanout, replace);
+  return {out_indptr, out_coo_col, out_indices, out_selected_index};
 }
 }  // namespace impl
 }  // namespace gs

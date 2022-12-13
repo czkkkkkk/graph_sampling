@@ -152,12 +152,17 @@ _CSCColSampling(torch::Tensor indptr, torch::Tensor indices, int64_t fanout,
   return {sub_indptr, coo_col, sub_indices, select_index};
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> CSCColSamplingCUDA(
-    torch::Tensor indptr, torch::Tensor indices, int64_t fanout, bool replace) {
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+CSCColSamplingCUDA(torch::Tensor indptr, torch::Tensor indices, int64_t fanout,
+                   bool replace, bool with_coo) {
   torch::Tensor out_indptr, out_coo_col, out_indices, out_selected_index;
-  std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
-      _CSCColSampling<int64_t, false>(indptr, indices, fanout, replace);
-  return {out_indptr, out_indices, out_selected_index};
+  if (with_coo)
+    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
+        _CSCColSampling<int64_t, true>(indptr, indices, fanout, replace);
+  else
+    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
+        _CSCColSampling<int64_t, false>(indptr, indices, fanout, replace);
+  return {out_indptr, out_coo_col, out_indices, out_selected_index};
 }
 
 }  // namespace impl
