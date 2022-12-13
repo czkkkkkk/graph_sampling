@@ -258,7 +258,7 @@ void CSCGraphSum(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
 void COOGraphSum(std::shared_ptr<COO> coo, torch::Tensor data,
                  torch::Tensor out_data, int64_t powk, int target_side) {
   if (coo->col.device().type() == torch::kCUDA) {
-    auto target = (target_side == 0) ? coo->col : coo->row;
+    auto target = (target_side == 0) ? coo->row : coo->col;
     impl::COOSumCUDA(target, coo->e_ids, data, out_data, powk);
   } else {
     LOG(FATAL) << "Not implemented warning";
@@ -309,7 +309,7 @@ void COOGraphNormalize(std::shared_ptr<COO> coo, torch::Tensor data,
   if (coo->col.device().type() == torch::kCUDA) {
     auto segmented_sum = torch::zeros(side_len, data.options());
     auto target = (target_side == 0) ? coo->row : coo->col;
-    impl::COOSumCUDA(target, coo->e_ids, data, out_data, 1);
+    impl::COOSumCUDA(target, coo->e_ids, data, segmented_sum, 1);
     const auto& bcast = CalcBcastOff("div", data, segmented_sum);
     int rhs_target = (target_side == 0) ? 0 : 2;
     impl::SDDMMCOO("div", bcast, coo, data, segmented_sum, out_data, 1,

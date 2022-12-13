@@ -20,6 +20,7 @@ class Graph : public torch::CustomClassHolder {
         col_ids_{col_ids},
         row_ids_{row_ids} {}
   void LoadCSC(torch::Tensor indptr, torch::Tensor indices);
+  void LoadCOO(torch::Tensor row, torch::Tensor col);
   void LoadCSR(torch::Tensor indptr, torch::Tensor indices);
   void LoadCSCWithColIds(torch::Tensor column_ids, torch::Tensor indptr,
                          torch::Tensor indices);

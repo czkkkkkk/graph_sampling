@@ -20,6 +20,18 @@ void Graph::LoadCSC(torch::Tensor indptr, torch::Tensor indices) {
             << indices.numel() << " edges";
 }
 
+void Graph::LoadCOO(torch::Tensor row, torch::Tensor col) {
+  coo_ = std::make_shared<COO>();
+  coo_->row = row;
+  coo_->col = col;
+  auto num_nodes = std::max(std::get<0>(torch::_unique(row)).numel(),
+                            std::get<0>(torch::_unique(col)).numel());
+  num_cols_ = num_rows_ = num_nodes;
+  num_edges_ = row.numel();
+  LOG(INFO) << "Loaded COO with " << num_nodes << " nodes and " << num_edges_
+            << " edges";
+}
+
 void Graph::LoadCSCWithColIds(torch::Tensor column_ids, torch::Tensor indptr,
                               torch::Tensor indices) {
   if (column_ids.numel() != indptr.numel() - 1) {
@@ -98,9 +110,9 @@ void Graph::CreateCSC() {
   if (coo_ != nullptr) {
     if (is_subgraph_) {
       val_col_ids_ = std::get<0>(torch::_unique(coo_->col));
-      SetCSR(GraphCOO2DCSC(coo_, val_col_ids_.value(), true));
+      SetCSC(GraphCOO2DCSC(coo_, val_col_ids_.value(), true));
     } else {
-      SetCSR(GraphCOO2CSC(coo_, num_cols_, true));
+      SetCSC(GraphCOO2CSC(coo_, num_cols_, true));
     }
   } else {
     if (is_subgraph_) {
@@ -482,7 +494,7 @@ torch::Tensor Graph::Sum(int64_t axis, int64_t powk, int64_t on_format) {
 
   if (on_format == _COO) {
     CreateCOO();
-    COOGraphSum(coo_, in_data, out_data, powk, axis);
+    COOGraphSum(coo_, in_data, out_data, powk, 1 - axis);
   } else if (axis == 0 && on_format == _CSC) {
     CreateCSC();
     CSCGraphSum(csc_, val_col_ids_, in_data, out_data, powk);
@@ -507,7 +519,7 @@ c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis,
   torch::Tensor out_data = torch::zeros(num_edges_, in_data.options());
   if (on_format == _COO) {
     CreateCOO();
-    COOGraphDiv(coo_, in_data, divisor, out_data, axis);
+    COOGraphDiv(coo_, in_data, divisor, out_data, 1 - axis);
   } else if (axis == 0 && on_format == _CSC) {
     CreateCSC();
     CSCGraphDiv(csc_, val_col_ids_, in_data, divisor, out_data);
@@ -535,9 +547,9 @@ c10::intrusive_ptr<Graph> Graph::Normalize(int64_t axis, int64_t on_format) {
   if (on_format == _COO) {
     CreateCOO();
     if (axis == 0)
-      COOGraphNormalize(coo_, in_data, out_data, num_cols_, axis);
+      COOGraphNormalize(coo_, in_data, out_data, num_cols_, 1);
     else
-      COOGraphNormalize(coo_, in_data, out_data, num_rows_, axis);
+      COOGraphNormalize(coo_, in_data, out_data, num_rows_, 0);
   } else if (axis == 0 && on_format == _CSC) {
     CreateCSC();
     CSCGraphNormalize(csc_, val_col_ids_, in_data, out_data);
@@ -665,19 +677,19 @@ torch::Tensor Graph::GetCols() {
 }
 
 torch::Tensor Graph::GetValidRows() {
-  if (row_ids_.has_value()) {
-    return row_ids_.value();
-  } else {
-    return std::get<0>(torch::_unique(GetCOORows(true)));
-  }
+  torch::Tensor valid_row_local_ids =
+      val_row_ids_.has_value() ? val_row_ids_.value()
+                               : std::get<0>(torch::_unique(GetCOORows(true)));
+  return row_ids_.has_value() ? row_ids_.value().index({valid_row_local_ids})
+                              : valid_row_local_ids;
 }
 
 torch::Tensor Graph::GetValidCols() {
-  if (col_ids_.has_value()) {
-    return col_ids_.value();
-  } else {
-    return std::get<0>(torch::_unique(GetCOOCols(true)));
-  }
+  torch::Tensor valid_col_local_ids =
+      val_col_ids_.has_value() ? val_col_ids_.value()
+                               : std::get<0>(torch::_unique(GetCOOCols(true)));
+  return col_ids_.has_value() ? col_ids_.value().index({valid_col_local_ids})
+                              : valid_col_local_ids;
 }
 
 torch::Tensor Graph::GetCOORows(bool is_original) {
@@ -755,7 +767,7 @@ void Graph::SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
                    rhs_target);
   } else if (on_format == _CSC) {
     CreateCSC();
-    impl::SDDMMCSC(op, bcast, csc_, val_row_ids_, lhs, rhs, out, lhs_target,
+    impl::SDDMMCSC(op, bcast, csc_, val_col_ids_, lhs, rhs, out, lhs_target,
                    rhs_target);
   } else {
     LOG(FATAL) << "SDDMM only supports CSR and COO formats";
