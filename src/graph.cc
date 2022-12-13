@@ -32,13 +32,66 @@ void Graph::LoadCSCWithColIds(torch::Tensor column_ids, torch::Tensor indptr,
   num_edges_ = indices.numel();
 }
 
-std::shared_ptr<CSC> Graph::GetCSC() { return csc_; }
+std::shared_ptr<CSC> Graph::GetCSC() {
+  if (csc_ == nullptr) {
+    if (coo_ != nullptr) {
+      SetCSC(GraphCOO2CSC(coo_, num_cols_, true));
+    } else if (csr_ != nullptr) {
+      CSR2CSC();
+    }
+  }
+  return csc_;
+}
 
-std::shared_ptr<CSR> Graph::GetCSR() { return csr_; }
+std::shared_ptr<CSR> Graph::GetCSR() {
+  if (csr_ == nullptr) {
+    if (coo_ != nullptr) {
+      SetCSR(GraphCOO2CSC(coo_, num_rows_, false));
+    } else if (csc_ != nullptr) {
+      CSC2CSR();
+    }
+  }
+  return csr_;
+}
 
-std::shared_ptr<COO> Graph::GetCOO() { return coo_; }
+std::shared_ptr<COO> Graph::GetCOO() {
+  if (coo_ == nullptr) {
+    if (csc_ != nullptr) {
+      SetCOO(GraphCSC2COO(csc_, true));
+    } else if (csr_ != nullptr) {
+      SetCOO(GraphCSC2COO(csr_, false));
+    }
+  }
+  return coo_;
+}
 
-torch::optional<torch::Tensor> Graph::GetData() { return data_; }
+torch::optional<torch::Tensor> Graph::GetData(std::string order) {
+  auto data =
+      data_.has_value()
+          ? data_.value()
+          : torch::ones(num_edges_,
+                        torch::dtype(torch::kFloat32).device(torch::kCUDA));
+  bool need_idx = false;
+  torch::Tensor idx;
+  if (order == "col") {
+    if (csc_ == nullptr) {
+      GetCSC();
+    }
+    if (csc_->e_ids.has_value()) {
+      need_idx = true;
+      idx = csc_->e_ids.value();
+    }
+  } else if (order == "row") {
+    if (csr_ == nullptr) {
+      GetCSR();
+    }
+    if (csr_->e_ids.has_value()) {
+      need_idx = true;
+      idx = csr_->e_ids.value();
+    }
+  }
+  return need_idx ? data[idx] : data;
+}
 
 int64_t Graph::GetNumCols() { return num_cols_; }
 
@@ -52,7 +105,24 @@ void Graph::SetCSR(std::shared_ptr<CSR> csr) { csr_ = csr; }
 
 void Graph::SetCOO(std::shared_ptr<COO> coo) { coo_ = coo; }
 
-void Graph::SetData(torch::Tensor data) { data_ = data; }
+void Graph::SetData(torch::Tensor data, std::string order) {
+  bool need_permutation = false;
+  torch::Tensor idx;
+  if (order == "col") {
+    GetCSC();
+    need_permutation = csc_->e_ids.has_value();
+    if (need_permutation) {
+      idx = csc_->e_ids.value();
+    }
+  } else if (order == "row") {
+    GetCSR();
+    need_permutation = csr_->e_ids.has_value();
+    if (need_permutation) {
+      idx = csr_->e_ids.value();
+    }
+  }
+  data_ = need_permutation ? data[idx] : data;
+}
 
 c10::intrusive_ptr<Graph> Graph::FusedBidirSlicing(torch::Tensor column_seeds,
                                                    torch::Tensor row_seeds) {
@@ -215,16 +285,12 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
 
 void Graph::CSC2CSR() {
   SetCOO(GraphCSC2COO(csc_, true));
-  int64_t num_rows =
-      (row_ids_.has_value()) ? row_ids_.value().numel() : num_rows_;
-  SetCSR(GraphCOO2CSC(coo_, num_rows, false));
+  SetCSR(GraphCOO2CSC(coo_, num_rows_, false));
 }
 
 void Graph::CSR2CSC() {
   SetCOO(GraphCSC2COO(csr_, false));
-  int64_t num_cols =
-      (col_ids_.has_value()) ? col_ids_.value().numel() : num_cols_;
-  SetCSC(GraphCOO2CSC(coo_, num_cols, true));
+  SetCSC(GraphCOO2CSC(coo_, num_cols_, true));
 }
 
 void Graph::CreateSparseFormat(int64_t axis) {
@@ -320,8 +386,9 @@ Graph::Relabel() {
   torch::Tensor col_ids = col_ids_.value();
 
   if (csc_ != nullptr) {
-    torch::Tensor row_ids =
-        (row_ids_.has_value()) ? row_ids_.value() : csc_->indices;
+    torch::Tensor row_ids = (row_ids_.has_value())
+                                ? row_ids_.value().index({csc_->indices})
+                                : csc_->indices;
     torch::Tensor row_indices = row_ids_.has_value()
                                     ? row_ids_.value().index({csc_->indices})
                                     : csc_->indices;
@@ -347,8 +414,9 @@ Graph::Relabel() {
     if (coo_ == nullptr) {
       SetCOO(GraphCSC2COO(csr_, false));
     }
-    torch::Tensor row_ids =
-        (row_ids_.has_value()) ? row_ids_.value() : coo_->row;
+    torch::Tensor row_ids = (row_ids_.has_value())
+                                ? row_ids_.value().index({coo_->row})
+                                : coo_->row;
 
     torch::Tensor coo_col = col_ids.index({coo_->col});
     torch::Tensor coo_row = (row_ids_.has_value())
