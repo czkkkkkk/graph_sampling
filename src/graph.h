@@ -19,7 +19,10 @@ class Graph : public torch::CustomClassHolder {
         num_rows_{num_rows},
         col_ids_{col_ids},
         row_ids_{row_ids} {}
+  Graph(bool is_subgraph, int64_t num_nodes)
+      : is_subgraph_{is_subgraph}, num_nodes_{num_nodes} {}
   void LoadCSC(torch::Tensor indptr, torch::Tensor indices);
+  void FullLoadCSC(torch::Tensor indptr, torch::Tensor indices);
   void LoadCOO(torch::Tensor row, torch::Tensor col);
   void LoadCSR(torch::Tensor indptr, torch::Tensor indices);
   void LoadCSCWithColIds(torch::Tensor column_ids, torch::Tensor indptr,
@@ -36,6 +39,7 @@ class Graph : public torch::CustomClassHolder {
   void CSR2CSC();
   void CSR2DCSC();
   void CreateSparseFormat(int64_t format);
+  void FullCreateSparseFormat(int64_t format);
   std::shared_ptr<CSC> GetCSC();
   std::shared_ptr<CSR> GetCSR();
   std::shared_ptr<COO> GetCOO();
@@ -54,12 +58,24 @@ class Graph : public torch::CustomClassHolder {
                                           int64_t fanout, bool replace,
                                           int64_t on_format,
                                           int64_t output_format);
+  c10::intrusive_ptr<Graph> FullSlicing(torch::Tensor n_ids, int64_t axis,
+                                        int64_t on_format);
+  c10::intrusive_ptr<Graph> FullSampling(int64_t axis, int64_t fanout,
+                                         bool replace, int64_t on_format);
+  c10::intrusive_ptr<Graph> FullSamplingProbs(int64_t axis,
+                                              torch::Tensor edge_probs,
+                                              int64_t fanout, bool replace,
+                                              int64_t on_format);
   c10::intrusive_ptr<Graph> ColumnwiseFusedSlicingAndSampling(
       torch::Tensor column_index, int64_t fanout, bool replace);
   torch::Tensor Sum(int64_t axis, int64_t powk, int64_t on_format);
   c10::intrusive_ptr<Graph> Divide(torch::Tensor divisor, int64_t axis,
                                    int64_t on_format);
   c10::intrusive_ptr<Graph> Normalize(int64_t axis, int64_t on_format);
+  torch::Tensor FullSum(int64_t axis, int64_t powk, int64_t on_format);
+  c10::intrusive_ptr<Graph> FullDivide(torch::Tensor divisor, int64_t axis,
+                                       int64_t on_format);
+  c10::intrusive_ptr<Graph> FullNormalize(int64_t axis, int64_t on_format);
   // A "valid" node means that the node is required by the user or that it is
   // not an isolated node.
   torch::Tensor AllValidNode();
@@ -81,13 +97,18 @@ class Graph : public torch::CustomClassHolder {
   void SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
              torch::Tensor out, int64_t lhs_target, int64_t rhs_target,
              int64_t on_format);
+  void FullSDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
+                 torch::Tensor out, int64_t lhs_target, int64_t rhs_target,
+                 int64_t on_format);
 
+  std::vector<torch::Tensor> FullGetCOO();
   // todo: return global_e_id
  private:
   bool is_subgraph_;
   int64_t num_cols_;  // total number of cols in a matrix
   int64_t num_rows_;  // total number of rows in a matrix
   int64_t num_edges_;
+  int64_t num_nodes_;
   std::shared_ptr<CSC> csc_;
   std::shared_ptr<CSR> csr_;
   std::shared_ptr<COO> coo_;

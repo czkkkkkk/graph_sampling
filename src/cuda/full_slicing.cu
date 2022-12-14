@@ -163,10 +163,9 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> FullCSCColSlicingCUDA(
 ////////////////////////////// indices slicing //////////////////////////
 template <typename IdType, int BLOCK_WARPS, int TILE_SIZE>
 __global__ void _OnIndicesSlicinigQueryKernel(
-    const IdType* column_ids, const IdType* const in_indptr,
-    const IdType* const in_indices, IdType* const key_buffer,
-    IdType* const value_buffer, IdType* out_coo_col, IdType* const out_mask,
-    const int num_items, const int dir_size) {
+    const IdType* const in_indptr, const IdType* const in_indices,
+    IdType* const key_buffer, IdType* const value_buffer, IdType* out_coo_col,
+    IdType* const out_mask, const int num_items, const int dir_size) {
   assert(blockDim.x == WARP_SIZE);
   assert(blockDim.y == BLOCK_WARPS);
 
@@ -187,7 +186,7 @@ __global__ void _OnIndicesSlicinigQueryKernel(
       IdType value = hashmap.Query(in_indices[idx]);
       if (value != -1) {
         out_mask[idx] = 1;
-        out_coo_col[idx] = column_ids[out_row];
+        out_coo_col[idx] = out_row;
       }
     }
     out_row += BLOCK_WARPS;
@@ -196,8 +195,7 @@ __global__ void _OnIndicesSlicinigQueryKernel(
 
 template <typename IdType>
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _OnIndicesSlicing(
-    torch::Tensor column_ids, torch::Tensor indptr, torch::Tensor indices,
-    torch::Tensor row_ids) {
+    torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids) {
   int num_items = indptr.numel() - 1;
   int num_row_ids = row_ids.numel();
 
@@ -205,7 +203,6 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _OnIndicesSlicing(
   int dir_size = UpPower(num_row_ids) * 2;
   torch::Tensor key_buffer = torch::full(dir_size, -1, indptr.options());
   torch::Tensor value_buffer = torch::full(dir_size, -1, indices.options());
-
   using it = thrust::counting_iterator<IdType>;
   thrust::for_each(thrust::device, it(0), it(num_row_ids),
                    [key = row_ids.data_ptr<IdType>(),
@@ -224,13 +221,12 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _OnIndicesSlicing(
 
   torch::Tensor out_coo_col = torch::empty_like(indices);
   torch::Tensor out_mask = torch::zeros_like(indices);
-
   // query hashmap to get mask
   _OnIndicesSlicinigQueryKernel<IdType, BLOCK_WARP, TILE_SIZE><<<grid, block>>>(
-      column_ids.data_ptr<IdType>(), indptr.data_ptr<IdType>(),
-      indices.data_ptr<IdType>(), key_buffer.data_ptr<IdType>(),
-      value_buffer.data_ptr<IdType>(), out_coo_col.data_ptr<IdType>(),
-      out_mask.data_ptr<IdType>(), num_items, dir_size);
+      indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
+      key_buffer.data_ptr<IdType>(), value_buffer.data_ptr<IdType>(),
+      out_coo_col.data_ptr<IdType>(), out_mask.data_ptr<IdType>(), num_items,
+      dir_size);
 
   torch::Tensor select_index = torch::nonzero(out_mask).reshape({
       -1,
@@ -241,12 +237,11 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _OnIndicesSlicing(
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> FullCSCRowSlicingCUDA(
-    torch::Tensor column_ids, torch::Tensor indptr, torch::Tensor indices,
-    torch::Tensor row_ids) {
+    torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids) {
   torch::Tensor coo_row, coo_col, select_index;
 
   std::tie(coo_row, coo_col, select_index) =
-      _OnIndicesSlicing<int64_t>(column_ids, indptr, indices, row_ids);
+      _OnIndicesSlicing<int64_t>(indptr, indices, row_ids);
   return {coo_row, coo_col, select_index};
 };
 

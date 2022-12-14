@@ -11,8 +11,8 @@ namespace impl {
 template <typename IdType>
 __global__ void _SampleSubIndicesReplaceKernel(IdType* coo_row,
                                                IdType* select_index,
-                                               IdType* coo_col, IdType* col_ids,
-                                               IdType* indptr, IdType* indices,
+                                               IdType* coo_col, IdType* indptr,
+                                               IdType* indices,
                                                IdType* sub_indptr, int64_t size,
                                                const uint64_t random_seed) {
   int64_t row = blockIdx.x * blockDim.y + threadIdx.y;
@@ -31,7 +31,7 @@ __global__ void _SampleSubIndicesReplaceKernel(IdType* coo_row,
       in_pos = in_start + edge;
       select_index[out_pos] = in_pos;
       coo_row[out_pos] = indices[in_pos];
-      coo_row[out_pos] = col_ids[row];
+      coo_col[out_pos] = row;
     }
     row += gridDim.x * blockDim.y;
   }
@@ -39,9 +39,9 @@ __global__ void _SampleSubIndicesReplaceKernel(IdType* coo_row,
 
 template <typename IdType>
 __global__ void _SampleSubIndicesKernel(IdType* coo_row, IdType* select_index,
-                                        IdType* coo_col, IdType* col_ids,
-                                        IdType* indptr, IdType* indices,
-                                        IdType* sub_indptr, int64_t size,
+                                        IdType* coo_col, IdType* indptr,
+                                        IdType* indices, IdType* sub_indptr,
+                                        int64_t size,
                                         const uint64_t random_seed) {
   int64_t row = blockIdx.x * blockDim.y + threadIdx.y;
   curandStatePhilox4_32_10_t rng;
@@ -60,7 +60,7 @@ __global__ void _SampleSubIndicesKernel(IdType* coo_row, IdType* select_index,
 
         select_index[out_pos] = in_pos;
         coo_row[out_pos] = indices[in_pos];
-        coo_col[out_pos] = col_ids[row];
+        coo_col[out_pos] = row;
       }
     } else {
       // reservoir algorithm
@@ -82,7 +82,7 @@ __global__ void _SampleSubIndicesKernel(IdType* coo_row, IdType* select_index,
         const IdType perm_idx = in_start + coo_row[out_pos];
         coo_row[out_pos] = indices[perm_idx];
         select_index[out_pos] = perm_idx;
-        coo_row[out_pos] = col_ids[row];
+        coo_col[out_pos] = row;
       }
     }
     row += gridDim.x * blockDim.y;
@@ -90,9 +90,8 @@ __global__ void _SampleSubIndicesKernel(IdType* coo_row, IdType* select_index,
 }
 
 template <typename IdType>
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _CSCColSampling(
-    torch::Tensor col_ids, torch::Tensor indptr, torch::Tensor indices,
-    int64_t fanout, bool replace) {
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> __CSCColSampling(
+    torch::Tensor indptr, torch::Tensor indices, int64_t fanout, bool replace) {
   int64_t num_items = indptr.numel() - 1;
   auto sub_indptr = torch::empty(num_items + 1, indptr.options());
 
@@ -116,7 +115,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _CSCColSampling(
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
   int nnz = item_prefix[num_items];  // cpu
-  auto coo_row = torch::empty(nnz, indices.options());
+  auto coo_row = torch::ones(nnz, indices.options());
   auto coo_col = torch::empty(nnz, indices.options());
   auto select_index = torch::empty(nnz, indices.options());
 
@@ -126,26 +125,25 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _CSCColSampling(
   if (replace) {
     _SampleSubIndicesReplaceKernel<IdType><<<grid, block>>>(
         coo_row.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
-        coo_col.data_ptr<IdType>(), col_ids.data_ptr<IdType>(),
-        indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
-        sub_indptr.data_ptr<IdType>(), num_items, random_seed);
+        coo_col.data_ptr<IdType>(), indptr.data_ptr<IdType>(),
+        indices.data_ptr<IdType>(), sub_indptr.data_ptr<IdType>(), num_items,
+        random_seed);
   } else {
     _SampleSubIndicesKernel<IdType><<<grid, block>>>(
         coo_row.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
-        coo_col.data_ptr<IdType>(), col_ids.data_ptr<IdType>(),
-        indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
-        sub_indptr.data_ptr<IdType>(), num_items, random_seed);
+        coo_col.data_ptr<IdType>(), indptr.data_ptr<IdType>(),
+        indices.data_ptr<IdType>(), sub_indptr.data_ptr<IdType>(), num_items,
+        random_seed);
   }
 
   return {coo_row, coo_col, select_index};
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> FullCSCColSamplingCUDA(
-    torch::Tensor col_ids, torch::Tensor indptr, torch::Tensor indices,
-    int64_t fanout, bool replace) {
+    torch::Tensor indptr, torch::Tensor indices, int64_t fanout, bool replace) {
   torch::Tensor coo_row, coo_col, selected_index;
   std::tie(coo_row, coo_col, selected_index) =
-      _CSCColSampling<int64_t>(col_ids, indptr, indices, fanout, replace);
+      __CSCColSampling<int64_t>(indptr, indices, fanout, replace);
   return {coo_row, coo_col, selected_index};
 }
 

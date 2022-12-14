@@ -327,11 +327,11 @@ torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
 }
 
 std::pair<std::shared_ptr<COO>, torch::Tensor> FullCSCColSlicing(
-    std::shared_ptr<CSC> csc, torch::Tensor col_ids) {
+    std::shared_ptr<CSC> csc, torch::Tensor node_ids) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor coo_row, coo_col, select_index;
     std::tie(coo_row, coo_col, select_index) =
-        impl::FullCSCColSlicingCUDA(csc->indptr, csc->indices, col_ids);
+        impl::FullCSCColSlicingCUDA(csc->indptr, csc->indices, node_ids);
     return {std::make_shared<COO>(COO{coo_row, coo_col, torch::nullopt}),
             select_index};
   } else {
@@ -341,11 +341,11 @@ std::pair<std::shared_ptr<COO>, torch::Tensor> FullCSCColSlicing(
 }
 
 std::pair<std::shared_ptr<COO>, torch::Tensor> FullCSCRowSlicing(
-    std::shared_ptr<CSC> csc, torch::Tensor col_ids, torch::Tensor node_ids) {
+    std::shared_ptr<CSC> csc, torch::Tensor node_ids) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor coo_row, coo_col, select_index;
-    std::tie(coo_row, coo_col, select_index) = impl::FullCSCRowSlicingCUDA(
-        col_ids, csc->indptr, csc->indices, node_ids);
+    std::tie(coo_row, coo_col, select_index) =
+        impl::FullCSCRowSlicingCUDA(csc->indptr, csc->indices, node_ids);
     return {std::make_shared<COO>(COO{coo_row, coo_col, torch::nullopt}),
             select_index};
   } else {
@@ -374,12 +374,11 @@ std::pair<std::shared_ptr<COO>, torch::Tensor> FullCOOColSlicing(
 }
 
 std::pair<std::shared_ptr<COO>, torch::Tensor> FullCSCColSampling(
-    std::shared_ptr<CSC> csc, torch::Tensor col_ids, int64_t fanout,
-    bool replace) {
+    std::shared_ptr<CSC> csc, int64_t fanout, bool replace) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor coo_row, coo_col, select_index;
     std::tie(coo_row, coo_col, select_index) = impl::FullCSCColSamplingCUDA(
-        col_ids, csc->indptr, csc->indices, fanout, replace);
+        csc->indptr, csc->indices, fanout, replace);
     return {std::make_shared<COO>(COO{coo_row, coo_col, torch::nullopt}),
             select_index};
   } else {
@@ -389,13 +388,13 @@ std::pair<std::shared_ptr<COO>, torch::Tensor> FullCSCColSampling(
 }
 
 std::pair<std::shared_ptr<COO>, torch::Tensor> FullCSCColSamplingProbs(
-    std::shared_ptr<CSC> csc, torch::Tensor col_ids, torch::Tensor edge_probs,
-    int64_t fanout, bool replace) {
+    std::shared_ptr<CSC> csc, torch::Tensor edge_probs, int64_t fanout,
+    bool replace) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor coo_row, coo_col, select_index;
     std::tie(coo_row, coo_col, select_index) =
-        impl::FullCSCColSamplingProbsCUDA(col_ids, csc->indptr, csc->indices,
-                                          edge_probs, fanout, replace);
+        impl::FullCSCColSamplingProbsCUDA(csc->indptr, csc->indices, edge_probs,
+                                          fanout, replace);
     return {std::make_shared<COO>(COO{coo_row, coo_col, torch::nullopt}),
             select_index};
   } else {

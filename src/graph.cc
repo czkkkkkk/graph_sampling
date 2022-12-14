@@ -793,4 +793,262 @@ void Graph::SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
   }
 }
 
+void Graph::FullLoadCSC(torch::Tensor indptr, torch::Tensor indices) {
+  csc_ = std::make_shared<CSC>(CSC{indptr, indices, torch::nullopt});
+  num_nodes_ = indptr.numel() - 1;
+  num_edges_ = indices.numel();
+  LOG(INFO) << "Loaded CSC with " << num_nodes_ << " nodes and " << num_edges_
+            << " edges";
+}
+
+void Graph::FullCreateSparseFormat(int64_t format) {
+  if (format == _CSC) {
+    if (csc_ != nullptr) return;
+    if (coo_ != nullptr) {
+      SetCSC(GraphCOO2CSC(coo_, num_nodes_, true));
+    } else {
+      SetCOO(GraphCSC2COO(csr_, false));
+      SetCSC(GraphCOO2CSC(coo_, num_nodes_, true));
+    }
+  } else if (format == _COO) {
+    if (coo_ != nullptr) return;
+    if (csc_ != nullptr)
+      SetCOO(GraphCSC2COO(csc_, true));
+    else
+      SetCOO(GraphCSC2COO(csr_, false));
+  } else if (format == _CSR) {
+    if (csr_ != nullptr) return;
+    if (coo_ != nullptr) {
+      SetCSR(GraphCOO2CSC(coo_, num_nodes_, false));
+    } else {
+      SetCOO(GraphCSC2COO(csc_, true));
+      SetCSR(GraphCOO2CSC(coo_, num_nodes_, false));
+    }
+  }
+}
+
+// axis = 0 for col, axis = 1 for row
+c10::intrusive_ptr<Graph> Graph::FullSlicing(torch::Tensor n_ids, int64_t axis,
+                                             int64_t on_format) {
+  c10::intrusive_ptr<Graph> ret = c10::intrusive_ptr<Graph>(
+      std::unique_ptr<Graph>(new Graph(true, num_nodes_)));
+  std::shared_ptr<COO> coo_ptr;
+  torch::Tensor select_index;
+  torch::Tensor out_data;
+
+  FullCreateSparseFormat(on_format);
+
+  if (axis == 0) {
+    if (on_format == _CSC) {
+      std::tie(coo_ptr, select_index) = FullCSCColSlicing(csc_, n_ids);
+    } else if (on_format == _COO) {
+      std::tie(coo_ptr, select_index) = FullCOOColSlicing(coo_, n_ids, axis);
+    } else if (on_format == _CSR) {
+      std::tie(coo_ptr, select_index) = FullCSCRowSlicing(csr_, n_ids);
+    }
+
+  } else {
+    if (on_format == _CSR) {
+      std::tie(coo_ptr, select_index) = FullCSCColSlicing(csr_, n_ids);
+    } else if (on_format == _COO) {
+      std::tie(coo_ptr, select_index) = FullCOOColSlicing(coo_, n_ids, axis);
+    } else if (on_format == _CSC) {
+      std::tie(coo_ptr, select_index) = FullCSCRowSlicing(csc_, n_ids);
+    }
+  }
+
+  if (on_format == _CSR) {
+    ret->SetCOO(
+        std::make_shared<COO>(COO{coo_ptr->col, coo_ptr->row, coo_ptr->e_ids}));
+  } else {
+    ret->SetCOO(coo_ptr);
+  }
+
+  ret->SetNumEdges(coo_ptr->row.numel());
+  if (data_.has_value()) {
+    if (coo_->e_ids.has_value())
+      out_data =
+          data_.value().index({coo_->e_ids.value().index({select_index})});
+    else
+      out_data = data_.value().index({select_index});
+    ret->SetData(out_data);
+  }
+
+  return ret;
+}
+
+c10::intrusive_ptr<Graph> Graph::FullSampling(int64_t axis, int64_t fanout,
+                                              bool replace, int64_t on_format) {
+  FullCreateSparseFormat(on_format);
+  c10::intrusive_ptr<Graph> ret = c10::intrusive_ptr<Graph>(
+      std::unique_ptr<Graph>(new Graph(true, num_nodes_)));
+  std::shared_ptr<COO> coo_ptr;
+  torch::Tensor select_index;
+  torch::Tensor out_data;
+  if (axis == 0 && on_format == _CSC) {
+    std::tie(coo_ptr, select_index) = FullCSCColSampling(csc_, fanout, replace);
+  } else if (axis == 1 && on_format == _CSR) {
+    std::tie(coo_ptr, select_index) = FullCSCColSampling(csr_, fanout, replace);
+  } else {
+    LOG(FATAL) << "No implementation!";
+  }
+
+  if (on_format == _CSR) {
+    ret->SetCOO(
+        std::make_shared<COO>(COO{coo_ptr->col, coo_ptr->row, coo_ptr->e_ids}));
+  } else {
+    ret->SetCOO(coo_ptr);
+  }
+
+  ret->SetNumEdges(coo_ptr->row.numel());
+  if (data_.has_value()) {
+    if (coo_->e_ids.has_value())
+      out_data =
+          data_.value().index({coo_->e_ids.value().index({select_index})});
+    else
+      out_data = data_.value().index({select_index});
+    ret->SetData(out_data);
+  }
+  return ret;
+}
+
+c10::intrusive_ptr<Graph> Graph::FullSamplingProbs(int64_t axis,
+                                                   torch::Tensor edge_probs,
+                                                   int64_t fanout, bool replace,
+                                                   int64_t on_format) {
+  FullCreateSparseFormat(on_format);
+  c10::intrusive_ptr<Graph> ret = c10::intrusive_ptr<Graph>(
+      std::unique_ptr<Graph>(new Graph(true, num_nodes_)));
+  std::shared_ptr<COO> coo_ptr;
+  torch::Tensor select_index;
+  torch::Tensor out_data;
+  if (axis == 0 && on_format == _CSC) {
+    std::tie(coo_ptr, select_index) =
+        FullCSCColSamplingProbs(csc_, edge_probs, fanout, replace);
+  } else if (axis == 1 && on_format == _CSR) {
+    std::tie(coo_ptr, select_index) =
+        FullCSCColSamplingProbs(csr_, edge_probs, fanout, replace);
+  } else {
+    LOG(FATAL) << "No implementation!";
+  }
+
+  if (on_format == _CSR) {
+    ret->SetCOO(
+        std::make_shared<COO>(COO{coo_ptr->col, coo_ptr->row, coo_ptr->e_ids}));
+  } else {
+    ret->SetCOO(coo_ptr);
+  }
+
+  ret->SetNumEdges(coo_ptr->row.numel());
+  if (data_.has_value()) {
+    if (coo_->e_ids.has_value())
+      out_data =
+          data_.value().index({coo_->e_ids.value().index({select_index})});
+    else
+      out_data = data_.value().index({select_index});
+    ret->SetData(out_data);
+  }
+  return ret;
+}
+
+torch::Tensor Graph::FullSum(int64_t axis, int64_t powk, int64_t on_format) {
+  FullCreateSparseFormat(on_format);
+  auto in_data =
+      data_.has_value()
+          ? data_.value()
+          : torch::ones(num_edges_,
+                        torch::dtype(torch::kFloat32).device(torch::kCUDA));
+  torch::Tensor out_data = torch::zeros(num_nodes_, in_data.options());
+
+  if (on_format == _COO) {
+    COOGraphSum(coo_, in_data, out_data, powk, 1 - axis);
+  } else if (axis == 0 && on_format == _CSC) {
+    CSCGraphSum(csc_, val_col_ids_, in_data, out_data, powk);
+  } else if (axis == 1 && on_format == _CSR) {
+    CSCGraphSum(csr_, val_row_ids_, in_data, out_data, powk);
+  } else {
+    LOG(FATAL) << "axis should be 0 or 1? on_format and axis do not match?";
+  }
+  return out_data;
+}
+
+c10::intrusive_ptr<Graph> Graph::FullDivide(torch::Tensor divisor, int64_t axis,
+                                            int64_t on_format) {
+  FullCreateSparseFormat(on_format);
+  auto ret = c10::intrusive_ptr<Graph>(
+      std::unique_ptr<Graph>(new Graph(is_subgraph_, num_nodes_)));
+  auto in_data =
+      data_.has_value()
+          ? data_.value()
+          : torch::ones(num_edges_,
+                        torch::dtype(torch::kFloat32).device(torch::kCUDA));
+  torch::Tensor out_data = torch::zeros(num_edges_, in_data.options());
+  if (on_format == _COO) {
+    COOGraphDiv(coo_, in_data, divisor, out_data, 1 - axis);
+  } else if (axis == 0 && on_format == _CSC) {
+    CSCGraphDiv(csc_, torch::nullopt, in_data, divisor, out_data);
+  } else if (axis == 1 && on_format == _CSR) {
+    CSCGraphDiv(csr_, torch::nullopt, in_data, divisor, out_data);
+  }
+  ret->SetCSC(csc_);
+  ret->SetCSR(csr_);
+  ret->SetCOO(coo_);
+  ret->SetNumEdges(num_edges_);
+  ret->num_nodes_ = num_nodes_;
+  ret->SetData(out_data);
+  return ret;
+}
+
+c10::intrusive_ptr<Graph> Graph::FullNormalize(int64_t axis,
+                                               int64_t on_format) {
+  FullCreateSparseFormat(on_format);
+  auto ret = c10::intrusive_ptr<Graph>(
+      std::unique_ptr<Graph>(new Graph(is_subgraph_, num_nodes_)));
+  auto in_data =
+      data_.has_value()
+          ? data_.value()
+          : torch::ones(num_edges_,
+                        torch::dtype(torch::kFloat32).device(torch::kCUDA));
+  torch::Tensor out_data = torch::zeros(num_edges_, in_data.options());
+  if (on_format == _COO) {
+    COOGraphNormalize(coo_, in_data, out_data, num_nodes_, 1 - axis);
+  } else if (axis == 0 && on_format == _CSC) {
+    CSCGraphNormalize(csc_, in_data, out_data);
+  } else if (axis == 1 && on_format == _CSR) {
+    CSCGraphNormalize(csr_, in_data, out_data);
+  }
+  ret->SetCSC(csc_);
+  ret->SetCSR(csr_);
+  ret->SetCOO(coo_);
+  ret->SetNumEdges(num_edges_);
+  ret->num_nodes_ = num_nodes_;
+  ret->SetData(out_data);
+  return ret;
+}
+
+void Graph::FullSDDMM(const std::string& op, torch::Tensor lhs,
+                      torch::Tensor rhs, torch::Tensor out, int64_t lhs_target,
+                      int64_t rhs_target, int64_t on_format) {
+  FullCreateSparseFormat(on_format);
+  const auto& bcast = CalcBcastOff(op, lhs, rhs);
+  if (on_format == _COO) {
+    impl::SDDMMCOO(op, bcast, coo_, lhs, rhs, out, lhs_target, rhs_target);
+  } else if (on_format == _CSR) {
+    lhs_target = lhs_target == 1 ? lhs_target : (2 - lhs_target);
+    rhs_target = rhs_target == 1 ? rhs_target : (2 - rhs_target);
+    impl::SDDMMCSC(op, bcast, csr_, torch::nullopt, lhs, rhs, out, lhs_target,
+                   rhs_target);
+  } else if (on_format == _CSC) {
+    impl::SDDMMCSC(op, bcast, csc_, torch::nullopt, lhs, rhs, out, lhs_target,
+                   rhs_target);
+  } else {
+    LOG(FATAL) << "SDDMM only supports CSR and COO formats";
+  }
+}
+
+std::vector<torch::Tensor> Graph::FullGetCOO() {
+  FullCreateSparseFormat(_COO);
+  return {coo_->row, coo_->col};
+}
+
 }  // namespace gs

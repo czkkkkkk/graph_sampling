@@ -23,10 +23,10 @@ template <typename IdType, typename FloatType, int TILE_SIZE, int BLOCK_WARPS,
           int NumWarpQ, int NumThreadQ>
 __global__ void _CSRRowWiseSampleKernel(
     const uint64_t rand_seed, const int64_t num_picks, const int64_t num_rows,
-    const IdType *const col_ids, const IdType *const in_indptr,
-    const IdType *const in_indices, const FloatType *const prob,
-    const IdType *const out_ptr, IdType *const out_indices,
-    IdType *const selected_index, IdType *const coo_row) {
+    const IdType *const in_indptr, const IdType *const in_indices,
+    const FloatType *const prob, const IdType *const out_ptr,
+    IdType *const out_indices, IdType *const selected_index,
+    IdType *const coo_row) {
   // we assign one warp per row
   assert(num_picks <= NumWarpQ);
   assert(blockDim.x == WARP_SIZE);
@@ -86,7 +86,7 @@ __global__ void _CSRRowWiseSampleKernel(
         const IdType in_idx = in_row_start + warpselect_out_index_per_warp[idx];
         out_indices[out_idx] = in_indices[in_idx];
         selected_index[out_idx] = in_idx;
-        coo_row[out_idx] = col_ids[out_row];
+        coo_row[out_idx] = out_row;
       }
     } else {
       for (int idx = laneid; idx < deg; idx += WARP_SIZE) {
@@ -96,7 +96,7 @@ __global__ void _CSRRowWiseSampleKernel(
         // copy permutation over
         out_indices[out_idx] = in_indices[in_idx];
         selected_index[out_idx] = in_idx;
-        coo_row[out_idx] = col_ids[out_row];
+        coo_row[out_idx] = out_row;
       }
     }
 
@@ -107,11 +107,11 @@ __global__ void _CSRRowWiseSampleKernel(
 template <typename IdType, typename FloatType, int TILE_SIZE, int BLOCK_WARPS>
 __global__ void _CSRRowWiseSampleReplaceKernel(
     const uint64_t rand_seed, const int64_t num_picks, const int64_t num_rows,
-    IdType *col_ids, const IdType *const in_indptr,
-    const IdType *const in_indices, const FloatType *const prob,
-    const IdType *const sub_indptr, const IdType *const cdf_indptr,
-    FloatType *const cdf, IdType *const out_indices,
-    IdType *const selected_index, IdType *const coo_row) {
+    const IdType *const in_indptr, const IdType *const in_indices,
+    const FloatType *const prob, const IdType *const sub_indptr,
+    const IdType *const cdf_indptr, FloatType *const cdf,
+    IdType *const out_indices, IdType *const selected_index,
+    IdType *const coo_row) {
   // we assign one warp per row
   assert(blockDim.x == WARP_SIZE);
   assert(blockDim.y == BLOCK_WARPS);
@@ -172,7 +172,7 @@ __global__ void _CSRRowWiseSampleReplaceKernel(
         // copy permutation over
         out_indices[out_idx] = in_indices[in_idx];
         selected_index[out_idx] = in_idx;
-        coo_row[out_idx] = col_ids[out_row];
+        coo_row[out_idx] = out_row;
       }
     }
     out_row += BLOCK_WARPS;
@@ -181,8 +181,8 @@ __global__ void _CSRRowWiseSampleReplaceKernel(
 
 template <typename IdType, typename FloatType>
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _CSCColSamplingProbs(
-    torch::Tensor col_ids, torch::Tensor indptr, torch::Tensor indices,
-    torch::Tensor probs, int64_t num_picks, bool replace) {
+    torch::Tensor indptr, torch::Tensor indices, torch::Tensor probs,
+    int64_t num_picks, bool replace) {
   int64_t num_items = indptr.numel() - 1;
   torch::Tensor sub_indptr = torch::empty_like(indptr);
 
@@ -230,33 +230,30 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _CSCColSamplingProbs(
   if (replace) {
     _CSRRowWiseSampleReplaceKernel<IdType, FloatType, TILE_SIZE, BLOCK_WARPS>
         <<<grid, block>>>(
-            random_seed, num_picks, num_items, col_ids.data_ptr<IdType>(),
-            indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
-            probs.data_ptr<FloatType>(), sub_indptr.data_ptr<IdType>(),
-            temp_indptr.data_ptr<IdType>(), temp.data_ptr<FloatType>(),
-            coo_row.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
-            coo_col.data_ptr<IdType>());
+            random_seed, num_picks, num_items, indptr.data_ptr<IdType>(),
+            indices.data_ptr<IdType>(), probs.data_ptr<FloatType>(),
+            sub_indptr.data_ptr<IdType>(), temp_indptr.data_ptr<IdType>(),
+            temp.data_ptr<FloatType>(), coo_row.data_ptr<IdType>(),
+            select_index.data_ptr<IdType>(), coo_col.data_ptr<IdType>());
   } else {
     _CSRRowWiseSampleKernel<IdType, FloatType, TILE_SIZE, BLOCK_WARPS, 32, 2>
         <<<grid, block>>>(
-            random_seed, num_picks, num_items, col_ids.data_ptr<IdType>(),
-            indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
-            probs.data_ptr<FloatType>(), sub_indptr.data_ptr<IdType>(),
-            coo_row.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
-            coo_col.data_ptr<IdType>());
+            random_seed, num_picks, num_items, indptr.data_ptr<IdType>(),
+            indices.data_ptr<IdType>(), probs.data_ptr<FloatType>(),
+            sub_indptr.data_ptr<IdType>(), coo_row.data_ptr<IdType>(),
+            select_index.data_ptr<IdType>(), coo_col.data_ptr<IdType>());
   }
 
   return {coo_row, coo_col, select_index};
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-FullCSCColSamplingProbsCUDA(torch::Tensor col_ids, torch::Tensor indptr,
-                            torch::Tensor indices, torch::Tensor probs,
-                            int64_t fanout, bool replace) {
+FullCSCColSamplingProbsCUDA(torch::Tensor indptr, torch::Tensor indices,
+                            torch::Tensor probs, int64_t fanout, bool replace) {
   torch::Tensor coo_row, coo_col, selected_index;
   std::tie(coo_row, coo_col, selected_index) =
-      _CSCColSamplingProbs<int64_t, float>(col_ids, indptr, indices, probs,
-                                           fanout, replace);
+      _CSCColSamplingProbs<int64_t, float>(indptr, indices, probs, fanout,
+                                           replace);
 
   return {coo_row, coo_col, selected_index};
 }
