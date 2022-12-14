@@ -67,7 +67,7 @@ template <typename IdType, typename DType>
 void CSCSum(torch::Tensor indptr, torch::optional<torch::Tensor> e_ids,
             torch::optional<torch::Tensor> n_ids, torch::Tensor data,
             torch::Tensor out_data, int64_t powk) {
-  auto num_element = out_data.numel();
+  auto num_element = indptr.numel() - 1;
   auto use_n_map = n_ids.has_value(), use_e_map = e_ids.has_value();
   auto n_ids_map = use_n_map ? n_ids.value().data_ptr<IdType>() : nullptr;
   auto e_ids_map = use_e_map ? e_ids.value().data_ptr<IdType>() : nullptr;
