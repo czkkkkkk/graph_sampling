@@ -51,6 +51,25 @@ COO2DCSCCUDA(torch::Tensor row, torch::Tensor col);
 std::pair<torch::Tensor, torch::Tensor> DCSC2COOCUDA(torch::Tensor indptr,
                                                      torch::Tensor indices,
                                                      torch::Tensor ids);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> FullCSCColSlicingCUDA(
+    torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> FullCSCRowSlicingCUDA(
+    torch::Tensor column_ids, torch::Tensor indptr, torch::Tensor indices,
+    torch::Tensor row_ids);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> FullCOORowSlicingCUDA(
+    torch::Tensor coo_row, torch::Tensor coo_col, torch::Tensor row_ids);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> FullCSCColSamplingCUDA(
+    torch::Tensor col_ids, torch::Tensor indptr, torch::Tensor indices,
+    int64_t fanout, bool replace);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+FullCSCColSamplingProbsCUDA(torch::Tensor col_ids, torch::Tensor indptr,
+                            torch::Tensor indices, torch::Tensor probs,
+                            int64_t fanout, bool replace);
 }  // namespace impl
 }  // namespace gs
 
