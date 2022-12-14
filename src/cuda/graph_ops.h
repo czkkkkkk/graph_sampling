@@ -45,8 +45,8 @@ std::pair<torch::Tensor, torch::Tensor> CSC2COOCUDA(torch::Tensor indptr,
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COO2CSCCUDA(
     torch::Tensor row, torch::Tensor col, int64_t num_rows);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COO2DCSCCUDA(
-    torch::Tensor row, torch::Tensor col, torch::Tensor ids);
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+COO2DCSCCUDA(torch::Tensor row, torch::Tensor col);
 
 std::pair<torch::Tensor, torch::Tensor> DCSC2COOCUDA(torch::Tensor indptr,
                                                      torch::Tensor indices,

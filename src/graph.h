@@ -35,9 +35,7 @@ class Graph : public torch::CustomClassHolder {
   void CSC2DCSR();
   void CSR2CSC();
   void CSR2DCSC();
-  void CreateCOO();
-  void CreateCSR();
-  void CreateCSC();
+  void CreateSparseFormat(int64_t format);
   std::shared_ptr<CSC> GetCSC();
   std::shared_ptr<CSR> GetCSR();
   std::shared_ptr<COO> GetCOO();
@@ -98,8 +96,6 @@ class Graph : public torch::CustomClassHolder {
   torch::optional<torch::Tensor> row_ids_;      // row id in matrix
   torch::optional<torch::Tensor> val_col_ids_;  // valid column id in matrix
   torch::optional<torch::Tensor> val_row_ids_;  // valid row id in matrix
-
-  void CreateSparseFormat(int64_t axis);
 };
 
 }  // namespace gs

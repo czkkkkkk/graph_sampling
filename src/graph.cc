@@ -72,13 +72,13 @@ torch::optional<torch::Tensor> Graph::GetData(std::string order) {
   bool need_idx = false;
   torch::Tensor idx;
   if (order == "col") {
-    CreateCSC();
+    CreateSparseFormat(_CSC);
     if (csc_->e_ids.has_value()) {
       need_idx = true;
       idx = csc_->e_ids.value();
     }
   } else if (order == "row") {
-    CreateCSR();
+    CreateSparseFormat(_CSR);
     if (csr_->e_ids.has_value()) {
       need_idx = true;
       idx = csr_->e_ids.value();
@@ -103,13 +103,13 @@ void Graph::SetData(torch::Tensor data, std::string order) {
   bool need_permutation = false;
   torch::Tensor idx;
   if (order == "col") {
-    CreateCSC();
+    CreateSparseFormat(_CSC);
     need_permutation = csc_->e_ids.has_value();
     if (need_permutation) {
       idx = csc_->e_ids.value();
     }
   } else if (order == "row") {
-    CreateCSR();
+    CreateSparseFormat(_CSR);
     need_permutation = csr_->e_ids.has_value();
     if (need_permutation) {
       idx = csr_->e_ids.value();
@@ -121,57 +121,6 @@ void Graph::SetData(torch::Tensor data, std::string order) {
 void Graph::SetValidCols(torch::Tensor val_cols) { val_col_ids_ = val_cols; }
 
 void Graph::SetValidRows(torch::Tensor val_rows) { val_row_ids_ = val_rows; }
-
-void Graph::CreateCOO() {
-  if (coo_ != nullptr) return;
-  if (csc_ != nullptr) {
-    if (val_col_ids_.has_value())
-      SetCOO(GraphDCSC2COO(csc_, val_col_ids_.value(), true));
-    else
-      SetCOO(GraphCSC2COO(csc_, true));
-  } else {
-    if (val_row_ids_.has_value())
-      SetCOO(GraphDCSC2COO(csr_, val_row_ids_.value(), false));
-    else
-      SetCOO(GraphCSC2COO(csr_, false));
-  }
-}
-
-void Graph::CreateCSR() {
-  if (csr_ != nullptr) return;
-  if (coo_ != nullptr) {
-    if (is_subgraph_) {
-      val_row_ids_ = std::get<0>(torch::_unique(coo_->row));
-      SetCSR(GraphCOO2DCSC(coo_, val_row_ids_.value(), false));
-    } else {
-      SetCSR(GraphCOO2CSC(coo_, num_rows_, false));
-    }
-  } else {
-    if (is_subgraph_) {
-      CSC2DCSR();
-    } else {
-      CSC2CSR();
-    }
-  }
-}
-
-void Graph::CreateCSC() {
-  if (csc_ != nullptr) return;
-  if (coo_ != nullptr) {
-    if (is_subgraph_) {
-      val_col_ids_ = std::get<0>(torch::_unique(coo_->col));
-      SetCSC(GraphCOO2DCSC(coo_, val_col_ids_.value(), true));
-    } else {
-      SetCSC(GraphCOO2CSC(coo_, num_cols_, true));
-    }
-  } else {
-    if (is_subgraph_) {
-      CSR2DCSC();
-    } else {
-      CSR2CSC();
-    }
-  }
-}
 
 c10::intrusive_ptr<Graph> Graph::FusedBidirSlicing(torch::Tensor column_seeds,
                                                    torch::Tensor row_seeds) {
@@ -205,6 +154,12 @@ void Graph::SetNumEdges(int64_t num_edges) { num_edges_ = num_edges; }
 c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
                                          int64_t on_format,
                                          int64_t output_format) {
+  CreateSparseFormat(on_format);
+  std::shared_ptr<COO> coo_ptr;
+  std::shared_ptr<_TMP> tmp_ptr;
+  torch::Tensor select_index, out_data;
+  bool with_coo = output_format & _COO;
+
   c10::intrusive_ptr<Graph> ret;
   if (axis == 0) {
     auto new_col_ids =
@@ -219,9 +174,6 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
   }
 
   if (on_format == _COO) {
-    CreateCOO();
-    std::shared_ptr<COO> coo_ptr;
-    torch::Tensor select_index, out_data;
     std::tie(coo_ptr, select_index) = COOColSlicing(coo_, n_ids, axis);
     ret->SetCOO(coo_ptr);
     ret->SetNumEdges(coo_ptr->row.numel());
@@ -234,15 +186,11 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
       ret->SetData(out_data);
     }
 
-  } else if (on_format == _CSC) {
+  } else if (on_format == _CSC || on_format == _DCSC) {
     if (output_format == _CSR) {
       LOG(FATAL) << "Error in Slicing, Not implementation [on_format = CSC, "
                     "output_forat = CSR]";
     }
-    CreateCSC();
-    torch::Tensor select_index, out_data;
-    std::shared_ptr<_TMP> tmp_ptr;
-    bool with_coo = output_format & _COO;
     if (axis == 0) {
       // for col
       if (val_col_ids_.has_value())
@@ -273,15 +221,11 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
       ret->SetData(out_data);
     }
 
-  } else if (on_format == _CSR) {
+  } else if (on_format == _CSR || on_format == _DCSR) {
     if (output_format == _CSC) {
       LOG(FATAL) << "Error in Slicing, Not implementation [on_format = CSR, "
                     "output_forat = CSC]";
     }
-    CreateCSR();
-    torch::Tensor select_index, out_data;
-    std::shared_ptr<_TMP> tmp_ptr;
-    bool with_coo = output_format & _COO;
     if (axis == 0) {
       // for col
       std::tie(tmp_ptr, select_index) = CSCRowSlicing(csr_, n_ids, with_coo);
@@ -320,9 +264,11 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
 c10::intrusive_ptr<Graph> Graph::Sampling(int64_t axis, int64_t fanout,
                                           bool replace, int64_t on_format,
                                           int64_t output_format) {
+  CreateSparseFormat(on_format);
   torch::Tensor select_index, out_data;
   std::shared_ptr<_TMP> tmp_ptr;
   bool with_coo = output_format & _COO;
+
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(true, col_ids_, row_ids_, num_cols_, num_rows_)));
 
@@ -331,7 +277,6 @@ c10::intrusive_ptr<Graph> Graph::Sampling(int64_t axis, int64_t fanout,
       LOG(FATAL) << "Error in Sampling, Not implementation [on_format = CSC, "
                     "output_forat = CSR]";
 
-    CreateCSC();
     std::tie(tmp_ptr, select_index) =
         CSCColSampling(csc_, fanout, replace, with_coo);
 
@@ -357,7 +302,6 @@ c10::intrusive_ptr<Graph> Graph::Sampling(int64_t axis, int64_t fanout,
       LOG(FATAL) << "Error in Sampling, Not implementation [on_format = CSR, "
                     "output_forat = CSC]";
 
-    CreateCSR();
     std::tie(tmp_ptr, select_index) =
         CSCColSampling(csr_, fanout, replace, with_coo);
     if (output_format & _CSR)
@@ -388,17 +332,19 @@ c10::intrusive_ptr<Graph> Graph::SamplingProbs(int64_t axis,
                                                int64_t fanout, bool replace,
                                                int64_t on_format,
                                                int64_t output_format) {
+  CreateSparseFormat(on_format);
   torch::Tensor select_index, out_data;
   std::shared_ptr<_TMP> tmp_ptr;
   bool with_coo = output_format & _COO;
+
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(true, col_ids_, row_ids_, num_cols_, num_rows_)));
+
   if (axis == 0 && on_format == _CSC) {
     if (output_format == _CSR)
       LOG(FATAL) << "Error in Sampling, Not implementation [on_format = CSC, "
                     "output_forat = CSR]";
 
-    CreateCSC();
     std::tie(tmp_ptr, select_index) =
         CSCColSamplingProbs(csc_, edge_probs, fanout, replace, with_coo);
 
@@ -424,7 +370,6 @@ c10::intrusive_ptr<Graph> Graph::SamplingProbs(int64_t axis,
       LOG(FATAL) << "Error in Sampling, Not implementation [on_format = CSR, "
                     "output_forat = CSC]";
 
-    CreateCSR();
     std::tie(tmp_ptr, select_index) =
         CSCColSamplingProbs(csr_, edge_probs, fanout, replace, with_coo);
     if (output_format & _CSR)
@@ -482,8 +427,9 @@ void Graph::CSC2CSR() {
 
 void Graph::CSC2DCSR() {
   SetCOO(GraphCSC2COO(csc_, true));
-  val_row_ids_ = std::get<0>(torch::_unique(coo_->row));
-  SetCSR(GraphCOO2DCSC(coo_, val_row_ids_.value(), false));
+  std::shared_ptr<CSR> csr_ptr;
+  std::tie(csr_ptr, val_row_ids_) = GraphCOO2DCSC(coo_, false);
+  SetCSR(csr_ptr);
 }
 
 void Graph::CSR2CSC() {
@@ -493,18 +439,69 @@ void Graph::CSR2CSC() {
 
 void Graph::CSR2DCSC() {
   SetCOO(GraphCSC2COO(csr_, false));
-  val_col_ids_ = std::get<0>(torch::_unique(coo_->col));
-  SetCSC(GraphCOO2DCSC(coo_, val_col_ids_.value(), true));
+  std::shared_ptr<CSC> csc_ptr;
+  std::tie(csc_ptr, val_col_ids_) = GraphCOO2DCSC(coo_, true);
+  SetCSC(csc_ptr);
 }
 
-void Graph::CreateSparseFormat(int64_t axis) {
-  if (axis != 0 && axis != 1) {
-    LOG(FATAL) << "axis should be 0 or 1";
-  }
-  if (axis == 0 && csc_ == nullptr) {
-    CSR2CSC();
-  } else if (axis == 1 && csr_ == nullptr) {
-    CSC2CSR();
+void Graph::CreateSparseFormat(int64_t format) {
+  if (format == _COO) {
+    if (coo_ != nullptr) return;
+    if (csc_ != nullptr) {
+      if (val_col_ids_.has_value())
+        SetCOO(GraphDCSC2COO(csc_, val_col_ids_.value(), true));
+      else
+        SetCOO(GraphCSC2COO(csc_, true));
+    } else {
+      if (val_row_ids_.has_value())
+        SetCOO(GraphDCSC2COO(csr_, val_row_ids_.value(), false));
+      else
+        SetCOO(GraphCSC2COO(csr_, false));
+    }
+  } else if (format == _CSC) {
+    if (csc_ != nullptr) {
+      if (val_col_ids_.has_value())
+        LOG(FATAL) << "Require CSC, get DCSC instead";
+      return;
+    }
+    if (coo_ != nullptr)
+      SetCSC(GraphCOO2CSC(coo_, num_cols_, true));
+    else
+      CSR2CSC();
+  } else if (format == _DCSC) {
+    if (csc_ != nullptr) {
+      if (!val_col_ids_.has_value())
+        LOG(FATAL) << "Require DCSC, get CSC instead";
+      return;
+    }
+    if (coo_ != nullptr) {
+      std::shared_ptr<CSC> csc_ptr;
+      std::tie(csc_ptr, val_col_ids_) = GraphCOO2DCSC(coo_, true);
+      SetCSC(csc_ptr);
+    } else
+      CSR2DCSC();
+  } else if (format == _CSR) {
+    if (csr_ != nullptr) {
+      if (val_row_ids_.has_value())
+        LOG(FATAL) << "Require CSR, get DCSR instead";
+      return;
+    }
+    if (coo_ != nullptr)
+      SetCSR(GraphCOO2CSC(coo_, num_rows_, false));
+    else
+      CSC2CSR();
+  } else if (format == _DCSR) {
+    if (csr_ != nullptr) {
+      if (!val_row_ids_.has_value())
+        LOG(FATAL) << "Require DCSR, get CSR instead";
+      return;
+    }
+    if (coo_ != nullptr) {
+      std::shared_ptr<CSR> csr_ptr;
+      std::tie(csr_ptr, val_row_ids_) = GraphCOO2DCSC(coo_, false);
+      SetCSR(csr_ptr);
+    } else
+      CSC2DCSR();
   }
 }
 
@@ -513,6 +510,7 @@ torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length) {
 }
 
 torch::Tensor Graph::Sum(int64_t axis, int64_t powk, int64_t on_format) {
+  CreateSparseFormat(on_format);
   auto in_data =
       data_.has_value()
           ? data_.value()
@@ -522,13 +520,10 @@ torch::Tensor Graph::Sum(int64_t axis, int64_t powk, int64_t on_format) {
   torch::Tensor out_data = torch::zeros(out_size, in_data.options());
 
   if (on_format == _COO) {
-    CreateCOO();
     COOGraphSum(coo_, in_data, out_data, powk, 1 - axis);
-  } else if (axis == 0 && on_format == _CSC) {
-    CreateCSC();
+  } else if (axis == 0 && (on_format == _CSC || on_format == _DCSC)) {
     CSCGraphSum(csc_, val_col_ids_, in_data, out_data, powk);
-  } else if (axis == 1 && on_format == _CSR) {
-    CreateCSR();
+  } else if (axis == 1 && (on_format == _CSR || on_format == _DCSR)) {
     CSCGraphSum(csr_, val_row_ids_, in_data, out_data, powk);
   } else {
     LOG(FATAL) << "axis should be 0 or 1? on_format and axis do not match?";
@@ -538,6 +533,7 @@ torch::Tensor Graph::Sum(int64_t axis, int64_t powk, int64_t on_format) {
 
 c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis,
                                         int64_t on_format) {
+  CreateSparseFormat(on_format);
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(is_subgraph_, col_ids_, row_ids_, num_cols_, num_rows_)));
   auto in_data =
@@ -547,13 +543,10 @@ c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis,
                         torch::dtype(torch::kFloat32).device(torch::kCUDA));
   torch::Tensor out_data = torch::zeros(num_edges_, in_data.options());
   if (on_format == _COO) {
-    CreateCOO();
     COOGraphDiv(coo_, in_data, divisor, out_data, 1 - axis);
-  } else if (axis == 0 && on_format == _CSC) {
-    CreateCSC();
+  } else if (axis == 0 && (on_format == _CSC || on_format == _DCSC)) {
     CSCGraphDiv(csc_, val_col_ids_, in_data, divisor, out_data);
-  } else if (axis == 1 && on_format == _CSR) {
-    CreateCSR();
+  } else if (axis == 1 && (on_format == _CSR || on_format == _DCSR)) {
     CSCGraphDiv(csr_, val_row_ids_, in_data, divisor, out_data);
   }
   ret->SetCSC(csc_);
@@ -567,6 +560,7 @@ c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis,
 }
 
 c10::intrusive_ptr<Graph> Graph::Normalize(int64_t axis, int64_t on_format) {
+  CreateSparseFormat(on_format);
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(is_subgraph_, col_ids_, row_ids_, num_cols_, num_rows_)));
   auto in_data =
@@ -576,16 +570,13 @@ c10::intrusive_ptr<Graph> Graph::Normalize(int64_t axis, int64_t on_format) {
                         torch::dtype(torch::kFloat32).device(torch::kCUDA));
   torch::Tensor out_data = torch::zeros(num_edges_, in_data.options());
   if (on_format == _COO) {
-    CreateCOO();
     if (axis == 0)
       COOGraphNormalize(coo_, in_data, out_data, num_cols_, 1);
     else
       COOGraphNormalize(coo_, in_data, out_data, num_rows_, 0);
-  } else if (axis == 0 && on_format == _CSC) {
-    CreateCSC();
+  } else if (axis == 0 && (on_format == _CSC || on_format == _DCSC)) {
     CSCGraphNormalize(csc_, in_data, out_data);
-  } else if (axis == 1 && on_format == _CSR) {
-    CreateCSR();
+  } else if (axis == 1 && (on_format == _CSR || on_format == _DCSR)) {
     CSCGraphNormalize(csr_, in_data, out_data);
   }
   ret->SetCSC(csc_);
@@ -785,18 +776,16 @@ std::vector<torch::Tensor> Graph::MetaData() {
 void Graph::SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
                   torch::Tensor out, int64_t lhs_target, int64_t rhs_target,
                   int64_t on_format) {
+  CreateSparseFormat(on_format);
   const auto& bcast = CalcBcastOff(op, lhs, rhs);
   if (on_format == _COO) {
-    CreateCOO();
     impl::SDDMMCOO(op, bcast, coo_, lhs, rhs, out, lhs_target, rhs_target);
-  } else if (on_format == _CSR) {
-    CreateCSR();
+  } else if (on_format == _CSR || on_format == _DCSR) {
     lhs_target = lhs_target == 1 ? lhs_target : (2 - lhs_target);
     rhs_target = rhs_target == 1 ? rhs_target : (2 - rhs_target);
     impl::SDDMMCSC(op, bcast, csr_, val_row_ids_, lhs, rhs, out, lhs_target,
                    rhs_target);
-  } else if (on_format == _CSC) {
-    CreateCSC();
+  } else if (on_format == _CSC || on_format == _DCSC) {
     impl::SDDMMCSC(op, bcast, csc_, val_col_ids_, lhs, rhs, out, lhs_target,
                    rhs_target);
   } else {

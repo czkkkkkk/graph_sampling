@@ -94,6 +94,22 @@ void cub_segmentedSum(DType* d_in, DType* d_out, IdType* d_offsets,
   c10::cuda::CUDACachingAllocator::raw_delete(d_temp_storage);
 }
 
+template <typename IdType>
+void cub_consecutiveUnique(IdType* d_in, IdType* d_out,
+                           IdType* d_num_selected_out, int64_t num_items) {
+  void* d_temp_storage = NULL;
+  size_t temp_storage_bytes = 0;
+  cub::DeviceSelect::Unique(d_temp_storage, temp_storage_bytes, d_in, d_out,
+                            d_num_selected_out, num_items);
+  // Allocate temporary storage
+  d_temp_storage =
+      c10::cuda::CUDACachingAllocator::raw_alloc(temp_storage_bytes);
+  // Run sum-reduction
+  cub::DeviceSelect::Unique(d_temp_storage, temp_storage_bytes, d_in, d_out,
+                            d_num_selected_out, num_items);
+  c10::cuda::CUDACachingAllocator::raw_delete(d_temp_storage);
+}
+
 /*! \brief Calculate the number of threads needed given the dimension length.
  *
  * It finds the biggest number that is smaller than min(dim, max_nthrs)

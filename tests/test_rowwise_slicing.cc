@@ -30,7 +30,7 @@ TEST(RowwiseSlicing, test2)
     A.CSC2DCSR();
 
     torch::Tensor row_ids = torch::arange(5, 6, options);
-    auto subA = A.Slicing(row_ids, 1, _CSR, _CSR);
+    auto subA = A.Slicing(row_ids, 1, _DCSR, _CSR);
     auto csr_ptr = subA->GetCSR();
 
     EXPECT_EQ(csr_ptr->indptr.numel(), 2);
