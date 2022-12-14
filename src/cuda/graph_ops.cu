@@ -50,7 +50,7 @@ __global__ void _SegmentSumCOOKernel(IdType* target, IdType* EMap, DType* data,
   const IdType stride_y = blockDim.y * gridDim.y;
   const int64_t stride_x = blockDim.x * gridDim.x;
   while (ty < E) {
-    int tx = blockIdx.y * blockDim.x + threadIdx.x;
+    int64_t tx = blockIdx.x * blockDim.x + threadIdx.x;
     const IdType data_idx = UseEMap ? EMap[ty] : ty;
     const DType* dataoff = data + data_idx * out_len;
     DType* outoff = out + target[ty] * out_len;
@@ -105,10 +105,10 @@ void COOSum(torch::Tensor target, torch::optional<torch::Tensor> e_ids,
   // Aligning DGL
   const int out_len = 1;
 
-  const int ntx = 1;
-  const int nty = 256;
+  const int ntx = FindNumThreads(out_len);
+  const int nty = CUDA_MAX_NUM_THREADS / ntx;
   const int nbx = (out_len + ntx - 1) / ntx;
-  const int nby = (E + nty - 1) / nty;
+  const int nby = FindNumBlocks<'y'>((E + nty - 1) / nty);
   const dim3 nblks(nbx, nby);
   const dim3 nthrs(ntx, nty);
   SWITCH_IDX(use_e_map, false, {
