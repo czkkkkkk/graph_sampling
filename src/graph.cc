@@ -631,9 +631,8 @@ Graph::Relabel() {
   torch::Tensor col_ids = col_ids_.value();
 
   if (csc_ != nullptr) {
-    if (val_col_ids_.has_value()) {
-      LOG(FATAL) << "Relabel on DCSC: Not implemented warning";
-    }
+    if (val_col_ids_.has_value())
+      col_ids = col_ids.index({val_col_ids_.value()});
     torch::Tensor row_indices = row_ids_.has_value()
                                     ? row_ids_.value().index({csc_->indices})
                                     : csc_->indices;
