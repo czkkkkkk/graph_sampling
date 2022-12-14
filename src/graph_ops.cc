@@ -48,7 +48,8 @@ std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
   }
 }
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> GraphCOO2DCSC(std::shared_ptr<COO> coo, bool COO2DCSC) {
+std::pair<std::shared_ptr<CSC>, torch::Tensor> GraphCOO2DCSC(
+    std::shared_ptr<COO> coo, bool COO2DCSC) {
   if (coo->row.device().type() == torch::kCUDA) {
     torch::Tensor indptr, indices, sort_index, val_ids;
     torch::optional<torch::Tensor> sorted_e_ids = torch::nullopt;
@@ -323,6 +324,84 @@ torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
       seeds, walk_length, csc->indices.data_ptr<int64_t>(),
       csc->indptr.data_ptr<int64_t>());
   return paths;
+}
+
+std::pair<std::shared_ptr<COO>, torch::Tensor> FullCSCColSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor col_ids) {
+  if (csc->indptr.device().type() == torch::kCUDA) {
+    torch::Tensor coo_row, coo_col, select_index;
+    std::tie(coo_row, coo_col, select_index) =
+        impl::FullCSCColSlicingCUDA(csc->indptr, csc->indices, col_ids);
+    return {std::make_shared<COO>(COO{coo_row, coo_col, torch::nullopt}),
+            select_index};
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return {std::make_shared<COO>(COO{}), torch::Tensor()};
+  }
+}
+
+std::pair<std::shared_ptr<COO>, torch::Tensor> FullCSCRowSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor col_ids, torch::Tensor node_ids) {
+  if (csc->indptr.device().type() == torch::kCUDA) {
+    torch::Tensor coo_row, coo_col, select_index;
+    std::tie(coo_row, coo_col, select_index) = impl::FullCSCRowSlicingCUDA(
+        col_ids, csc->indptr, csc->indices, node_ids);
+    return {std::make_shared<COO>(COO{coo_row, coo_col, torch::nullopt}),
+            select_index};
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return {std::make_shared<COO>(COO{}), torch::Tensor()};
+  }
+}
+
+// axis = 0 for column; reverse = 1 for row;
+std::pair<std::shared_ptr<COO>, torch::Tensor> FullCOOColSlicing(
+    std::shared_ptr<COO> coo, torch::Tensor node_ids, int64_t axis) {
+  if (coo->row.device().type() == torch::kCUDA) {
+    torch::Tensor coo_row, coo_col, select_index;
+    if (axis == 1)
+      std::tie(coo_row, coo_col, select_index) =
+          impl::FullCOORowSlicingCUDA(coo->row, coo->col, node_ids);
+    else
+      std::tie(coo_row, coo_col, select_index) =
+          impl::FullCOORowSlicingCUDA(coo->col, coo->row, node_ids);
+    return {std::make_shared<COO>(COO{coo_row, coo_col, torch::nullopt}),
+            select_index};
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return {std::make_shared<COO>(COO{}), torch::Tensor()};
+  }
+}
+
+std::pair<std::shared_ptr<COO>, torch::Tensor> FullCSCColSampling(
+    std::shared_ptr<CSC> csc, torch::Tensor col_ids, int64_t fanout,
+    bool replace) {
+  if (csc->indptr.device().type() == torch::kCUDA) {
+    torch::Tensor coo_row, coo_col, select_index;
+    std::tie(coo_row, coo_col, select_index) = impl::FullCSCColSamplingCUDA(
+        col_ids, csc->indptr, csc->indices, fanout, replace);
+    return {std::make_shared<COO>(COO{coo_row, coo_col, torch::nullopt}),
+            select_index};
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return {std::make_shared<COO>(COO{}), torch::Tensor()};
+  }
+}
+
+std::pair<std::shared_ptr<COO>, torch::Tensor> FullCSCColSamplingProbs(
+    std::shared_ptr<CSC> csc, torch::Tensor col_ids, torch::Tensor edge_probs,
+    int64_t fanout, bool replace) {
+  if (csc->indptr.device().type() == torch::kCUDA) {
+    torch::Tensor coo_row, coo_col, select_index;
+    std::tie(coo_row, coo_col, select_index) =
+        impl::FullCSCColSamplingProbsCUDA(col_ids, csc->indptr, csc->indices,
+                                          edge_probs, fanout, replace);
+    return {std::make_shared<COO>(COO{coo_row, coo_col, torch::nullopt}),
+            select_index};
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return {std::make_shared<COO>(COO{}), torch::Tensor()};
+  }
 }
 
 }  // namespace gs

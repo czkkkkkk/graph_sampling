@@ -66,13 +66,31 @@ std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc, bool CSC2COO);
 std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
                                   bool COO2CSC);
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> GraphCOO2DCSC(std::shared_ptr<COO> coo, bool COO2DCSC);
+std::pair<std::shared_ptr<CSC>, torch::Tensor> GraphCOO2DCSC(
+    std::shared_ptr<COO> coo, bool COO2DCSC);
 
 std::shared_ptr<COO> GraphDCSC2COO(std::shared_ptr<CSC> csc, torch::Tensor ids,
                                    bool DCSC2COO);
 
 torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
                               int64_t walk_length);
+
+std::pair<std::shared_ptr<COO>, torch::Tensor> FullCSCColSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor col_ids);
+
+std::pair<std::shared_ptr<COO>, torch::Tensor> FullCSCRowSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor col_ids, torch::Tensor node_ids);
+
+std::pair<std::shared_ptr<COO>, torch::Tensor> FullCOOColSlicing(
+    std::shared_ptr<COO> coo, torch::Tensor node_ids, int64_t axis);
+
+std::pair<std::shared_ptr<COO>, torch::Tensor> FullCSCColSampling(
+    std::shared_ptr<CSC> csc, torch::Tensor col_ids, int64_t fanout,
+    bool replace);
+
+std::pair<std::shared_ptr<COO>, torch::Tensor> FullCSCColSamplingProbs(
+    std::shared_ptr<CSC> csc, torch::Tensor col_ids, torch::Tensor edge_probs,
+    int64_t fanout, bool replace);
 
 }  // namespace gs
 

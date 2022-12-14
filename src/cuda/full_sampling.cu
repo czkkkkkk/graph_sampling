@@ -125,8 +125,9 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _CSCColSampling(
   dim3 grid((num_items + block.x - 1) / block.x);
   if (replace) {
     _SampleSubIndicesReplaceKernel<IdType><<<grid, block>>>(
-        coo_row.data_ptr<IdType>(), select_index.data_ptr<IdType>(), coo_col.data_ptr<IdType>(,
-        col_ids.data_ptr<IdType>(), indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
+        coo_row.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
+        coo_col.data_ptr<IdType>(), col_ids.data_ptr<IdType>(),
+        indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
         sub_indptr.data_ptr<IdType>(), num_items, random_seed);
   } else {
     _SampleSubIndicesKernel<IdType><<<grid, block>>>(

@@ -228,22 +228,22 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _CSCColSamplingProbs(
   const dim3 block(WARP_SIZE, BLOCK_WARPS);
   const dim3 grid((num_items + TILE_SIZE - 1) / TILE_SIZE);
   if (replace) {
-    _CSRRowWiseSampleReplaceKernel<IdType, FloatType, TILE_SIZE, BLOCK_WARPS,
-                                   WITH_COO><<<grid, block>>>(
-        random_seed, num_picks, num_items, col_ids.data_ptr<IdType>(),
-        indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
-        probs.data_ptr<FloatType>(), sub_indptr.data_ptr<IdType>(),
-        temp_indptr.data_ptr<IdType>(), temp.data_ptr<FloatType>(),
-        coo_row.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
-        coo_col.data_ptr<IdType>());
+    _CSRRowWiseSampleReplaceKernel<IdType, FloatType, TILE_SIZE, BLOCK_WARPS>
+        <<<grid, block>>>(
+            random_seed, num_picks, num_items, col_ids.data_ptr<IdType>(),
+            indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
+            probs.data_ptr<FloatType>(), sub_indptr.data_ptr<IdType>(),
+            temp_indptr.data_ptr<IdType>(), temp.data_ptr<FloatType>(),
+            coo_row.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
+            coo_col.data_ptr<IdType>());
   } else {
-    _CSRRowWiseSampleKernel<IdType, FloatType, TILE_SIZE, BLOCK_WARPS, 32, 2,
-                            WITH_COO><<<grid, block>>>(
-        random_seed, num_picks, num_items, col_ids.data_ptr<IdType>(),
-        indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
-        probs.data_ptr<FloatType>(), sub_indptr.data_ptr<IdType>(),
-        coo_row.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
-        coo_col.data_ptr<IdType>());
+    _CSRRowWiseSampleKernel<IdType, FloatType, TILE_SIZE, BLOCK_WARPS, 32, 2>
+        <<<grid, block>>>(
+            random_seed, num_picks, num_items, col_ids.data_ptr<IdType>(),
+            indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
+            probs.data_ptr<FloatType>(), sub_indptr.data_ptr<IdType>(),
+            coo_row.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
+            coo_col.data_ptr<IdType>());
   }
 
   return {coo_row, coo_col, select_index};
