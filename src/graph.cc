@@ -32,6 +32,17 @@ void Graph::LoadCOO(torch::Tensor row, torch::Tensor col) {
             << " edges";
 }
 
+void Graph::LoadCSR(torch::Tensor indptr, torch::Tensor indices) {
+  csr_ = std::make_shared<CSR>();
+  csr_->indptr = indptr;
+  csr_->indices = indices;
+  num_rows_ = indptr.numel() - 1;
+  num_cols_ = indptr.numel() - 1;
+  num_edges_ = indices.numel();
+  LOG(INFO) << "Loaded CSR with " << indptr.numel() - 1 << " nodes and "
+            << indices.numel() << " edges";
+}
+
 void Graph::LoadCSCWithColIds(torch::Tensor column_ids, torch::Tensor indptr,
                               torch::Tensor indices) {
   if (column_ids.numel() != indptr.numel() - 1) {
@@ -483,7 +494,7 @@ void Graph::CSR2CSC() {
 void Graph::CSR2DCSC() {
   SetCOO(GraphCSC2COO(csr_, false));
   val_col_ids_ = std::get<0>(torch::_unique(coo_->col));
-  SetCSR(GraphCOO2DCSC(coo_, val_col_ids_.value(), true));
+  SetCSC(GraphCOO2DCSC(coo_, val_col_ids_.value(), true));
 }
 
 void Graph::CreateSparseFormat(int64_t axis) {
@@ -550,6 +561,8 @@ c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis,
   ret->SetCOO(coo_);
   ret->SetNumEdges(num_edges_);
   ret->SetData(out_data);
+  if (val_col_ids_.has_value()) ret->SetValidCols(val_col_ids_.value());
+  if (val_row_ids_.has_value()) ret->SetValidRows(val_row_ids_.value());
   return ret;
 }
 
@@ -570,16 +583,18 @@ c10::intrusive_ptr<Graph> Graph::Normalize(int64_t axis, int64_t on_format) {
       COOGraphNormalize(coo_, in_data, out_data, num_rows_, 0);
   } else if (axis == 0 && on_format == _CSC) {
     CreateCSC();
-    CSCGraphNormalize(csc_, val_col_ids_, in_data, out_data);
+    CSCGraphNormalize(csc_, in_data, out_data);
   } else if (axis == 1 && on_format == _CSR) {
     CreateCSR();
-    CSCGraphNormalize(csr_, row_ids_, in_data, out_data);
+    CSCGraphNormalize(csr_, in_data, out_data);
   }
   ret->SetCSC(csc_);
   ret->SetCSR(csr_);
   ret->SetCOO(coo_);
   ret->SetNumEdges(num_edges_);
   ret->SetData(out_data);
+  if (val_col_ids_.has_value()) ret->SetValidCols(val_col_ids_.value());
+  if (val_row_ids_.has_value()) ret->SetValidRows(val_row_ids_.value());
   return ret;
 }
 

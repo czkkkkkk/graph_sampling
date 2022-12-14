@@ -110,7 +110,7 @@ TEST(GraphSum, test6)
 
 TEST(GraphSum, test7)
 {
-    Graph A(true);
+    Graph A(false);
     auto options = torch::TensorOptions().dtype(torch::kInt64).device(torch::kCUDA);
     auto data_options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA);
     torch::Tensor n_ids = torch::arange(10, 12, options);
@@ -234,4 +234,46 @@ TEST(GraphNormalize, test3)
 
     EXPECT_EQ(result.numel(), expected.numel());
     EXPECT_TRUE(result.isclose(expected).all().item<bool>());
+}
+
+TEST(GraphNormalize, test4)
+{
+    Graph A(false);
+    auto options = torch::TensorOptions().dtype(torch::kInt64).device(torch::kCUDA);
+    auto data_options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA);
+    torch::Tensor n_ids = torch::arange(10, 12, options);
+    torch::Tensor indptr = torch::cat({torch::zeros(10, options), torch::arange(0, 3, options) * 2});
+    torch::Tensor indices = torch::arange(1, 4, 2, options).repeat({2});
+    torch::Tensor data = torch::arange(3, 7, data_options);
+    torch::Tensor expected = torch::flatten(data.reshape({2, 2}) / data.reshape({2, 2}).sum(0));
+    A.LoadCSC(indptr, indices);
+    A.SetData(data);
+
+    auto graph_ptr = A.Slicing(n_ids, 0, _CSC, _CSC);
+    graph_ptr = graph_ptr->Normalize(1, _CSR);
+    auto result = graph_ptr->GetData().value();
+
+    EXPECT_TRUE(result.equal(expected));
+}
+
+TEST(GraphNormalize, test5)
+{
+    Graph A(false);
+    auto options = torch::TensorOptions().dtype(torch::kInt64).device(torch::kCUDA);
+    auto data_options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA);
+    torch::Tensor n_ids = torch::arange(10, 12, options);
+    torch::Tensor indptr = torch::cat({torch::zeros(10, options), torch::arange(0, 3, options) * 2});
+    torch::Tensor indices = torch::arange(1, 4, 2, options).repeat({2});
+    torch::Tensor data = torch::arange(3, 7, data_options);
+    torch::Tensor expected = torch::flatten(data.reshape({2, 2}) / data.reshape({2, 2}).sum(0));
+    torch::Tensor divisor = torch::ones(2, data_options);
+    A.LoadCSR(indptr, indices);
+    A.SetData(data);
+    auto graph_ptr = A.Slicing(n_ids, 1, _CSR, _CSR);
+
+    graph_ptr = graph_ptr->Divide(divisor, 1, _CSR);
+    graph_ptr = graph_ptr->Normalize(0, _CSC);
+    auto result = graph_ptr->GetData().value();
+
+    EXPECT_TRUE(result.equal(expected));
 }
