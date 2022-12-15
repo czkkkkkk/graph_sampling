@@ -801,6 +801,8 @@ void Graph::FullLoadCSC(torch::Tensor indptr, torch::Tensor indices) {
             << " edges";
 }
 
+int64_t Graph::GetNumNodes() { return num_nodes_; }
+
 void Graph::FullCreateSparseFormat(int64_t format) {
   if (format == _CSC) {
     if (csc_ != nullptr) return;

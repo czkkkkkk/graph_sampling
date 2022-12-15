@@ -37,6 +37,7 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_metadata", &Graph::MetaData)
       .def("_CAPI_random_walk", &Graph::RandomWalk)
       .def("_CAPI_sddmm", &Graph::SDDMM)
+      .def("_CAPI_full_get_num_nodes", &Graph::GetNumNodes)
       .def("_CAPI_full_load_csc", &Graph::FullLoadCSC)
       .def("_CAPI_full_slicing", &Graph::FullSlicing)
       .def("_CAPI_full_sampling", &Graph::FullSampling)
