@@ -195,7 +195,7 @@ __global__ void _GetSubIndicesKernelWithIdMapping(
         out_indices[out_start + idx] = indices[in_start + idx];
         select_index[out_start + idx] = in_start + idx;
         if (WITH_COO) {
-          out_row[out_start + idx] = indptr_off;
+          out_row[out_start + idx] = row;
         }
       }
     }
