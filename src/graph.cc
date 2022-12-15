@@ -866,11 +866,27 @@ c10::intrusive_ptr<Graph> Graph::FullSlicing(torch::Tensor n_ids, int64_t axis,
 
   ret->SetNumEdges(coo_ptr->row.numel());
   if (data_.has_value()) {
-    if (coo_->e_ids.has_value())
-      out_data =
-          data_.value().index({coo_->e_ids.value().index({select_index})});
-    else
-      out_data = data_.value().index({select_index});
+    if (on_format == _CSR) {
+      if (csr_->e_ids.has_value())
+        out_data =
+            data_.value().index({csr_->e_ids.value().index({select_index})});
+      else
+        out_data = data_.value().index({select_index});
+
+    } else if (on_format == _CSC) {
+      if (csc_->e_ids.has_value())
+        out_data =
+            data_.value().index({csc_->e_ids.value().index({select_index})});
+      else
+        out_data = data_.value().index({select_index});
+
+    } else {
+      if (coo_->e_ids.has_value())
+        out_data =
+            data_.value().index({coo_->e_ids.value().index({select_index})});
+      else
+        out_data = data_.value().index({select_index});
+    }
     ret->SetData(out_data);
   }
 
@@ -902,11 +918,27 @@ c10::intrusive_ptr<Graph> Graph::FullSampling(int64_t axis, int64_t fanout,
 
   ret->SetNumEdges(coo_ptr->row.numel());
   if (data_.has_value()) {
-    if (coo_->e_ids.has_value())
-      out_data =
-          data_.value().index({coo_->e_ids.value().index({select_index})});
-    else
-      out_data = data_.value().index({select_index});
+    if (on_format == _CSR) {
+      if (csr_->e_ids.has_value())
+        out_data =
+            data_.value().index({csr_->e_ids.value().index({select_index})});
+      else
+        out_data = data_.value().index({select_index});
+
+    } else if (on_format == _CSC) {
+      if (csc_->e_ids.has_value())
+        out_data =
+            data_.value().index({csc_->e_ids.value().index({select_index})});
+      else
+        out_data = data_.value().index({select_index});
+
+    } else {
+      if (coo_->e_ids.has_value())
+        out_data =
+            data_.value().index({coo_->e_ids.value().index({select_index})});
+      else
+        out_data = data_.value().index({select_index});
+    }
     ret->SetData(out_data);
   }
   return ret;
@@ -941,11 +973,27 @@ c10::intrusive_ptr<Graph> Graph::FullSamplingProbs(int64_t axis,
 
   ret->SetNumEdges(coo_ptr->row.numel());
   if (data_.has_value()) {
-    if (coo_->e_ids.has_value())
-      out_data =
-          data_.value().index({coo_->e_ids.value().index({select_index})});
-    else
-      out_data = data_.value().index({select_index});
+    if (on_format == _CSR) {
+      if (csr_->e_ids.has_value())
+        out_data =
+            data_.value().index({csr_->e_ids.value().index({select_index})});
+      else
+        out_data = data_.value().index({select_index});
+
+    } else if (on_format == _CSC) {
+      if (csc_->e_ids.has_value())
+        out_data =
+            data_.value().index({csc_->e_ids.value().index({select_index})});
+      else
+        out_data = data_.value().index({select_index});
+
+    } else {
+      if (coo_->e_ids.has_value())
+        out_data =
+            data_.value().index({coo_->e_ids.value().index({select_index})});
+      else
+        out_data = data_.value().index({select_index});
+    }
     ret->SetData(out_data);
   }
   return ret;
