@@ -700,7 +700,7 @@ torch::Tensor Graph::GetCols() {
 torch::Tensor Graph::GetValidRows() {
   torch::Tensor valid_row_local_ids =
       val_row_ids_.has_value() ? val_row_ids_.value()
-                               : std::get<0>(torch::_unique(GetCOORows(true)));
+                               : std::get<0>(torch::_unique(GetCOORows(false)));
   return row_ids_.has_value() ? row_ids_.value().index({valid_row_local_ids})
                               : valid_row_local_ids;
 }
@@ -708,7 +708,7 @@ torch::Tensor Graph::GetValidRows() {
 torch::Tensor Graph::GetValidCols() {
   torch::Tensor valid_col_local_ids =
       val_col_ids_.has_value() ? val_col_ids_.value()
-                               : std::get<0>(torch::_unique(GetCOOCols(true)));
+                               : std::get<0>(torch::_unique(GetCOOCols(false)));
   return col_ids_.has_value() ? col_ids_.value().index({valid_col_local_ids})
                               : valid_col_local_ids;
 }
