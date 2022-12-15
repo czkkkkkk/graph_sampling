@@ -31,6 +31,13 @@ coo_row, coo_col = subA._CAPI_get_coo()
 print(coo_row)
 print(coo_col)
 
+print("\nTest Relabel on row")
+seeds = torch.Tensor([1, 2]).long().cuda()
+subA = A._CAPI_full_slicing(seeds, 0, _CSC)
+result = subA._CAPI_full_relabel(seeds)
+for i in result:
+    print(i)
+
 print("\nTest COO Slicing on row")
 seeds = torch.Tensor([4, 8, 12, 16]).long().cuda()
 subA = A._CAPI_full_slicing(seeds, 1, _COO)

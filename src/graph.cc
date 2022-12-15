@@ -1051,4 +1051,22 @@ std::vector<torch::Tensor> Graph::FullGetCOO() {
   return {coo_->row, coo_->col};
 }
 
+std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,
+           torch::optional<torch::Tensor>, std::string>
+Graph::FullRelabel(torch::Tensor col_seeds) {
+  torch::Tensor coo_row = coo_->row;
+  torch::Tensor coo_col = coo_->col;
+  torch::Tensor frontier;
+  std::vector<torch::Tensor> relabeled_result;
+  std::tie(frontier, relabeled_result) =
+      BatchTensorRelabel({col_seeds, coo_row}, {coo_col, coo_row});
+
+  return {frontier,
+          frontier.numel(),
+          col_seeds.numel(),
+          relabeled_result[1],
+          relabeled_result[0],
+          coo_->e_ids,
+          "coo"};
+}
 }  // namespace gs

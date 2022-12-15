@@ -92,6 +92,9 @@ class Graph : public torch::CustomClassHolder {
   std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,
              torch::optional<torch::Tensor>, std::string>
   Relabel();
+  std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,
+             torch::optional<torch::Tensor>, std::string>
+  FullRelabel(torch::Tensor col_seeds);
   std::vector<torch::Tensor> MetaData();
   torch::Tensor RandomWalk(torch::Tensor seeds, int64_t walk_length);
   void SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
