@@ -24,6 +24,7 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_load_csc", &Graph::LoadCSC)
       .def("_CAPI_load_csc_with_col_ids", &Graph::LoadCSCWithColIds)
       .def("_CAPI_all_valid_node", &Graph::AllValidNode)
+      .def("_CAPI_full_all_valid_node", &Graph::FullAllValidNode)
       .def("_CAPI_get_rows", &Graph::GetRows)
       .def("_CAPI_get_cols", &Graph::GetCols)
       .def("_CAPI_get_valid_rows", &Graph::GetValidRows)

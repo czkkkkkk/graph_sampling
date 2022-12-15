@@ -612,6 +612,17 @@ torch::Tensor Graph::AllValidNode() {
   return TensorUnique(torch::cat({col_ids, row_ids}));
 }
 
+torch::Tensor Graph::FullAllValidNode(torch::Tensor seeds) {
+  if (coo_ != nullptr) {
+    return TensorUnique(torch::cat({seeds, coo_->row}));
+  }
+  if (csc_ != nullptr) {
+    return TensorUnique(torch::cat({seeds, csc_->indices}));
+  }
+  FullCreateSparseFormat(_COO);
+  return TensorUnique(torch::cat({seeds, coo_->row}));
+}
+
 std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,
            torch::optional<torch::Tensor>, std::string>
 Graph::Relabel() {

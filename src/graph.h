@@ -80,6 +80,7 @@ class Graph : public torch::CustomClassHolder {
   // A "valid" node means that the node is required by the user or that it is
   // not an isolated node.
   torch::Tensor AllValidNode();
+  torch::Tensor FullAllValidNode(torch::Tensor seeds);
   torch::Tensor GetRows();       // return row_ids
   torch::Tensor GetCols();       // return col_ids
   torch::Tensor GetValidRows();  // return valid row_ids.
