@@ -5,7 +5,6 @@ from dgl import DGLHeteroGraph, create_block
 from typing import Optional
 from gs.utils import create_block_from_coo, create_block_from_csc
 
-
 torch.fx.wrap('create_block')
 torch.fx.wrap('create_block_from_coo')
 torch.fx.wrap('create_block_from_csc')
@@ -39,7 +38,8 @@ class Matrix(object):
             self._graph._CAPI_set_data(g.edata[weight][edge_ids])
 
     def to_dgl_block(self):
-        unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = self._graph._CAPI_relabel()
+        unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = self._graph._CAPI_relabel(
+        )
         block = None
         if format == 'coo':
             block = create_block_from_coo(format_tensor1,
@@ -64,14 +64,36 @@ class Matrix(object):
         block.srcdata['_ID'] = unique_tensor
         return block
 
+    def full_to_dgl_block(self, col_seeds):
+        unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = self._graph._CAPI_full_relabel(
+            col_seeds)
+        block = create_block_from_coo(format_tensor1,
+                                      format_tensor2,
+                                      num_src=num_row,
+                                      num_dst=num_col)
+
+        if e_ids is not None:
+            block.edata['_ID'] = e_ids
+
+        data = self._graph._CAPI_get_data('default')
+        if data is not None:
+            if e_ids is not None:
+                data = data[e_ids]
+            block.edata['w'] = data
+        block.srcdata['_ID'] = unique_tensor
+        return block
+
     def columnwise_slicing(self, t):
         return Matrix(self._graph._CAPI_columnwise_slicing(t))
 
     def columnwise_sampling(self, fanout, replace=True, bias=None):
         if bias is None:
-            return Matrix(self._graph._CAPI_columnwise_sampling(fanout, replace))
+            return Matrix(
+                self._graph._CAPI_columnwise_sampling(fanout, replace))
         else:
-            return Matrix(self._graph._CAPI_columnwise_sampling_with_probs(bias, fanout, replace))
+            return Matrix(
+                self._graph._CAPI_columnwise_sampling_with_probs(
+                    bias, fanout, replace))
 
     def sum(self, axis, powk=1) -> torch.Tensor:
         return self._graph._CAPI_sum(axis, powk)
