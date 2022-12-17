@@ -124,7 +124,10 @@ _OnIndptrSlicing(torch::Tensor indptr, torch::Tensor indices,
   int64_t num_items = column_ids.numel();
 
   // compute indptr
-  torch::Tensor sub_indptr = torch::empty(num_items + 1, indptr.options());
+  auto Id_option = (indptr.is_pinned())
+                       ? torch::dtype(indptr.dtype()).device(torch::kCUDA)
+                       : indptr.options();
+  torch::Tensor sub_indptr = torch::empty(num_items + 1, Id_option);
   using it = thrust::counting_iterator<IdType>;
   thrust::for_each(
       thrust::device, it(0), it(num_items),
@@ -141,13 +144,13 @@ _OnIndptrSlicing(torch::Tensor indptr, torch::Tensor indices,
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
   int nnz = item_prefix[num_items];  // cpu
-  torch::Tensor sub_indices = torch::empty(nnz, indices.options());
-  torch::Tensor select_index = torch::empty(nnz, indices.options());
+  torch::Tensor sub_indices = torch::empty(nnz, Id_option);
+  torch::Tensor select_index = torch::empty(nnz, Id_option);
 
   torch::Tensor coo_col;
   IdType* coo_col_ptr;
   if (WITH_COO) {
-    coo_col = torch::empty(nnz, indices.options());
+    coo_col = torch::empty(nnz, Id_option);
     coo_col_ptr = coo_col.data_ptr<IdType>();
   } else {
     coo_col = torch::Tensor();

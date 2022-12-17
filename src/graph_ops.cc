@@ -48,7 +48,8 @@ std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
   }
 }
 
-std::pair<std::shared_ptr<CSC>, torch::Tensor> GraphCOO2DCSC(std::shared_ptr<COO> coo, bool COO2DCSC) {
+std::pair<std::shared_ptr<CSC>, torch::Tensor> GraphCOO2DCSC(
+    std::shared_ptr<COO> coo, bool COO2DCSC) {
   if (coo->row.device().type() == torch::kCUDA) {
     torch::Tensor indptr, indices, sort_index, val_ids;
     torch::optional<torch::Tensor> sorted_e_ids = torch::nullopt;
@@ -117,7 +118,8 @@ std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCRowSlicing(
 
 std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCColSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor node_ids, bool with_coo) {
-  if (csc->indptr.device().type() == torch::kCUDA) {
+  auto csc_type = csc->indptr.device().type();
+  if (csc_type == torch::kCUDA || csc->indptr.is_pinned()) {
     torch::Tensor sub_indptr, coo_col, coo_row, select_index;
     std::tie(sub_indptr, coo_col, coo_row, select_index) =
         impl::CSCColSlicingCUDA(csc->indptr, csc->indices, node_ids, with_coo);

@@ -25,6 +25,8 @@ torch::Tensor TensorUniqueCUDA(torch::Tensor input);
 std::tuple<torch::Tensor, std::vector<torch::Tensor>> RelabelCUDA(
     std::vector<torch::Tensor> mapping_tensor,
     std::vector<torch::Tensor> data_requiring_relabel);
+
+torch::Tensor IndexSelectCPUFromGPU(torch::Tensor array, torch::Tensor index);
 }  // namespace impl
 }  // namespace gs
 

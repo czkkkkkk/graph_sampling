@@ -2,7 +2,6 @@
 
 #include <sstream>
 #include "bcast.h"
-#include "cuda/graph_ops.h"
 #include "cuda/sddmm.h"
 #include "cuda/tensor_ops.h"
 #include "graph_ops.h"
@@ -157,7 +156,8 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
   CreateSparseFormat(on_format);
   std::shared_ptr<COO> coo_ptr;
   std::shared_ptr<_TMP> tmp_ptr;
-  torch::Tensor select_index, out_data;
+  torch::Tensor select_index;
+  torch::optional<torch::Tensor> e_ids;
   bool with_coo = output_format & _COO;
 
   c10::intrusive_ptr<Graph> ret;
@@ -177,14 +177,7 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
     std::tie(coo_ptr, select_index) = COOColSlicing(coo_, n_ids, axis);
     ret->SetCOO(coo_ptr);
     ret->SetNumEdges(coo_ptr->row.numel());
-    if (data_.has_value()) {
-      if (coo_->e_ids.has_value())
-        out_data =
-            data_.value().index({coo_->e_ids.value().index({select_index})});
-      else
-        out_data = data_.value().index({select_index});
-      ret->SetData(out_data);
-    }
+    e_ids = coo_->e_ids;
 
   } else if (on_format == _CSC || on_format == _DCSC) {
     if (output_format == _CSR) {
@@ -211,15 +204,7 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
       ret->SetCOO(std::make_shared<COO>(COO{
           tmp_ptr->coo_in_indices, tmp_ptr->coo_in_indptr, torch::nullopt}));
     ret->SetNumEdges(tmp_ptr->coo_in_indices.numel());
-    if (data_.has_value()) {
-      if (csc_->e_ids.has_value()) {
-        out_data =
-            data_.value().index({csc_->e_ids.value().index({select_index})});
-      } else {
-        out_data = data_.value().index({select_index});
-      }
-      ret->SetData(out_data);
-    }
+    e_ids = csc_->e_ids;
 
   } else if (on_format == _CSR || on_format == _DCSR) {
     if (output_format == _CSC) {
@@ -246,17 +231,23 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
       ret->SetCOO(std::make_shared<COO>(COO{
           tmp_ptr->coo_in_indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
     ret->SetNumEdges(tmp_ptr->coo_in_indices.numel());
-    if (data_.has_value()) {
-      if (csr_->e_ids.has_value()) {
-        out_data =
-            data_.value().index({csr_->e_ids.value().index({select_index})});
-      } else {
-        out_data = data_.value().index({select_index});
-      }
-      ret->SetData(out_data);
-    }
+    e_ids = csr_->e_ids;
   } else {
     LOG(FATAL) << "Not implemented warning";
+  }
+  if (data_.has_value()) {
+    torch::Tensor out_data, data_index;
+    if (e_ids.has_value())
+      data_index =
+          (e_ids.value().is_pinned())
+              ? impl::IndexSelectCPUFromGPU(e_ids.value(), select_index)
+              : e_ids.value().index({select_index});
+    else
+      data_index = select_index;
+    out_data = (data_.value().is_pinned())
+                   ? impl::IndexSelectCPUFromGPU(data_.value(), data_index)
+                   : data_.value().index({data_index});
+    ret->SetData(out_data);
   }
   return ret;
 }
