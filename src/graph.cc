@@ -98,24 +98,7 @@ void Graph::SetCSR(std::shared_ptr<CSR> csr) { csr_ = csr; }
 
 void Graph::SetCOO(std::shared_ptr<COO> coo) { coo_ = coo; }
 
-void Graph::SetData(torch::Tensor data, std::string order) {
-  bool need_permutation = false;
-  torch::Tensor idx;
-  if (order == "col") {
-    CreateSparseFormat(_CSC);
-    need_permutation = csc_->e_ids.has_value();
-    if (need_permutation) {
-      idx = csc_->e_ids.value();
-    }
-  } else if (order == "row") {
-    CreateSparseFormat(_CSR);
-    need_permutation = csr_->e_ids.has_value();
-    if (need_permutation) {
-      idx = csr_->e_ids.value();
-    }
-  }
-  data_ = need_permutation ? data[idx] : data;
-}
+void Graph::SetData(torch::Tensor data) { data_ = data; }
 
 void Graph::SetValidCols(torch::Tensor val_cols) { val_col_ids_ = val_cols; }
 
