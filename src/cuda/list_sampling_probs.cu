@@ -81,7 +81,7 @@ std::tuple<torch::Tensor, torch::Tensor> _ListSamplingProbs(torch::Tensor data,
     cub_sortPairsDescending<FloatType, int64_t>(
         ares_tensor.data_ptr<FloatType>(), sort_ares.data_ptr<FloatType>(),
         ares_index.data_ptr<int64_t>(), sort_index.data_ptr<int64_t>(),
-        num_items);
+        num_items, 0);
 
     index = sort_index.slice(0, 0, num_picks, 1);
     select = data.index({index});

@@ -18,6 +18,8 @@ struct COO {
   torch::Tensor row;
   torch::Tensor col;
   torch::optional<torch::Tensor> e_ids;
+  bool row_sorted = false;
+  bool col_sorted = false;
 };
 
 struct _TMP {

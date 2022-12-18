@@ -59,10 +59,29 @@ std::pair<torch::Tensor, torch::Tensor> DCSC2COOCUDA(torch::Tensor indptr,
   return {indices, col};
 }
 
+template <typename T>
+int _NumberOfBits(const T& range) {
+  if (range <= 1) {
+    // ranges of 0 or 1 require no bits to store
+    return 0;
+  }
+
+  int bits = 1;
+  while (bits < static_cast<int>(sizeof(T) * 8) && (1 << bits) < range) {
+    ++bits;
+  }
+
+  CHECK_EQ((range - 1) >> bits, 0);
+  CHECK_NE((range - 1) >> (bits - 1), 0);
+
+  return bits;
+}
+
 template <typename IdType>
 inline std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COOSort(
-    torch::Tensor coo_key, torch::Tensor coo_value) {
-  int num_items = coo_key.numel();
+    torch::Tensor coo_key, torch::Tensor coo_value, int64_t num_keys) {
+  auto num_items = coo_key.numel();
+  const int num_bits = _NumberOfBits(num_keys);
 
   torch::Tensor input_key = coo_key;
   torch::Tensor input_value;
@@ -72,10 +91,10 @@ inline std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COOSort(
   input_value = torch::arange(num_items,
                               torch::dtype(torch::kInt64).device(torch::kCUDA));
   output_value = torch::zeros_like(input_value);
-  cub_sortPairs<IdType, int64_t>(input_key.data_ptr<IdType>(),
-                                 output_key.data_ptr<IdType>(),
-                                 input_value.data_ptr<int64_t>(),
-                                 output_value.data_ptr<int64_t>(), num_items);
+  cub_sortPairs<IdType, int64_t>(
+      input_key.data_ptr<IdType>(), output_key.data_ptr<IdType>(),
+      input_value.data_ptr<int64_t>(), output_value.data_ptr<int64_t>(),
+      num_items, num_bits);
 
   return {output_key, coo_value.index({output_value}), output_value};
 }
@@ -113,19 +132,27 @@ __global__ void _SortedSearchKernelUpperBound(const IdType* hay,
   }
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COO2CSCCUDA(
-    torch::Tensor row, torch::Tensor col, int64_t num_rows) {
-  torch::Tensor sort_row, sort_col, sort_index;
-  std::tie(sort_row, sort_col, sort_index) = COOSort<int64_t>(col, row);
+std::tuple<torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>>
+COO2CSCCUDA(torch::Tensor row, torch::Tensor col, int64_t num_cols,
+            bool col_sorted) {
+  torch::Tensor sort_row, sort_col;
+  torch::optional<torch::Tensor> sort_index;
+  if (col_sorted) {
+    sort_col = col, sort_row = row;
+    sort_index = torch::nullopt;
+  } else {
+    std::tie(sort_col, sort_row, sort_index) =
+        COOSort<int64_t>(col, row, num_cols);
+  }
 
-  auto indptr = torch::zeros(num_rows + 1, sort_row.options());
+  auto indptr = torch::zeros(num_cols + 1, sort_col.options());
 
   dim3 block(128);
-  dim3 grid((num_rows + block.x - 1) / block.x);
+  dim3 grid((num_cols + block.x - 1) / block.x);
   _SortedSearchKernelUpperBound<int64_t>
-      <<<grid, block>>>(sort_row.data_ptr<int64_t>(), sort_row.numel(),
-                        num_rows, indptr.data_ptr<int64_t>() + 1);
-  return std::make_tuple(indptr, sort_col, sort_index);
+      <<<grid, block>>>(sort_col.data_ptr<int64_t>(), sort_col.numel(),
+                        num_cols, indptr.data_ptr<int64_t>() + 1);
+  return std::make_tuple(indptr, sort_row, sort_index);
 }
 
 template <typename IdType>
@@ -142,30 +169,39 @@ __global__ void _SortedSearchKernelUpperBoundWithMapping(const IdType* hay,
   }
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
-COO2DCSCCUDA(torch::Tensor row, torch::Tensor col) {
-  torch::Tensor sort_row, sort_col, sort_index;
-  std::tie(sort_row, sort_col, sort_index) = COOSort<int64_t>(col, row);
+std::tuple<torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>,
+           torch::Tensor>
+COO2DCSCCUDA(torch::Tensor row, torch::Tensor col, int64_t max_num_cols,
+             bool col_sorted) {
+  torch::Tensor sort_row, sort_col;
+  torch::optional<torch::Tensor> sort_index;
+  if (col_sorted) {
+    sort_col = col, sort_row = row;
+    sort_index = torch::nullopt;
+  } else {
+    std::tie(sort_col, sort_row, sort_index) =
+        COOSort<int64_t>(col, row, max_num_cols);
+  }
 
   auto d_unique_res = torch::empty_like(col);
   auto d_num_selected_out = torch::empty(1, col.options());
   cub_consecutiveUnique<int64_t>(
-      sort_row.data_ptr<int64_t>(), d_unique_res.data_ptr<int64_t>(),
+      sort_col.data_ptr<int64_t>(), d_unique_res.data_ptr<int64_t>(),
       d_num_selected_out.data_ptr<int64_t>(), col.numel());
   thrust::device_ptr<int64_t> item_prefix(
       static_cast<int64_t*>(d_num_selected_out.data_ptr<int64_t>()));
-  auto val_row_ids = d_unique_res.index(
+  auto val_col_ids = d_unique_res.index(
       {torch::indexing::Slice(torch::indexing::None, item_prefix[0])});
 
-  auto id_size = val_row_ids.numel();
+  auto id_size = val_col_ids.numel();
   auto indptr = torch::zeros(id_size + 1, sort_row.options());
 
   dim3 block(128);
   dim3 grid((id_size + block.x - 1) / block.x);
   _SortedSearchKernelUpperBoundWithMapping<int64_t><<<grid, block>>>(
-      sort_row.data_ptr<int64_t>(), sort_row.numel(), id_size,
-      indptr.data_ptr<int64_t>() + 1, val_row_ids.data_ptr<int64_t>());
-  return std::make_tuple(indptr, sort_col, sort_index, val_row_ids);
+      sort_col.data_ptr<int64_t>(), sort_col.numel(), id_size,
+      indptr.data_ptr<int64_t>() + 1, val_col_ids.data_ptr<int64_t>());
+  return std::make_tuple(indptr, sort_row, sort_index, val_col_ids);
 }
 
 }  // namespace impl

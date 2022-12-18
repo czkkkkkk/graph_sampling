@@ -402,7 +402,7 @@ void Graph::CSC2CSR() {
 void Graph::CSC2DCSR() {
   SetCOO(GraphCSC2COO(csc_, true));
   std::shared_ptr<CSR> csr_ptr;
-  std::tie(csr_ptr, val_row_ids_) = GraphCOO2DCSC(coo_, false);
+  std::tie(csr_ptr, val_row_ids_) = GraphCOO2DCSC(coo_, num_rows_, false);
   SetCSR(csr_ptr);
 }
 
@@ -414,7 +414,7 @@ void Graph::CSR2CSC() {
 void Graph::CSR2DCSC() {
   SetCOO(GraphCSC2COO(csr_, false));
   std::shared_ptr<CSC> csc_ptr;
-  std::tie(csc_ptr, val_col_ids_) = GraphCOO2DCSC(coo_, true);
+  std::tie(csc_ptr, val_col_ids_) = GraphCOO2DCSC(coo_, num_cols_, true);
   SetCSC(csc_ptr);
 }
 
@@ -450,7 +450,7 @@ void Graph::CreateSparseFormat(int64_t format) {
     }
     if (coo_ != nullptr) {
       std::shared_ptr<CSC> csc_ptr;
-      std::tie(csc_ptr, val_col_ids_) = GraphCOO2DCSC(coo_, true);
+      std::tie(csc_ptr, val_col_ids_) = GraphCOO2DCSC(coo_, num_cols_, true);
       SetCSC(csc_ptr);
     } else
       CSR2DCSC();
@@ -472,7 +472,7 @@ void Graph::CreateSparseFormat(int64_t format) {
     }
     if (coo_ != nullptr) {
       std::shared_ptr<CSR> csr_ptr;
-      std::tie(csr_ptr, val_row_ids_) = GraphCOO2DCSC(coo_, false);
+      std::tie(csr_ptr, val_row_ids_) = GraphCOO2DCSC(coo_, num_rows_, false);
       SetCSR(csr_ptr);
     } else
       CSC2DCSR();

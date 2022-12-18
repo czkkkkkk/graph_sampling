@@ -43,36 +43,42 @@ void cub_inclusiveSum(IdType* arrays, int32_t array_length) {
 template <typename KeyType, typename ValueType>
 void cub_sortPairs(KeyType* d_keys_in, KeyType* d_keys_out,
                    ValueType* d_values_in, ValueType* d_values_out,
-                   int32_t num_items) {
+                   int32_t num_items, int num_bits) {
+  if (num_bits == 0) {
+    num_bits = sizeof(KeyType) * 8;
+  }
   void* d_temp_storage = NULL;
   size_t temp_storage_bytes = 0;
   cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, d_keys_in,
                                   d_keys_out, d_values_in, d_values_out,
-                                  num_items);
+                                  num_items, 0, num_bits);
   d_temp_storage =
       c10::cuda::CUDACachingAllocator::raw_alloc(temp_storage_bytes);
   cub::DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, d_keys_in,
                                   d_keys_out, d_values_in, d_values_out,
-                                  num_items);
+                                  num_items, 0, num_bits);
   c10::cuda::CUDACachingAllocator::raw_delete(d_temp_storage);
 }
 
 template <typename KeyType, typename ValueType>
 void cub_sortPairsDescending(KeyType* d_keys_in, KeyType* d_keys_out,
                              ValueType* d_values_in, ValueType* d_values_out,
-                             int32_t num_items) {
+                             int32_t num_items, int num_bits) {
+  if (num_bits == 0) {
+    num_bits = sizeof(KeyType) * 8;
+  }
   void* d_temp_storage = NULL;
   size_t temp_storage_bytes = 0;
-  cub::DeviceRadixSort::SortPairsDescending(d_temp_storage, temp_storage_bytes,
-                                            d_keys_in, d_keys_out, d_values_in,
-                                            d_values_out, num_items);
+  cub::DeviceRadixSort::SortPairsDescending(
+      d_temp_storage, temp_storage_bytes, d_keys_in, d_keys_out, d_values_in,
+      d_values_out, num_items, 0, num_bits);
   // Allocate temporary storage
   d_temp_storage =
       c10::cuda::CUDACachingAllocator::raw_alloc(temp_storage_bytes);
   // Run sorting operation
-  cub::DeviceRadixSort::SortPairsDescending(d_temp_storage, temp_storage_bytes,
-                                            d_keys_in, d_keys_out, d_values_in,
-                                            d_values_out, num_items);
+  cub::DeviceRadixSort::SortPairsDescending(
+      d_temp_storage, temp_storage_bytes, d_keys_in, d_keys_out, d_values_in,
+      d_values_out, num_items, 0, num_bits);
   c10::cuda::CUDACachingAllocator::raw_delete(d_temp_storage);
 }
 

@@ -42,11 +42,11 @@ void COOSumCUDA(torch::Tensor target, torch::optional<torch::Tensor> e_ids,
 std::pair<torch::Tensor, torch::Tensor> CSC2COOCUDA(torch::Tensor indptr,
                                                     torch::Tensor indices);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COO2CSCCUDA(
-    torch::Tensor row, torch::Tensor col, int64_t num_rows);
+std::tuple<torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>> COO2CSCCUDA(
+    torch::Tensor row, torch::Tensor col, int64_t num_cols, bool col_sorted);
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
-COO2DCSCCUDA(torch::Tensor row, torch::Tensor col);
+std::tuple<torch::Tensor, torch::Tensor, torch::optional<torch::Tensor>, torch::Tensor>
+COO2DCSCCUDA(torch::Tensor row, torch::Tensor col, int64_t max_num_cols, bool col_sorted);
 
 std::pair<torch::Tensor, torch::Tensor> DCSC2COOCUDA(torch::Tensor indptr,
                                                      torch::Tensor indices,

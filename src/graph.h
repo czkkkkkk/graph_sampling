@@ -84,10 +84,10 @@ class Graph : public torch::CustomClassHolder {
 
   // todo: return global_e_id
  private:
-  bool is_subgraph_;
-  int64_t num_cols_;  // total number of cols in a matrix
-  int64_t num_rows_;  // total number of rows in a matrix
-  int64_t num_edges_;
+  bool is_subgraph_ = false;
+  int64_t num_cols_ = 0;  // total number of cols in a matrix
+  int64_t num_rows_ = 0;  // total number of rows in a matrix
+  int64_t num_edges_ = 0;
   std::shared_ptr<CSC> csc_;
   std::shared_ptr<CSR> csr_;
   std::shared_ptr<COO> coo_;
