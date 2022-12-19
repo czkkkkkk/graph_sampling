@@ -180,9 +180,9 @@ std::pair<std::shared_ptr<COO>, torch::Tensor> COOColSlicing(
     else
       std::tie(sub_coo_col, sub_coo_row, select_index) =
           impl::COORowSlicingCUDA(coo->col, coo->row, node_ids);
-    return {
-        std::make_shared<COO>(COO{sub_coo_row, sub_coo_col, torch::nullopt}),
-        select_index};
+    return {std::make_shared<COO>(COO{sub_coo_row, sub_coo_col, torch::nullopt,
+                                      coo->row_sorted, coo->col_sorted}),
+            select_index};
   } else {
     LOG(FATAL) << "Not implemented warning";
     return {std::make_shared<COO>(COO{}), torch::Tensor()};
