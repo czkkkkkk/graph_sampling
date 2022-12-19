@@ -834,19 +834,31 @@ c10::intrusive_ptr<Graph> Graph::FullSlicing(torch::Tensor n_ids, int64_t axis,
   if (axis == 0) {
     if (on_format == _CSC) {
       std::tie(coo_ptr, select_index) = FullCSCColSlicing(csc_, n_ids);
+      coo_ptr->row_sorted = false;
+      coo_ptr->col_sorted = true;
     } else if (on_format == _COO) {
       std::tie(coo_ptr, select_index) = FullCOOColSlicing(coo_, n_ids, axis);
+      coo_ptr->row_sorted = coo_->row_sorted;
+      coo_ptr->col_sorted = coo_->col_sorted;
     } else if (on_format == _CSR) {
       std::tie(coo_ptr, select_index) = FullCSCRowSlicing(csr_, n_ids);
+      coo_ptr->row_sorted = true;
+      coo_ptr->col_sorted = false;
     }
 
   } else {
     if (on_format == _CSR) {
       std::tie(coo_ptr, select_index) = FullCSCColSlicing(csr_, n_ids);
+      coo_ptr->row_sorted = true;
+      coo_ptr->col_sorted = false;
     } else if (on_format == _COO) {
       std::tie(coo_ptr, select_index) = FullCOOColSlicing(coo_, n_ids, axis);
+      coo_ptr->row_sorted = coo_->row_sorted;
+      coo_ptr->col_sorted = coo_->col_sorted;
     } else if (on_format == _CSC) {
       std::tie(coo_ptr, select_index) = FullCSCRowSlicing(csc_, n_ids);
+      coo_ptr->row_sorted = false;
+      coo_ptr->col_sorted = true;
     }
   }
 
@@ -896,8 +908,12 @@ c10::intrusive_ptr<Graph> Graph::FullSampling(int64_t axis, int64_t fanout,
   torch::Tensor out_data;
   if (axis == 0 && on_format == _CSC) {
     std::tie(coo_ptr, select_index) = FullCSCColSampling(csc_, fanout, replace);
+    coo_ptr->row_sorted = false;
+    coo_ptr->col_sorted = true;
   } else if (axis == 1 && on_format == _CSR) {
     std::tie(coo_ptr, select_index) = FullCSCColSampling(csr_, fanout, replace);
+    coo_ptr->row_sorted = true;
+    coo_ptr->col_sorted = false;
   } else {
     LOG(FATAL) << "No implementation!";
   }
@@ -950,9 +966,13 @@ c10::intrusive_ptr<Graph> Graph::FullSamplingProbs(int64_t axis,
   if (axis == 0 && on_format == _CSC) {
     std::tie(coo_ptr, select_index) =
         FullCSCColSamplingProbs(csc_, edge_probs, fanout, replace);
+    coo_ptr->row_sorted = false;
+    coo_ptr->col_sorted = true;
   } else if (axis == 1 && on_format == _CSR) {
     std::tie(coo_ptr, select_index) =
         FullCSCColSamplingProbs(csr_, edge_probs, fanout, replace);
+    coo_ptr->row_sorted = true;
+    coo_ptr->col_sorted = false;
   } else {
     LOG(FATAL) << "No implementation!";
   }
