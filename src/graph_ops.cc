@@ -13,12 +13,16 @@ namespace gs {
 std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc, bool CSC2COO) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor row, col;
+    bool row_sorted = false, col_sorted = false;
     if (CSC2COO) {
       std::tie(row, col) = impl::CSC2COOCUDA(csc->indptr, csc->indices);
+      col_sorted = true;
     } else {
       std::tie(col, row) = impl::CSC2COOCUDA(csc->indptr, csc->indices);
+      row_sorted = true;
     }
-    return std::make_shared<COO>(COO{row, col, csc->e_ids});
+    return std::make_shared<COO>(
+        COO{row, col, csc->e_ids, row_sorted, col_sorted});
   } else {
     LOG(FATAL) << "Not implemented warning";
     return std::make_shared<COO>(COO{});
@@ -28,19 +32,26 @@ std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc, bool CSC2COO) {
 std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
                                   bool COO2CSC) {
   if (coo->row.device().type() == torch::kCUDA) {
-    torch::Tensor indptr, indices, sort_index;
-    torch::optional<torch::Tensor> sorted_e_ids = torch::nullopt;
+    torch::Tensor indptr, indices;
+    torch::optional<torch::Tensor> sorted_e_ids = torch::nullopt,
+                                   sort_index = torch::nullopt;
     if (COO2CSC) {
       std::tie(indptr, indices, sort_index) =
-          impl::COO2CSCCUDA(coo->row, coo->col, num_items);
+          impl::COO2CSCCUDA(coo->row, coo->col, num_items, coo->col_sorted);
     } else {
       std::tie(indptr, indices, sort_index) =
-          impl::COO2CSCCUDA(coo->col, coo->row, num_items);
+          impl::COO2CSCCUDA(coo->col, coo->row, num_items, coo->row_sorted);
     }
 
-    sorted_e_ids = coo->e_ids.has_value()
-                       ? coo->e_ids.value().index({sort_index})
-                       : sort_index;
+    if (coo->e_ids.has_value()) {
+      if (sort_index.has_value()) {
+        sorted_e_ids = coo->e_ids.value().index({sort_index});
+      } else {
+        sorted_e_ids = coo->e_ids.value();
+      }
+    } else {
+      sorted_e_ids = sort_index;
+    }
     return std::make_shared<CSC>(CSC{indptr, indices, sorted_e_ids});
   } else {
     LOG(FATAL) << "Not implemented warning";
@@ -49,21 +60,28 @@ std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
 }
 
 std::pair<std::shared_ptr<CSC>, torch::Tensor> GraphCOO2DCSC(
-    std::shared_ptr<COO> coo, bool COO2DCSC) {
+    std::shared_ptr<COO> coo, int64_t num_items, bool COO2DCSC) {
   if (coo->row.device().type() == torch::kCUDA) {
-    torch::Tensor indptr, indices, sort_index, val_ids;
-    torch::optional<torch::Tensor> sorted_e_ids = torch::nullopt;
+    torch::Tensor indptr, indices, val_ids;
+    torch::optional<torch::Tensor> sorted_e_ids = torch::nullopt,
+                                   sort_index = torch::nullopt;
     if (COO2DCSC) {
       std::tie(indptr, indices, sort_index, val_ids) =
-          impl::COO2DCSCCUDA(coo->row, coo->col);
+          impl::COO2DCSCCUDA(coo->row, coo->col, num_items, coo->col_sorted);
     } else {
       std::tie(indptr, indices, sort_index, val_ids) =
-          impl::COO2DCSCCUDA(coo->col, coo->row);
+          impl::COO2DCSCCUDA(coo->col, coo->row, num_items, coo->row_sorted);
     }
 
-    sorted_e_ids = coo->e_ids.has_value()
-                       ? coo->e_ids.value().index({sort_index})
-                       : sort_index;
+    if (coo->e_ids.has_value()) {
+      if (sort_index.has_value()) {
+        sorted_e_ids = coo->e_ids.value().index({sort_index});
+      } else {
+        sorted_e_ids = coo->e_ids.value();
+      }
+    } else {
+      sorted_e_ids = sort_index;
+    }
     return {std::make_shared<CSC>(CSC{indptr, indices, sorted_e_ids}), val_ids};
   } else {
     LOG(FATAL) << "Not implemented warning";
@@ -75,12 +93,16 @@ std::shared_ptr<COO> GraphDCSC2COO(std::shared_ptr<CSC> csc, torch::Tensor ids,
                                    bool DCSC2COO) {
   if (csc->indptr.device().type() == torch::kCUDA) {
     torch::Tensor row, col;
+    bool row_sorted = false, col_sorted = true;
     if (DCSC2COO) {
       std::tie(row, col) = impl::DCSC2COOCUDA(csc->indptr, csc->indices, ids);
+      col_sorted = true;
     } else {
       std::tie(col, row) = impl::DCSC2COOCUDA(csc->indptr, csc->indices, ids);
+      row_sorted = true;
     }
-    return std::make_shared<COO>(COO{row, col, csc->e_ids});
+    return std::make_shared<COO>(
+        COO{row, col, csc->e_ids, row_sorted, col_sorted});
   } else {
     LOG(FATAL) << "Not implemented warning";
     return std::make_shared<COO>(COO{});
@@ -118,7 +140,8 @@ std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCRowSlicing(
 
 std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCColSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor node_ids, bool with_coo) {
-  if (csc->indptr.device().type() == torch::kCUDA) {
+  auto csc_type = csc->indptr.device().type();
+  if (csc_type == torch::kCUDA || csc->indptr.is_pinned()) {
     torch::Tensor sub_indptr, coo_col, coo_row, select_index;
     std::tie(sub_indptr, coo_col, coo_row, select_index) =
         impl::CSCColSlicingCUDA(csc->indptr, csc->indices, node_ids, with_coo);

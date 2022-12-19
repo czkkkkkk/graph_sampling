@@ -30,7 +30,7 @@ class Graph : public torch::CustomClassHolder {
   void SetCSC(std::shared_ptr<CSC> csc);
   void SetCSR(std::shared_ptr<CSR> csr);
   void SetCOO(std::shared_ptr<COO> coo);
-  void SetData(torch::Tensor data, std::string order = "default");
+  void SetData(torch::Tensor data);
   void SetValidCols(torch::Tensor val_cols);
   void SetValidRows(torch::Tensor val_rows);
   void SetNumEdges(int64_t num_edges);
@@ -109,11 +109,11 @@ class Graph : public torch::CustomClassHolder {
   std::vector<torch::Tensor> FullGetCOO();
   // todo: return global_e_id
  private:
-  bool is_subgraph_;
-  int64_t num_cols_;  // total number of cols in a matrix
-  int64_t num_rows_;  // total number of rows in a matrix
-  int64_t num_edges_;
-  int64_t num_nodes_;
+  bool is_subgraph_ = false;
+  int64_t num_cols_ = 0;  // total number of cols in a matrix
+  int64_t num_rows_ = 0;  // total number of rows in a matrix
+  int64_t num_edges_ = 0;
+  int64_t num_nodes_ = 0;
   std::shared_ptr<CSC> csc_;
   std::shared_ptr<CSR> csr_;
   std::shared_ptr<COO> coo_;

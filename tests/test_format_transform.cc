@@ -102,7 +102,7 @@ TEST(CSC2DCSR, test1)
     Graph A(false);
     auto options = torch::TensorOptions().dtype(torch::kInt64).device(torch::kCUDA);
     torch::Tensor n_ids = torch::arange(1, 4, 2, options);
-    torch::Tensor expeceted_indices = torch::arange(10, 12, options).repeat({2});
+    torch::Tensor expected_indices = torch::arange(10, 12, options).repeat({2});
     torch::Tensor indptr = torch::cat({torch::zeros(10, options), torch::arange(0, 3, options) * 2});
     torch::Tensor indices = torch::arange(1, 4, 2, options).repeat({2});
     A.LoadCSC(indptr, indices);
@@ -111,6 +111,6 @@ TEST(CSC2DCSR, test1)
     auto csr_ptr = A.GetCSR();
 
     EXPECT_EQ(csr_ptr->indptr.numel(), 3);
-    EXPECT_TRUE(csr_ptr->indices.equal(expeceted_indices));
+    EXPECT_TRUE(csr_ptr->indices.equal(expected_indices));
     EXPECT_TRUE(A.GetValidRows().equal(n_ids));
 }
