@@ -184,8 +184,9 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
       ret->SetCSC(std::make_shared<CSC>(
           CSC{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
     if (output_format & _COO)
-      ret->SetCOO(std::make_shared<COO>(COO{
-          tmp_ptr->coo_in_indices, tmp_ptr->coo_in_indptr, torch::nullopt}));
+      ret->SetCOO(std::make_shared<COO>(COO{tmp_ptr->coo_in_indices,
+                                            tmp_ptr->coo_in_indptr,
+                                            torch::nullopt, false, true}));
     ret->SetNumEdges(tmp_ptr->coo_in_indices.numel());
     e_ids = csc_->e_ids;
 
@@ -211,8 +212,9 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
       ret->SetCSR(std::make_shared<CSR>(
           CSR{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
     if (output_format & _COO)
-      ret->SetCOO(std::make_shared<COO>(COO{
-          tmp_ptr->coo_in_indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+      ret->SetCOO(std::make_shared<COO>(COO{tmp_ptr->coo_in_indptr,
+                                            tmp_ptr->coo_in_indices,
+                                            torch::nullopt, true, false}));
     ret->SetNumEdges(tmp_ptr->coo_in_indices.numel());
     e_ids = csr_->e_ids;
   } else {
@@ -258,8 +260,9 @@ c10::intrusive_ptr<Graph> Graph::Sampling(int64_t axis, int64_t fanout,
       ret->SetCSC(std::make_shared<CSC>(
           CSC{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
     if (output_format & _COO)
-      ret->SetCOO(std::make_shared<COO>(COO{
-          tmp_ptr->coo_in_indices, tmp_ptr->coo_in_indptr, torch::nullopt}));
+      ret->SetCOO(std::make_shared<COO>(COO{tmp_ptr->coo_in_indices,
+                                            tmp_ptr->coo_in_indptr,
+                                            torch::nullopt, false, true}));
     ret->SetNumEdges(tmp_ptr->coo_in_indices.numel());
     if (data_.has_value()) {
       if (csc_->e_ids.has_value()) {
@@ -282,8 +285,9 @@ c10::intrusive_ptr<Graph> Graph::Sampling(int64_t axis, int64_t fanout,
       ret->SetCSR(std::make_shared<CSR>(
           CSR{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
     if (output_format & _COO)
-      ret->SetCOO(std::make_shared<COO>(COO{
-          tmp_ptr->coo_in_indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+      ret->SetCOO(std::make_shared<COO>(COO{tmp_ptr->coo_in_indptr,
+                                            tmp_ptr->coo_in_indices,
+                                            torch::nullopt, true, false}));
     ret->SetNumEdges(tmp_ptr->coo_in_indices.numel());
     if (data_.has_value()) {
       if (csr_->e_ids.has_value()) {
@@ -326,8 +330,9 @@ c10::intrusive_ptr<Graph> Graph::SamplingProbs(int64_t axis,
       ret->SetCSC(std::make_shared<CSC>(
           CSC{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
     if (output_format & _COO)
-      ret->SetCOO(std::make_shared<COO>(COO{
-          tmp_ptr->coo_in_indices, tmp_ptr->coo_in_indptr, torch::nullopt}));
+      ret->SetCOO(std::make_shared<COO>(COO{tmp_ptr->coo_in_indices,
+                                            tmp_ptr->coo_in_indptr,
+                                            torch::nullopt, false, true}));
     ret->SetNumEdges(tmp_ptr->coo_in_indices.numel());
     if (data_.has_value()) {
       if (csc_->e_ids.has_value()) {
@@ -350,8 +355,9 @@ c10::intrusive_ptr<Graph> Graph::SamplingProbs(int64_t axis,
       ret->SetCSR(std::make_shared<CSR>(
           CSR{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
     if (output_format & _COO)
-      ret->SetCOO(std::make_shared<COO>(COO{
-          tmp_ptr->coo_in_indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+      ret->SetCOO(std::make_shared<COO>(COO{tmp_ptr->coo_in_indptr,
+                                            tmp_ptr->coo_in_indices,
+                                            torch::nullopt, true, false}));
     ret->SetNumEdges(tmp_ptr->coo_in_indices.numel());
     if (data_.has_value()) {
       if (csr_->e_ids.has_value()) {
