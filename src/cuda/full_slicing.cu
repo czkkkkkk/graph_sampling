@@ -121,7 +121,8 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _OnIndptrSlicing(
   int64_t num_items = column_ids.numel();
 
   // compute indptr
-  torch::Tensor sub_indptr = torch::empty(num_items + 1, indptr.options());
+  torch::Tensor sub_indptr = torch::empty(
+      num_items + 1, torch::dtype(indptr.dtype()).device(torch::kCUDA));
   using it = thrust::counting_iterator<IdType>;
   thrust::for_each(
       thrust::device, it(0), it(num_items),
@@ -138,9 +139,12 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _OnIndptrSlicing(
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
   int nnz = item_prefix[num_items];  // cpu
-  torch::Tensor out_coo_row = torch::empty(nnz, indices.options());
-  torch::Tensor out_coo_col = torch::empty(nnz, indices.options());
-  torch::Tensor select_index = torch::empty(nnz, indices.options());
+  torch::Tensor out_coo_row =
+      torch::empty(nnz, torch::dtype(indices.dtype()).device(torch::kCUDA));
+  torch::Tensor out_coo_col =
+      torch::empty(nnz, torch::dtype(indices.dtype()).device(torch::kCUDA));
+  torch::Tensor select_index =
+      torch::empty(nnz, torch::dtype(indices.dtype()).device(torch::kCUDA));
 
   dim3 block(32, 16);
   dim3 grid((num_items + block.x - 1) / block.x);
@@ -201,8 +205,10 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _OnIndicesSlicing(
 
   // construct NodeQueryHashMap
   int dir_size = UpPower(num_row_ids) * 2;
-  torch::Tensor key_buffer = torch::full(dir_size, -1, indptr.options());
-  torch::Tensor value_buffer = torch::full(dir_size, -1, indices.options());
+  torch::Tensor key_buffer = torch::full(
+      dir_size, -1, torch::dtype(indptr.dtype()).device(torch::kCUDA));
+  torch::Tensor value_buffer = torch::full(
+      dir_size, -1, torch::dtype(indices.dtype()).device(torch::kCUDA));
   using it = thrust::counting_iterator<IdType>;
   thrust::for_each(thrust::device, it(0), it(num_row_ids),
                    [key = row_ids.data_ptr<IdType>(),
@@ -219,8 +225,10 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _OnIndicesSlicing(
   const dim3 block(WARP_SIZE, BLOCK_WARP);
   const dim3 grid((num_items + TILE_SIZE - 1) / TILE_SIZE);
 
-  torch::Tensor out_coo_col = torch::empty_like(indices);
-  torch::Tensor out_mask = torch::zeros_like(indices);
+  torch::Tensor out_coo_col = torch::empty_like(
+      indices, torch::dtype(indices.dtype()).device(torch::kCUDA));
+  torch::Tensor out_mask = torch::zeros_like(
+      indices, torch::dtype(indices.dtype()).device(torch::kCUDA));
   // query hashmap to get mask
   _OnIndicesSlicinigQueryKernel<IdType, BLOCK_WARP, TILE_SIZE><<<grid, block>>>(
       indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
@@ -275,8 +283,10 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _COORowSlicing(
 
   // construct NodeQueryHashMap
   int dir_size = UpPower(num_row_ids) * 2;
-  torch::Tensor key_buffer = torch::full(dir_size, -1, row_ids.options());
-  torch::Tensor value_buffer = torch::full(dir_size, -1, row_ids.options());
+  torch::Tensor key_buffer = torch::full(
+      dir_size, -1, torch::dtype(row_ids.dtype()).device(torch::kCUDA));
+  torch::Tensor value_buffer = torch::full(
+      dir_size, -1, torch::dtype(row_ids.dtype()).device(torch::kCUDA));
 
   using it = thrust::counting_iterator<IdType>;
   thrust::for_each(thrust::device, it(0), it(num_row_ids),

@@ -184,10 +184,12 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _CSCColSamplingProbs(
     torch::Tensor indptr, torch::Tensor indices, torch::Tensor probs,
     int64_t num_picks, bool replace) {
   int64_t num_items = indptr.numel() - 1;
-  torch::Tensor sub_indptr = torch::empty_like(indptr);
+  torch::Tensor sub_indptr = torch::empty_like(
+      indptr, torch::dtype(indptr.dtype()).device(torch::kCUDA));
 
   // temp_indptr is used to measure how much extra space we need.
-  torch::Tensor temp_indptr = torch::empty_like(indptr);
+  torch::Tensor temp_indptr = torch::empty_like(
+      indptr, torch::dtype(indptr.dtype()).device(torch::kCUDA));
 
   using it = thrust::counting_iterator<IdType>;
   thrust::for_each(thrust::device, it(0), it(num_items),
@@ -216,10 +218,14 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _CSCColSamplingProbs(
   IdType nnz = sub_prefix[num_items];
   IdType temp_size = temp_prefix[num_items];
 
-  torch::Tensor temp = torch::empty(temp_size, probs.options());
-  torch::Tensor coo_row = torch::empty(nnz, indices.options());
-  torch::Tensor coo_col = torch::empty(nnz, indices.options());
-  torch::Tensor select_index = torch::empty(nnz, indices.options());
+  torch::Tensor temp =
+      torch::empty(temp_size, torch::dtype(probs.dtype()).device(torch::kCUDA));
+  torch::Tensor coo_row =
+      torch::empty(nnz, torch::dtype(indices.dtype()).device(torch::kCUDA));
+  torch::Tensor coo_col =
+      torch::empty(nnz, torch::dtype(indices.dtype()).device(torch::kCUDA));
+  torch::Tensor select_index =
+      torch::empty(nnz, torch::dtype(indices.dtype()).device(torch::kCUDA));
 
   const uint64_t random_seed = 7777;
   constexpr int BLOCK_SIZE = 128;

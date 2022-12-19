@@ -93,7 +93,8 @@ template <typename IdType>
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> __CSCColSampling(
     torch::Tensor indptr, torch::Tensor indices, int64_t fanout, bool replace) {
   int64_t num_items = indptr.numel() - 1;
-  auto sub_indptr = torch::empty(num_items + 1, indptr.options());
+  auto sub_indptr = torch::empty(
+      num_items + 1, torch::dtype(indptr.dtype()).device(torch::kCUDA));
 
   // compute indptr
   using it = thrust::counting_iterator<IdType>;
@@ -115,9 +116,12 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> __CSCColSampling(
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
   int nnz = item_prefix[num_items];  // cpu
-  auto coo_row = torch::ones(nnz, indices.options());
-  auto coo_col = torch::empty(nnz, indices.options());
-  auto select_index = torch::empty(nnz, indices.options());
+  auto coo_row =
+      torch::ones(nnz, torch::dtype(indices.dtype()).device(torch::kCUDA));
+  auto coo_col =
+      torch::empty(nnz, torch::dtype(indices.dtype()).device(torch::kCUDA));
+  auto select_index =
+      torch::empty(nnz, torch::dtype(indices.dtype()).device(torch::kCUDA));
 
   const uint64_t random_seed = 7777;
   dim3 block(32, 16);

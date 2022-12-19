@@ -351,7 +351,7 @@ torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
 
 std::pair<std::shared_ptr<COO>, torch::Tensor> FullCSCColSlicing(
     std::shared_ptr<CSC> csc, torch::Tensor node_ids) {
-  if (csc->indptr.device().type() == torch::kCUDA) {
+  if (csc->indptr.device().type() == torch::kCUDA || csc->indptr.is_pinned()) {
     torch::Tensor coo_row, coo_col, select_index;
     std::tie(coo_row, coo_col, select_index) =
         impl::FullCSCColSlicingCUDA(csc->indptr, csc->indices, node_ids);
