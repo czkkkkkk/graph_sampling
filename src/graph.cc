@@ -1130,4 +1130,10 @@ Graph::FullRelabel(torch::Tensor col_seeds) {
           coo_->e_ids,
           "coo"};
 }
+
+void Graph::DropFormat(int64_t format) {
+  if (format == _COO) coo_ = nullptr;
+  if (format == _CSR) csr_ = nullptr;
+  if (format == _CSC) csc_ = nullptr;
+}
 }  // namespace gs

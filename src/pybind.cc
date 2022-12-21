@@ -48,7 +48,10 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_full_normalize", &Graph::FullNormalize)
       .def("_CAPI_full_sddmm", &Graph::FullSDDMM)
       .def("_CAPI_get_coo", &Graph::FullGetCOO)
-      .def("_CAPI_full_relabel", &Graph::FullRelabel);
+      .def("_CAPI_full_relabel", &Graph::FullRelabel)
+      .def("_CAPI_drop_format", &Graph::DropFormat)
+      .def("_CAPI_create_format", &Graph::CreateSparseFormat)
+      .def("_CAPI_full_create_format", &Graph::FullCreateSparseFormat);
   m.class_<HeteroGraph>("HeteroGraph")
       .def(torch::init<>())
       .def("load_from_homo", &HeteroGraph::LoadFromHomo)

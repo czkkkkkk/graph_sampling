@@ -106,6 +106,7 @@ class Graph : public torch::CustomClassHolder {
                  torch::Tensor out, int64_t lhs_target, int64_t rhs_target,
                  int64_t on_format);
 
+  void DropFormat(int64_t format);
   std::vector<torch::Tensor> FullGetCOO();
   // todo: return global_e_id
  private:
