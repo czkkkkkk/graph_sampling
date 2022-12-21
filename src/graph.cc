@@ -835,21 +835,21 @@ c10::intrusive_ptr<Graph> Graph::FullSlicing(torch::Tensor n_ids, int64_t axis,
     if (on_format == _CSC) {
       std::tie(coo_ptr, select_index) = FullCSCColSlicing(csc_, n_ids);
       coo_ptr->row_sorted = false;
-      coo_ptr->col_sorted = true;
+      coo_ptr->col_sorted = false;
     } else if (on_format == _COO) {
       std::tie(coo_ptr, select_index) = FullCOOColSlicing(coo_, n_ids, axis);
       coo_ptr->row_sorted = coo_->row_sorted;
       coo_ptr->col_sorted = coo_->col_sorted;
     } else if (on_format == _CSR) {
       std::tie(coo_ptr, select_index) = FullCSCRowSlicing(csr_, n_ids);
-      coo_ptr->row_sorted = true;
-      coo_ptr->col_sorted = false;
+      coo_ptr->row_sorted = false;
+      coo_ptr->col_sorted = true;
     }
 
   } else {
     if (on_format == _CSR) {
       std::tie(coo_ptr, select_index) = FullCSCColSlicing(csr_, n_ids);
-      coo_ptr->row_sorted = true;
+      coo_ptr->row_sorted = false;
       coo_ptr->col_sorted = false;
     } else if (on_format == _COO) {
       std::tie(coo_ptr, select_index) = FullCOOColSlicing(coo_, n_ids, axis);
@@ -864,7 +864,8 @@ c10::intrusive_ptr<Graph> Graph::FullSlicing(torch::Tensor n_ids, int64_t axis,
 
   if (on_format == _CSR) {
     ret->SetCOO(
-        std::make_shared<COO>(COO{coo_ptr->col, coo_ptr->row, coo_ptr->e_ids}));
+        std::make_shared<COO>(COO{coo_ptr->col, coo_ptr->row, coo_ptr->e_ids,
+                                  coo_ptr->col_sorted, coo_ptr->row_sorted}));
   } else {
     ret->SetCOO(coo_ptr);
   }
@@ -912,15 +913,16 @@ c10::intrusive_ptr<Graph> Graph::FullSampling(int64_t axis, int64_t fanout,
     coo_ptr->col_sorted = true;
   } else if (axis == 1 && on_format == _CSR) {
     std::tie(coo_ptr, select_index) = FullCSCColSampling(csr_, fanout, replace);
-    coo_ptr->row_sorted = true;
-    coo_ptr->col_sorted = false;
+    coo_ptr->row_sorted = false;
+    coo_ptr->col_sorted = true;
   } else {
     LOG(FATAL) << "No implementation!";
   }
 
   if (on_format == _CSR) {
     ret->SetCOO(
-        std::make_shared<COO>(COO{coo_ptr->col, coo_ptr->row, coo_ptr->e_ids}));
+        std::make_shared<COO>(COO{coo_ptr->col, coo_ptr->row, coo_ptr->e_ids,
+                                  coo_ptr->col_sorted, coo_ptr->row_sorted}));
   } else {
     ret->SetCOO(coo_ptr);
   }
@@ -971,15 +973,16 @@ c10::intrusive_ptr<Graph> Graph::FullSamplingProbs(int64_t axis,
   } else if (axis == 1 && on_format == _CSR) {
     std::tie(coo_ptr, select_index) =
         FullCSCColSamplingProbs(csr_, edge_probs, fanout, replace);
-    coo_ptr->row_sorted = true;
-    coo_ptr->col_sorted = false;
+    coo_ptr->row_sorted = false;
+    coo_ptr->col_sorted = true;
   } else {
     LOG(FATAL) << "No implementation!";
   }
 
   if (on_format == _CSR) {
     ret->SetCOO(
-        std::make_shared<COO>(COO{coo_ptr->col, coo_ptr->row, coo_ptr->e_ids}));
+        std::make_shared<COO>(COO{coo_ptr->col, coo_ptr->row, coo_ptr->e_ids,
+                                  coo_ptr->col_sorted, coo_ptr->row_sorted}));
   } else {
     ret->SetCOO(coo_ptr);
   }
@@ -1110,6 +1113,16 @@ void Graph::FullSDDMM(const std::string& op, torch::Tensor lhs,
 std::vector<torch::Tensor> Graph::FullGetCOO() {
   FullCreateSparseFormat(_COO);
   return {coo_->row, coo_->col};
+}
+
+std::vector<torch::Tensor> Graph::FullGetCSR() {
+  FullCreateSparseFormat(_CSR);
+  return {csr_->indptr, csr_->indices};
+}
+
+std::vector<torch::Tensor> Graph::FullGetCSC() {
+  FullCreateSparseFormat(_CSC);
+  return {csc_->indptr, csc_->indices};
 }
 
 std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,

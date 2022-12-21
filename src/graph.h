@@ -108,6 +108,8 @@ class Graph : public torch::CustomClassHolder {
 
   void DropFormat(int64_t format);
   std::vector<torch::Tensor> FullGetCOO();
+  std::vector<torch::Tensor> FullGetCSC();
+  std::vector<torch::Tensor> FullGetCSR();
   // todo: return global_e_id
  private:
   bool is_subgraph_ = false;
