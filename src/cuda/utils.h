@@ -3,6 +3,7 @@
 
 #include <c10/cuda/CUDACachingAllocator.h>
 #include <cub/cub.cuh>
+#include "../logging.h"
 #include "cuda_common.h"
 
 namespace gs {
