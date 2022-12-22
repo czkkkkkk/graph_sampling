@@ -828,6 +828,7 @@ c10::intrusive_ptr<Graph> Graph::FullSlicing(torch::Tensor n_ids, int64_t axis,
   std::shared_ptr<COO> coo_ptr;
   torch::Tensor select_index;
   torch::Tensor out_data;
+  torch::optional<torch::Tensor> e_ids;
 
   FullCreateSparseFormat(on_format);
 
@@ -836,14 +837,17 @@ c10::intrusive_ptr<Graph> Graph::FullSlicing(torch::Tensor n_ids, int64_t axis,
       std::tie(coo_ptr, select_index) = FullCSCColSlicing(csc_, n_ids);
       coo_ptr->row_sorted = false;
       coo_ptr->col_sorted = false;
+      e_ids = csc_->e_ids;
     } else if (on_format == _COO) {
       std::tie(coo_ptr, select_index) = FullCOOColSlicing(coo_, n_ids, axis);
       coo_ptr->row_sorted = coo_->row_sorted;
       coo_ptr->col_sorted = coo_->col_sorted;
+      e_ids = coo_->e_ids;
     } else if (on_format == _CSR) {
       std::tie(coo_ptr, select_index) = FullCSCRowSlicing(csr_, n_ids);
       coo_ptr->row_sorted = false;
       coo_ptr->col_sorted = true;
+      e_ids = csr_->e_ids;
     }
 
   } else {
@@ -872,30 +876,19 @@ c10::intrusive_ptr<Graph> Graph::FullSlicing(torch::Tensor n_ids, int64_t axis,
 
   ret->SetNumEdges(coo_ptr->row.numel());
   if (data_.has_value()) {
-    if (on_format == _CSR) {
-      if (csr_->e_ids.has_value())
-        out_data =
-            data_.value().index({csr_->e_ids.value().index({select_index})});
-      else
-        out_data = data_.value().index({select_index});
-
-    } else if (on_format == _CSC) {
-      if (csc_->e_ids.has_value())
-        out_data =
-            data_.value().index({csc_->e_ids.value().index({select_index})});
-      else
-        out_data = data_.value().index({select_index});
-
-    } else {
-      if (coo_->e_ids.has_value())
-        out_data =
-            data_.value().index({coo_->e_ids.value().index({select_index})});
-      else
-        out_data = data_.value().index({select_index});
-    }
+    torch::Tensor out_data, data_index;
+    if (e_ids.has_value())
+      data_index =
+          (e_ids.value().is_pinned())
+              ? impl::IndexSelectCPUFromGPU(e_ids.value(), select_index)
+              : e_ids.value().index({select_index});
+    else
+      data_index = select_index;
+    out_data = (data_.value().is_pinned())
+                   ? impl::IndexSelectCPUFromGPU(data_.value(), data_index)
+                   : data_.value().index({data_index});
     ret->SetData(out_data);
   }
-
   return ret;
 }
 
