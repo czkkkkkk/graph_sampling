@@ -15,4 +15,11 @@ std::tuple<torch::Tensor, torch::Tensor> ListSamplingProbs(torch::Tensor data,
   return impl::ListSamplingProbsCUDA(data, probs, num_picks, replace);
 }
 
+torch::Tensor IndexSearch(torch::Tensor origin_data, torch::Tensor keys) {
+  torch::Tensor key_buffer, value_buffer;
+  std::tie(key_buffer, value_buffer) =
+      impl::IndexHashMapInsertCUDA(origin_data);
+  return impl::IndexHashMapSearchCUDA(key_buffer, value_buffer, keys);
+}
+
 }  // namespace gs
