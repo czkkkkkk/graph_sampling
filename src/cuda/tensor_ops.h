@@ -27,6 +27,13 @@ std::tuple<torch::Tensor, std::vector<torch::Tensor>> RelabelCUDA(
     std::vector<torch::Tensor> data_requiring_relabel);
 
 torch::Tensor IndexSelectCPUFromGPU(torch::Tensor array, torch::Tensor index);
+
+std::tuple<torch::Tensor, torch::Tensor> IndexHashMapInsertCUDA(
+    torch::Tensor keys);
+
+torch::Tensor IndexHashMapSearchCUDA(torch::Tensor key_buffer,
+                                     torch::Tensor value_buffer,
+                                     torch::Tensor keys);
 }  // namespace impl
 }  // namespace gs
 
