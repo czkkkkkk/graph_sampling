@@ -23,5 +23,7 @@ std::tuple<torch::Tensor, torch::Tensor> ListSamplingProbs(torch::Tensor data,
                                                            int64_t num_picks,
                                                            bool replace);
 
+torch::Tensor IndexSearch(torch::Tensor origin_data, torch::Tensor keys);
+
 }  // namespace gs
 #endif

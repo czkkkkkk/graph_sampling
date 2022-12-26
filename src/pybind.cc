@@ -49,6 +49,7 @@ TORCH_LIBRARY(gs_classes, m) {
 TORCH_LIBRARY(gs_ops, m) {
   m.def("list_sampling", &ListSampling);
   m.def("list_sampling_with_probs", &ListSamplingProbs);
+  m.def("index_search", &IndexSearch);
 }
 
 namespace gs {}
