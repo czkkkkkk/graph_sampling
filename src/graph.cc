@@ -100,6 +100,8 @@ void Graph::SetCOO(std::shared_ptr<COO> coo) { coo_ = coo; }
 
 void Graph::SetData(torch::Tensor data) { data_ = data; }
 
+void Graph::SetRows(torch::Tensor rows) { row_ids_ = rows; }
+
 void Graph::SetValidCols(torch::Tensor val_cols) { val_col_ids_ = val_cols; }
 
 void Graph::SetValidRows(torch::Tensor val_rows) { val_row_ids_ = val_rows; }
@@ -132,10 +134,12 @@ c10::intrusive_ptr<Graph> Graph::FusedBidirSlicing(torch::Tensor column_seeds,
 
 void Graph::SetNumEdges(int64_t num_edges) { num_edges_ = num_edges; }
 
+void Graph::SetNumRows(int64_t num_rows) { num_rows_ = num_rows; }
+
 // axis = 0 for col; axis = 1 for row.
 c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
                                          int64_t on_format,
-                                         int64_t output_format) {
+                                         int64_t output_format, bool relabel) {
   CreateSparseFormat(on_format);
   std::shared_ptr<COO> coo_ptr;
   std::shared_ptr<_TMP> tmp_ptr;
@@ -178,6 +182,16 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
       // for row
       std::tie(tmp_ptr, select_index) = CSCRowSlicing(csc_, n_ids, with_coo);
       if (val_col_ids_.has_value()) ret->SetValidCols(val_col_ids_.value());
+    }
+
+    if (relabel) {
+      torch::Tensor frontier;
+      std::vector<torch::Tensor> relabeled_result;
+      std::tie(frontier, relabeled_result) = BatchTensorRelabel(
+          {tmp_ptr->coo_in_indices}, {tmp_ptr->coo_in_indices});
+      tmp_ptr->coo_in_indices = relabeled_result[0];
+      ret->SetRows(frontier);
+      ret->SetNumRows(frontier.numel());
     }
 
     if (output_format & _CSC)

@@ -28,9 +28,11 @@ class Graph : public torch::CustomClassHolder {
   void SetCSR(std::shared_ptr<CSR> csr);
   void SetCOO(std::shared_ptr<COO> coo);
   void SetData(torch::Tensor data);
+  void SetRows(torch::Tensor rows);
   void SetValidCols(torch::Tensor val_cols);
   void SetValidRows(torch::Tensor val_rows);
   void SetNumEdges(int64_t num_edges);
+  void SetNumRows(int64_t num_rows);
   void CSC2CSR();
   void CSC2DCSR();
   void CSR2CSC();
@@ -46,7 +48,8 @@ class Graph : public torch::CustomClassHolder {
   c10::intrusive_ptr<Graph> FusedBidirSlicing(torch::Tensor column_seeds,
                                               torch::Tensor row_seeds);
   c10::intrusive_ptr<Graph> Slicing(torch::Tensor n_ids, int64_t axis,
-                                    int64_t on_format, int64_t output_format);
+                                    int64_t on_format, int64_t output_format,
+                                    bool relabel = false);
   c10::intrusive_ptr<Graph> Sampling(int64_t axis, int64_t fanout, bool replace,
                                      int64_t on_format, int64_t output_format);
   c10::intrusive_ptr<Graph> SamplingProbs(int64_t axis,
