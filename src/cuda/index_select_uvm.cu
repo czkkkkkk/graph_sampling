@@ -37,6 +37,7 @@ torch::Tensor _IndexSelectCPUFromGPU(torch::Tensor array, torch::Tensor index) {
   const int nb = (len + nt - 1) / nt;
   CUDA_KERNEL_CALL((IndexSelectSingleKernel<DType, IdType>), nb, nt, array_data,
                    idx_data, len, arr_len, ret_data);
+  return ret;
 }
 
 torch::Tensor IndexSelectCPUFromGPU(torch::Tensor array, torch::Tensor index) {
