@@ -539,36 +539,6 @@ c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis,
   return ret;
 }
 
-c10::intrusive_ptr<Graph> Graph::Normalize(int64_t axis, int64_t on_format) {
-  CreateSparseFormat(on_format);
-  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
-      new Graph(is_subgraph_, col_ids_, row_ids_, num_cols_, num_rows_)));
-  auto in_data =
-      data_.has_value()
-          ? data_.value()
-          : torch::ones(num_edges_,
-                        torch::dtype(torch::kFloat32).device(torch::kCUDA));
-  torch::Tensor out_data = torch::zeros(num_edges_, in_data.options());
-  if (on_format == _COO) {
-    if (axis == 0)
-      COOGraphNormalize(coo_, in_data, out_data, num_cols_, 1);
-    else
-      COOGraphNormalize(coo_, in_data, out_data, num_rows_, 0);
-  } else if (axis == 0 && (on_format == _CSC || on_format == _DCSC)) {
-    CSCGraphNormalize(csc_, in_data, out_data);
-  } else if (axis == 1 && (on_format == _CSR || on_format == _DCSR)) {
-    CSCGraphNormalize(csr_, in_data, out_data);
-  }
-  ret->SetCSC(csc_);
-  ret->SetCSR(csr_);
-  ret->SetCOO(coo_);
-  ret->SetNumEdges(num_edges_);
-  ret->SetData(out_data);
-  if (val_col_ids_.has_value()) ret->SetValidCols(val_col_ids_.value());
-  if (val_row_ids_.has_value()) ret->SetValidRows(val_row_ids_.value());
-  return ret;
-}
-
 torch::Tensor Graph::AllValidNode() {
   // for sampling, col_ids_ is necessary!
   if (!col_ids_.has_value()) {

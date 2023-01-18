@@ -311,36 +311,6 @@ void COOGraphDiv(std::shared_ptr<COO> coo, torch::Tensor data,
   }
 }
 
-void CSCGraphNormalize(std::shared_ptr<CSC> csc, torch::Tensor data,
-                       torch::Tensor out_data) {
-  if (csc->indptr.device().type() == torch::kCUDA) {
-    auto segmented_sum = torch::zeros(csc->indptr.numel() - 1, data.options());
-    impl::CSCSumCUDA(csc->indptr, csc->e_ids, torch::nullopt, data,
-                     segmented_sum, 1);
-    const auto& bcast = CalcBcastOff("div", data, segmented_sum);
-    impl::SDDMMCSC("div", bcast, csc, torch::nullopt, data, segmented_sum,
-                   out_data, 1, 2);
-  } else {
-    LOG(FATAL) << "Not implemented warning";
-  }
-}
-
-void COOGraphNormalize(std::shared_ptr<COO> coo, torch::Tensor data,
-                       torch::Tensor out_data, int64_t side_len,
-                       int target_side) {
-  if (coo->col.device().type() == torch::kCUDA) {
-    auto segmented_sum = torch::zeros(side_len, data.options());
-    auto target = (target_side == 0) ? coo->row : coo->col;
-    impl::COOSumCUDA(target, coo->e_ids, data, segmented_sum, 1);
-    const auto& bcast = CalcBcastOff("div", data, segmented_sum);
-    int rhs_target = (target_side == 0) ? 0 : 2;
-    impl::SDDMMCOO("div", bcast, coo, data, segmented_sum, out_data, 1,
-                   rhs_target);
-  } else {
-    LOG(FATAL) << "Not implemented warning";
-  }
-}
-
 torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
                               int64_t walk_length) {
   torch::Tensor paths = impl::fusion::FusedRandomWalkCUDA(
