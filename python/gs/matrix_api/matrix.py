@@ -1,20 +1,13 @@
 import torch
 from torch.fx import Proxy
-import dgl
-from dgl import DGLHeteroGraph, create_block
+from dgl import DGLHeteroGraph
 from typing import Optional
 from gs.utils import create_block_from_coo, create_block_from_csc
-
+from gs.format import _COO, _CSC, _CSR, _DCSC, _DCSR
 
 torch.fx.wrap('create_block')
 torch.fx.wrap('create_block_from_coo')
 torch.fx.wrap('create_block_from_csc')
-
-_DCSR = 16
-_DCSC = 8
-_CSR = 4
-_CSC = 2
-_COO = 1
 
 
 class Matrix(object):
