@@ -17,8 +17,8 @@ class Matrix(object):
         # Graph bind to a C++ object
         self._graph = graph
 
-    def set_data(self, data, order: str = 'default'):
-        self._graph._CAPI_set_data(data, order)
+    def set_data(self, data):
+        self._graph._CAPI_set_data(data)
 
     def get_data(self, order: str = 'default') -> Optional[torch.Tensor]:
         return self._graph._CAPI_get_data(order)
@@ -79,11 +79,8 @@ class Matrix(object):
     def divide(self, divisor, axis):
         return Matrix(self._graph._CAPI_divide(divisor, axis))
 
-    def normalize(self, axis):
-        return Matrix(self._graph._CAPI_normalize(axis))
-
-    def row_ids(self, unique=True) -> torch.Tensor:
-        if unique:
+    def row_ids(self, remove_isolated=True) -> torch.Tensor:
+        if remove_isolated:
             return self._graph._CAPI_get_valid_rows()
         else:
             return self._graph._CAPI_get_rows()
