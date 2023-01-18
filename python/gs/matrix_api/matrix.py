@@ -1,10 +1,9 @@
 import torch
 from torch.fx import Proxy
-import dgl
-from dgl import DGLHeteroGraph, create_block
+from dgl import DGLHeteroGraph
 from typing import Optional
 from gs.utils import create_block_from_coo, create_block_from_csc
-
+from gs.format import _COO, _CSC, _CSR, _DCSC, _DCSR
 
 torch.fx.wrap('create_block')
 torch.fx.wrap('create_block_from_coo')
@@ -17,8 +16,8 @@ class Matrix(object):
         # Graph bind to a C++ object
         self._graph = graph
 
-    def set_data(self, data, order: str = 'default'):
-        self._graph._CAPI_set_data(data, order)
+    def set_data(self, data):
+        self._graph._CAPI_set_data(data)
 
     def get_data(self, order: str = 'default') -> Optional[torch.Tensor]:
         return self._graph._CAPI_get_data(order)
@@ -65,25 +64,25 @@ class Matrix(object):
         return block
 
     def columnwise_slicing(self, t):
-        return Matrix(self._graph._CAPI_columnwise_slicing(t))
+        return Matrix(self._graph._CAPI_columnwise_slicing(t, _CSC, _COO))
 
     def columnwise_sampling(self, fanout, replace=True, bias=None):
         if bias is None:
-            return Matrix(self._graph._CAPI_columnwise_sampling(fanout, replace))
+            return Matrix(self._graph._CAPI_columnwise_sampling(fanout, replace, _CSC, _COO))
         else:
-            return Matrix(self._graph._CAPI_columnwise_sampling_with_probs(bias, fanout, replace))
+            return Matrix(self._graph._CAPI_columnwise_sampling_with_probs(bias, fanout, replace, _CSC, _COO))
 
     def sum(self, axis, powk=1) -> torch.Tensor:
-        return self._graph._CAPI_sum(axis, powk)
+        if axis == 0:
+            return self._graph._CAPI_sum(axis, powk, _CSC)
+        else:
+            return self._graph._CAPI_sum(axis, powk, _CSR)
 
     def divide(self, divisor, axis):
-        return Matrix(self._graph._CAPI_divide(divisor, axis))
+        return Matrix(self._graph._CAPI_divide(divisor, axis, _COO))
 
-    def normalize(self, axis):
-        return Matrix(self._graph._CAPI_normalize(axis))
-
-    def row_ids(self, unique=True) -> torch.Tensor:
-        if unique:
+    def row_ids(self, remove_isolated=True) -> torch.Tensor:
+        if remove_isolated:
             return self._graph._CAPI_get_valid_rows()
         else:
             return self._graph._CAPI_get_rows()
@@ -100,10 +99,10 @@ class Matrix(object):
         c_slice = data[1]
 
         if isinstance(c_slice, Proxy) or isinstance(c_slice, torch.Tensor):
-            ret = ret._CAPI_columnwise_slicing(c_slice)
+            ret = ret._CAPI_columnwise_slicing(c_slice, _CSC, _COO)
 
         if isinstance(r_slice, Proxy) or isinstance(r_slice, torch.Tensor):
-            ret = ret._CAPI_rowwise_slicing(r_slice)
+            ret = ret._CAPI_rowwise_slicing(r_slice, _CSR, _COO)
 
         return Matrix(ret)
 

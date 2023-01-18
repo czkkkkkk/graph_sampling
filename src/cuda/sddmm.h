@@ -6,9 +6,10 @@
 
 namespace gs {
 namespace impl {
-void SDDMMCSR(const std::string& op, const BcastOff& bcast,
-              std::shared_ptr<CSR> csr, torch::Tensor lhs, torch::Tensor rhs,
-              torch::Tensor out, int lhs_target, int rhs_target);
+void SDDMMCSC(const std::string& op, const BcastOff& bcast,
+              std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
+              torch::Tensor lhs, torch::Tensor rhs, torch::Tensor out,
+              int lhs_target, int rhs_target);
 
 void SDDMMCOO(const std::string& op, const BcastOff& bcast,
               std::shared_ptr<COO> coo, torch::Tensor lhs, torch::Tensor rhs,

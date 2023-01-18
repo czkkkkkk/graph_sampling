@@ -5,67 +5,6 @@
 
 namespace gs {
 namespace impl {
-////////////////////////////// indptr slicing ///////////////////////////
-template <typename IdType>
-__global__ void _GetSubIndicesKernel(IdType* out_indices, IdType* select_index,
-                                     IdType* indptr, IdType* indices,
-                                     IdType* sub_indptr, IdType* column_ids,
-                                     int64_t size) {
-  int64_t row = blockIdx.x * blockDim.y + threadIdx.y;
-  while (row < size) {
-    IdType in_start = indptr[column_ids[row]];
-    IdType out_start = sub_indptr[row];
-    IdType n_edges = sub_indptr[row + 1] - out_start;
-    for (int idx = threadIdx.x; idx < n_edges; idx += blockDim.x) {
-      out_indices[out_start + idx] = indices[in_start + idx];
-      select_index[out_start + idx] = in_start + idx;
-    }
-    row += gridDim.x * blockDim.y;
-  }
-}
-
-template <typename IdType>
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _OnIndptrSlicing(
-    torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids) {
-  int64_t num_items = column_ids.numel();
-
-  // compute indptr
-  torch::Tensor sub_indptr = torch::empty(num_items + 1, indptr.options());
-  using it = thrust::counting_iterator<IdType>;
-  thrust::for_each(
-      thrust::device, it(0), it(num_items),
-      [in = column_ids.data_ptr<IdType>(),
-       in_indptr = indptr.data_ptr<IdType>(),
-       out = sub_indptr.data_ptr<IdType>()] __device__(int i) mutable {
-        IdType begin = in_indptr[in[i]];
-        IdType end = in_indptr[in[i] + 1];
-        out[i] = end - begin;
-      });
-  cub_exclusiveSum<IdType>(sub_indptr.data_ptr<IdType>(), num_items + 1);
-
-  // compute indices
-  thrust::device_ptr<IdType> item_prefix(
-      static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
-  int nnz = item_prefix[num_items];  // cpu
-  torch::Tensor sub_indices = torch::empty(nnz, indices.options());
-  torch::Tensor select_index = torch::empty(nnz, indices.options());
-
-  dim3 block(32, 16);
-  dim3 grid((num_items + block.x - 1) / block.x);
-  _GetSubIndicesKernel<int64_t><<<grid, block>>>(
-      sub_indices.data_ptr<int64_t>(), select_index.data_ptr<int64_t>(),
-      indptr.data_ptr<int64_t>(), indices.data_ptr<int64_t>(),
-      sub_indptr.data_ptr<int64_t>(), column_ids.data_ptr<int64_t>(),
-      num_items);
-  return {sub_indptr, sub_indices, select_index};
-}
-
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndptrSlicingCUDA(
-    torch::Tensor indptr, torch::Tensor indices, torch::Tensor column_ids) {
-  return _OnIndptrSlicing<int64_t>(indptr, indices, column_ids);
-}
-
-////////////////////////////// indices slicing //////////////////////////
 inline __host__ __device__ int UpPower(int key) {
   int ret = 1 << static_cast<uint32_t>(std::log2(key) + 1);
   return ret;
@@ -156,12 +95,216 @@ struct NodeQueryHashmap {
   uint32_t capacity{0};
 };
 
-template <typename IdType, int BLOCK_WARPS, int TILE_SIZE>
+////////////////////////////// indptr slicing ///////////////////////////
+template <typename IdType, bool WITH_COO>
+__global__ void _GetSubIndicesKernel(IdType* out_indices, IdType* select_index,
+                                     IdType* out_row, IdType* indptr,
+                                     IdType* indices, IdType* sub_indptr,
+                                     IdType* column_ids, int64_t size) {
+  int64_t row = blockIdx.x * blockDim.y + threadIdx.y;
+  while (row < size) {
+    IdType in_start = indptr[column_ids[row]];
+    IdType out_start = sub_indptr[row];
+    IdType n_edges = sub_indptr[row + 1] - out_start;
+    for (int idx = threadIdx.x; idx < n_edges; idx += blockDim.x) {
+      out_indices[out_start + idx] = indices[in_start + idx];
+      select_index[out_start + idx] = in_start + idx;
+      if (WITH_COO) {
+        out_row[out_start + idx] = row;
+      }
+    }
+    row += gridDim.x * blockDim.y;
+  }
+}
+
+template <typename IdType, bool WITH_COO>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+_OnIndptrSlicing(torch::Tensor indptr, torch::Tensor indices,
+                 torch::Tensor column_ids) {
+  int64_t num_items = column_ids.numel();
+
+  // compute indptr
+  auto Id_option = (indptr.is_pinned())
+                       ? torch::dtype(indptr.dtype()).device(torch::kCUDA)
+                       : indptr.options();
+  torch::Tensor sub_indptr = torch::empty(num_items + 1, Id_option);
+  using it = thrust::counting_iterator<IdType>;
+  thrust::for_each(
+      thrust::device, it(0), it(num_items),
+      [in = column_ids.data_ptr<IdType>(),
+       in_indptr = indptr.data_ptr<IdType>(),
+       out = sub_indptr.data_ptr<IdType>()] __device__(int i) mutable {
+        IdType begin = in_indptr[in[i]];
+        IdType end = in_indptr[in[i] + 1];
+        out[i] = end - begin;
+      });
+  cub_exclusiveSum<IdType>(sub_indptr.data_ptr<IdType>(), num_items + 1);
+
+  // compute indices
+  thrust::device_ptr<IdType> item_prefix(
+      static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
+  int nnz = item_prefix[num_items];  // cpu
+  torch::Tensor sub_indices = torch::empty(nnz, Id_option);
+  torch::Tensor select_index = torch::empty(nnz, Id_option);
+
+  torch::Tensor coo_col;
+  IdType* coo_col_ptr;
+  if (WITH_COO) {
+    coo_col = torch::empty(nnz, Id_option);
+    coo_col_ptr = coo_col.data_ptr<IdType>();
+  } else {
+    coo_col = torch::Tensor();
+    coo_col_ptr = nullptr;
+  }
+
+  dim3 block(32, 16);
+  dim3 grid((num_items + block.x - 1) / block.x);
+  _GetSubIndicesKernel<IdType, WITH_COO><<<grid, block>>>(
+      sub_indices.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
+      coo_col_ptr, indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
+      sub_indptr.data_ptr<IdType>(), column_ids.data_ptr<IdType>(), num_items);
+  return {sub_indptr, coo_col, sub_indices, select_index};
+}
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+CSCColSlicingCUDA(torch::Tensor indptr, torch::Tensor indices,
+                  torch::Tensor column_ids, bool with_coo) {
+  torch::Tensor out_indptr, out_coo_col, out_indices, out_selected_index;
+  if (with_coo)
+    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
+        _OnIndptrSlicing<int64_t, true>(indptr, indices, column_ids);
+  else
+    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
+        _OnIndptrSlicing<int64_t, false>(indptr, indices, column_ids);
+
+  return {out_indptr, out_coo_col, out_indices, out_selected_index};
+}
+
+///////////////////// indptr slicing with id mapping /////////////////////
+template <typename IdType, bool WITH_COO>
+__global__ void _GetSubIndicesKernelWithIdMapping(
+    IdType* out_indices, IdType* select_index, IdType* out_row, IdType* indptr,
+    IdType* indices, IdType* sub_indptr, IdType* remap_column_ids,
+    int64_t size) {
+  int64_t row = blockIdx.x * blockDim.y + threadIdx.y;
+
+  while (row < size) {
+    IdType indptr_off = remap_column_ids[row];
+    if (indptr_off != -1) {
+      IdType in_start = indptr[indptr_off];
+      IdType out_start = sub_indptr[row];
+      IdType n_edges = sub_indptr[row + 1] - out_start;
+      for (int idx = threadIdx.x; idx < n_edges; idx += blockDim.x) {
+        out_indices[out_start + idx] = indices[in_start + idx];
+        select_index[out_start + idx] = in_start + idx;
+        if (WITH_COO) {
+          out_row[out_start + idx] = row;
+        }
+      }
+    }
+    row += gridDim.x * blockDim.y;
+  }
+}
+
+template <typename IdType, bool WITH_COO>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+_OnIndptrSlicingWithIdMapping(torch::Tensor indptr, torch::Tensor indices,
+                              torch::Tensor nid_map, torch::Tensor column_ids) {
+  int64_t num_items = column_ids.numel();
+  int64_t num_val_cols = nid_map.numel();
+
+  // construct NodeQueryHashMap
+  int dir_size = UpPower(num_val_cols) * 2;
+  torch::Tensor key_buffer = torch::full(dir_size, -1, indptr.options());
+  torch::Tensor value_buffer = torch::full(dir_size, -1, indices.options());
+
+  using it = thrust::counting_iterator<IdType>;
+  thrust::for_each(thrust::device, it(0), it(num_val_cols),
+                   [key = nid_map.data_ptr<IdType>(),
+                    _key_buffer = key_buffer.data_ptr<IdType>(),
+                    _value_buffer = value_buffer.data_ptr<IdType>(),
+                    dir_size] __device__(IdType i) {
+                     NodeQueryHashmap<IdType> hashmap(_key_buffer,
+                                                      _value_buffer, dir_size);
+                     hashmap.Insert(key[i], i);
+                   });
+
+  // compute indptr
+  torch::Tensor sub_indptr = torch::empty(num_items + 1, indptr.options());
+  torch::Tensor remap_column_ids = torch::empty_like(column_ids);
+  using it = thrust::counting_iterator<IdType>;
+  thrust::for_each(thrust::device, it(0), it(num_items),
+                   [in = column_ids.data_ptr<IdType>(),
+                    in_indptr = indptr.data_ptr<IdType>(),
+                    out = sub_indptr.data_ptr<IdType>(),
+                    _key_buffer = key_buffer.data_ptr<IdType>(),
+                    _value_buffer = value_buffer.data_ptr<IdType>(),
+                    remap = remap_column_ids.data_ptr<IdType>(),
+                    dir_size] __device__(int i) mutable {
+                     NodeQueryHashmap<IdType> hashmap(_key_buffer,
+                                                      _value_buffer, dir_size);
+                     IdType indptr_off = hashmap.Query(in[i]);
+                     remap[i] = indptr_off;
+                     if (indptr_off == -1) {
+                       out[i] = 0;
+                     } else {
+                       IdType begin = in_indptr[indptr_off];
+                       IdType end = in_indptr[indptr_off + 1];
+                       out[i] = end - begin;
+                     }
+                   });
+  cub_exclusiveSum<IdType>(sub_indptr.data_ptr<IdType>(), num_items + 1);
+
+  // compute indices
+  thrust::device_ptr<IdType> item_prefix(
+      static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
+  int nnz = item_prefix[num_items];  // cpu
+  torch::Tensor sub_indices = torch::empty(nnz, indices.options());
+  torch::Tensor select_index = torch::empty(nnz, indices.options());
+  torch::Tensor coo_col;
+  IdType* coo_col_ptr;
+  if (WITH_COO) {
+    coo_col = torch::empty(nnz, indices.options());
+    coo_col_ptr = coo_col.data_ptr<IdType>();
+  } else {
+    coo_col = torch::Tensor();
+    coo_col_ptr = nullptr;
+  }
+
+  dim3 block(32, 16);
+  dim3 grid((num_items + block.x - 1) / block.x);
+  _GetSubIndicesKernelWithIdMapping<IdType, WITH_COO><<<grid, block>>>(
+      sub_indices.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
+      coo_col_ptr, indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
+      sub_indptr.data_ptr<IdType>(), remap_column_ids.data_ptr<IdType>(),
+      num_items);
+  return {sub_indptr, coo_col, sub_indices, select_index};
+}
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+DCSCColSlicingCUDA(torch::Tensor indptr, torch::Tensor indices,
+                   torch::Tensor nid_map, torch::Tensor column_ids,
+                   bool with_coo) {
+  torch::Tensor out_indptr, out_coo_col, out_indices, out_selected_index;
+  if (with_coo) {
+    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
+        _OnIndptrSlicingWithIdMapping<int64_t, true>(indptr, indices, nid_map,
+                                                     column_ids);
+  } else {
+    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
+        _OnIndptrSlicingWithIdMapping<int64_t, false>(indptr, indices, nid_map,
+                                                      column_ids);
+  }
+  return {out_indptr, out_coo_col, out_indices, out_selected_index};
+}
+
+////////////////////////////// indices slicing //////////////////////////
+template <typename IdType, int BLOCK_WARPS, int TILE_SIZE, bool WITH_COO>
 __global__ void _OnIndicesSlicinigQueryKernel(
     const IdType* const in_indptr, const IdType* const in_indices,
     IdType* const key_buffer, IdType* const value_buffer, IdType* const out_deg,
-    IdType* const out_indices, IdType* const out_mask, const int num_items,
-    const int dir_size) {
+    IdType* out_coo_row, IdType* const out_indices, IdType* const out_mask,
+    const int num_items, const int dir_size) {
   assert(blockDim.x == WARP_SIZE);
   assert(blockDim.y == BLOCK_WARPS);
 
@@ -188,6 +331,9 @@ __global__ void _OnIndicesSlicinigQueryKernel(
         count += 1;
         out_mask[idx] = 1;
         out_indices[idx] = value;
+        if (WITH_COO) {
+          out_coo_row[idx] = out_row;
+        }
       }
     }
 
@@ -200,9 +346,10 @@ __global__ void _OnIndicesSlicinigQueryKernel(
   }
 }
 
-template <typename IdType>
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _OnIndicesSlicing(
-    torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids) {
+template <typename IdType, bool WITH_COO>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+_OnIndicesSlicing(torch::Tensor indptr, torch::Tensor indices,
+                  torch::Tensor row_ids) {
   int num_items = indptr.numel() - 1;
   int num_row_ids = row_ids.numel();
 
@@ -231,12 +378,24 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _OnIndicesSlicing(
   torch::Tensor out_indices = torch::empty_like(indices);
   torch::Tensor out_mask = torch::zeros_like(indices);
 
+  torch::Tensor coo_col;
+  IdType* coo_col_ptr;
+  if (WITH_COO) {
+    coo_col = torch::empty_like(indices);
+    coo_col_ptr = coo_col.data_ptr<IdType>();
+  } else {
+    coo_col = torch::Tensor();
+    coo_col_ptr = nullptr;
+  }
+
   // query hashmap to get mask
-  _OnIndicesSlicinigQueryKernel<IdType, BLOCK_WARP, TILE_SIZE><<<grid, block>>>(
-      indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
-      key_buffer.data_ptr<IdType>(), value_buffer.data_ptr<IdType>(),
-      out_indptr.data_ptr<IdType>(), out_indices.data_ptr<IdType>(),
-      out_mask.data_ptr<IdType>(), num_items, dir_size);
+  _OnIndicesSlicinigQueryKernel<IdType, BLOCK_WARP, TILE_SIZE, WITH_COO>
+      <<<grid, block>>>(indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
+                        key_buffer.data_ptr<IdType>(),
+                        value_buffer.data_ptr<IdType>(),
+                        out_indptr.data_ptr<IdType>(), coo_col_ptr,
+                        out_indices.data_ptr<IdType>(),
+                        out_mask.data_ptr<IdType>(), num_items, dir_size);
 
   // prefix sum to get out_indptr and out_indices_index
   cub_exclusiveSum<IdType>(out_indptr.data_ptr<IdType>(), num_items + 1);
@@ -244,12 +403,96 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _OnIndicesSlicing(
       -1,
   });
 
-  return {out_indptr, out_indices.index({select_index}), select_index};
+  if (WITH_COO)
+    return {out_indptr, coo_col.index({select_index}),
+            out_indices.index({select_index}), select_index};
+  else
+    return {out_indptr, torch::Tensor(), out_indices.index({select_index}),
+            select_index};
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> OnIndicesSlicingCUDA(
-    torch::Tensor indptr, torch::Tensor indices, torch::Tensor row_ids) {
-  return _OnIndicesSlicing<int64_t>(indptr, indices, row_ids);
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+CSCRowSlicingCUDA(torch::Tensor indptr, torch::Tensor indices,
+                  torch::Tensor row_ids, bool with_coo) {
+  torch::Tensor out_indptr, out_coo_col, out_indices, out_selected_index;
+  if (with_coo)
+    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
+        _OnIndicesSlicing<int64_t, true>(indptr, indices, row_ids);
+  else
+    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
+        _OnIndicesSlicing<int64_t, false>(indptr, indices, row_ids);
+  return {out_indptr, out_coo_col, out_indices, out_selected_index};
 };
+
+////////////////////////////// COORowSlicingCUDA //////////////////////////
+// reuse hashmap in CSCRowSlicingCUDA
+template <typename IdType>
+__global__ void _COORowSlicingKernel(const IdType* const in_coo_row,
+                                     IdType* const key_buffer,
+                                     IdType* const value_buffer,
+                                     IdType* const out_mask,
+                                     IdType* const out_coo_row,
+                                     const int num_items, const int dir_size) {
+  IdType tid = threadIdx.x + blockIdx.x * blockDim.x;
+  IdType stride = gridDim.x * blockDim.x;
+
+  NodeQueryHashmap<IdType> hashmap(key_buffer, value_buffer, dir_size);
+
+  while (tid < num_items) {
+    IdType value = hashmap.Query(in_coo_row[tid]);
+    if (value != -1) {
+      out_mask[tid] = 1;
+      out_coo_row[tid] = value;
+    }
+    tid += stride;
+  }
+}
+
+template <typename IdType>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _COORowSlicing(
+    torch::Tensor coo_row, torch::Tensor coo_col, torch::Tensor row_ids) {
+  int num_items = coo_row.numel();
+  int num_row_ids = row_ids.numel();
+
+  // construct NodeQueryHashMap
+  int dir_size = UpPower(num_row_ids) * 2;
+  torch::Tensor key_buffer = torch::full(dir_size, -1, row_ids.options());
+  torch::Tensor value_buffer = torch::full(dir_size, -1, row_ids.options());
+
+  using it = thrust::counting_iterator<IdType>;
+  thrust::for_each(thrust::device, it(0), it(num_row_ids),
+                   [key = row_ids.data_ptr<IdType>(),
+                    _key_buffer = key_buffer.data_ptr<IdType>(),
+                    _value_buffer = value_buffer.data_ptr<IdType>(),
+                    dir_size] __device__(IdType i) {
+                     NodeQueryHashmap<IdType> hashmap(_key_buffer,
+                                                      _value_buffer, dir_size);
+                     hashmap.Insert(key[i], i);
+                   });
+
+  torch::Tensor out_mask = torch::zeros_like(coo_row);
+  torch::Tensor out_relabel_row = torch::empty_like(coo_row);
+
+  constexpr int TILE_SIZE = 16;
+  const dim3 block(256);
+  const dim3 grid((num_items + TILE_SIZE - 1) / TILE_SIZE);
+
+  _COORowSlicingKernel<IdType><<<grid, block>>>(
+      coo_row.data_ptr<IdType>(), key_buffer.data_ptr<IdType>(),
+      value_buffer.data_ptr<IdType>(), out_mask.data_ptr<IdType>(),
+      out_relabel_row.data_ptr<IdType>(), num_items, dir_size);
+
+  torch::Tensor select_index = torch::nonzero(out_mask).reshape({
+      -1,
+  });
+  return {out_relabel_row.index({select_index}), coo_col.index({select_index}),
+          select_index};
+}
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COORowSlicingCUDA(
+    torch::Tensor coo_row, torch::Tensor coo_col, torch::Tensor row_ids) {
+  return _COORowSlicing<int64_t>(coo_row, coo_col, row_ids);
+};
+
 }  // namespace impl
 }  // namespace gs
