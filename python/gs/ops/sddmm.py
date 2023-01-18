@@ -1,5 +1,6 @@
 from itertools import product
 from .sparse import *
+from gs.format import _COO, _CSC, _CSR, _DCSC, _DCSR
 import sys
 
 __all__ = ['gsddmm']
@@ -31,7 +32,7 @@ def reshape_lhs_rhs(lhs_data, rhs_data):
     return lhs_data, rhs_data
 
 
-def gsddmm(g, op, lhs_data, rhs_data, lhs_target='u', rhs_target='v', on_format=1):
+def gsddmm(g, op, lhs_data, rhs_data, lhs_target='u', rhs_target='v', on_format=_COO):
     r""" Generalized Sampled-Dense-Dense Matrix Multiplication interface.
     It computes edge features by :attr:`op` lhs features and rhs features.
 
@@ -108,7 +109,7 @@ def _gen_sddmm_func(lhs_target, rhs_target, binary_op):
     for more details about the NumPy broadcasting semantics.
     """.format(op=binary_op, lhs=lhs_str, rhs=rhs_str)
 
-    def func(g, x, y, on_format):
+    def func(g, x, y, on_format=_COO):
         return gsddmm(g, binary_op, x, y,
                       lhs_target=lhs_target, rhs_target=rhs_target, on_format=on_format)
     func.__name__ = name

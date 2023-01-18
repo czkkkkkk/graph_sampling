@@ -1,4 +1,5 @@
 import torch
+from gs.format import _COO, _CSC, _CSR, _DCSC, _DCSR
 
 target_mapping = {
     'u': 0,
@@ -52,7 +53,7 @@ def infer_broadcast_shape(op, shp1, shp2):
     return rst[:-1] + (1,) if op == "dot" else rst
 
 
-def _gsddmm(gidx, op, lhs, rhs, lhs_target='u', rhs_target='v', on_format=1):
+def _gsddmm(gidx, op, lhs, rhs, lhs_target='u', rhs_target='v', on_format=_COO):
     r""" Generalized Sampled-Dense-Dense Matrix Multiplication interface. It
     takes the result of :attr:`op` on source node feature and destination node
     feature, leads to a feature on edge.
@@ -118,7 +119,7 @@ def _gsddmm(gidx, op, lhs, rhs, lhs_target='u', rhs_target='v', on_format=1):
     return out
 
 
-def gsddmm_internal(gidx, op, lhs_data, rhs_data, lhs_target='u', rhs_target='v', on_format=1):
+def gsddmm_internal(gidx, op, lhs_data, rhs_data, lhs_target='u', rhs_target='v', on_format=_COO):
     if op == 'sub':
         op = 'add'
         rhs_data = -rhs_data
