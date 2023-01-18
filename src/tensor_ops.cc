@@ -1,5 +1,4 @@
 #include "./tensor_ops.h"
-#include <nvToolsExt.h>
 #include "cuda/tensor_ops.h"
 
 namespace gs {
@@ -19,14 +18,10 @@ std::tuple<torch::Tensor, torch::Tensor> ListSamplingProbs(torch::Tensor data,
 torch::Tensor IndexSearch(torch::Tensor origin_data, torch::Tensor keys) {
   torch::Tensor key_buffer, value_buffer;
 
-  nvtxRangePush("Insert");
   std::tie(key_buffer, value_buffer) =
       impl::IndexHashMapInsertCUDA(origin_data);
-  nvtxRangePop();
-  nvtxRangePush("Search");
   torch::Tensor result =
       impl::IndexHashMapSearchCUDA(key_buffer, value_buffer, keys);
-  nvtxRangePop();
   return result;
 }
 
