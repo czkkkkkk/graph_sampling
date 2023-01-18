@@ -10,6 +10,12 @@ torch.fx.wrap('create_block')
 torch.fx.wrap('create_block_from_coo')
 torch.fx.wrap('create_block_from_csc')
 
+_DCSR = 16
+_DCSC = 8
+_CSR = 4
+_CSC = 2
+_COO = 1
+
 
 class Matrix(object):
 
@@ -65,19 +71,22 @@ class Matrix(object):
         return block
 
     def columnwise_slicing(self, t):
-        return Matrix(self._graph._CAPI_columnwise_slicing(t))
+        return Matrix(self._graph._CAPI_columnwise_slicing(t, _CSC, _COO))
 
     def columnwise_sampling(self, fanout, replace=True, bias=None):
         if bias is None:
-            return Matrix(self._graph._CAPI_columnwise_sampling(fanout, replace))
+            return Matrix(self._graph._CAPI_columnwise_sampling(fanout, replace, _CSC, _COO))
         else:
-            return Matrix(self._graph._CAPI_columnwise_sampling_with_probs(bias, fanout, replace))
+            return Matrix(self._graph._CAPI_columnwise_sampling_with_probs(bias, fanout, replace, _CSC, _COO))
 
     def sum(self, axis, powk=1) -> torch.Tensor:
-        return self._graph._CAPI_sum(axis, powk)
+        if axis == 0:
+            return self._graph._CAPI_sum(axis, powk, _CSC)
+        else:
+            return self._graph._CAPI_sum(axis, powk, _CSR)
 
     def divide(self, divisor, axis):
-        return Matrix(self._graph._CAPI_divide(divisor, axis))
+        return Matrix(self._graph._CAPI_divide(divisor, axis, _COO))
 
     def row_ids(self, remove_isolated=True) -> torch.Tensor:
         if remove_isolated:
@@ -97,10 +106,10 @@ class Matrix(object):
         c_slice = data[1]
 
         if isinstance(c_slice, Proxy) or isinstance(c_slice, torch.Tensor):
-            ret = ret._CAPI_columnwise_slicing(c_slice)
+            ret = ret._CAPI_columnwise_slicing(c_slice, _CSC, _COO)
 
         if isinstance(r_slice, Proxy) or isinstance(r_slice, torch.Tensor):
-            ret = ret._CAPI_rowwise_slicing(r_slice)
+            ret = ret._CAPI_rowwise_slicing(r_slice, _CSR, _COO)
 
         return Matrix(ret)
 
