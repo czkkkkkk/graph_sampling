@@ -191,7 +191,8 @@ TEST(GraphNormalize, test1)
     torch::Tensor expected = torch::ones(100, data_options) / 5;
     A.LoadCSC(indptr, indices);
 
-    auto graph_ptr = A.Normalize(0, _CSC);
+    auto sum_result = A.Sum(0, 1, _CSC);
+    auto graph_ptr = A.Divide(sum_result, 0, _CSC);
     auto result = graph_ptr->GetData().value();
 
     EXPECT_EQ(result.numel(), expected.numel());
@@ -210,7 +211,8 @@ TEST(GraphNormalize, test2)
     A.LoadCSC(indptr, indices);
     A.SetData(data.repeat({20}));
 
-    auto graph_ptr = A.Normalize(0, _CSC);
+    auto sum_result = A.Sum(0, 1, _CSC);
+    auto graph_ptr = A.Divide(sum_result, 0, _CSC);
     auto result = graph_ptr->GetData().value();
 
     EXPECT_EQ(result.numel(), expected.numel());
@@ -229,7 +231,8 @@ TEST(GraphNormalize, test3)
     A.LoadCSC(indptr, indices);
     A.SetData(data.repeat({20}));
 
-    auto graph_ptr = A.Normalize(0, _COO);
+    auto sum_result = A.Sum(0, 1, _COO);
+    auto graph_ptr = A.Divide(sum_result, 0, _COO);
     auto result = graph_ptr->GetData().value();
 
     EXPECT_EQ(result.numel(), expected.numel());
@@ -250,7 +253,8 @@ TEST(GraphNormalize, test4)
     A.SetData(data);
 
     auto graph_ptr = A.Slicing(n_ids, 0, _CSC, _CSC);
-    graph_ptr = graph_ptr->Normalize(1, _CSR);
+    auto sum_result = graph_ptr->Sum(1, 1, _CSR);
+    graph_ptr = graph_ptr->Divide(sum_result, 1, _CSR);
     auto result = graph_ptr->GetData().value();
 
     EXPECT_TRUE(result.equal(expected));
@@ -272,7 +276,8 @@ TEST(GraphNormalize, test5)
     auto graph_ptr = A.Slicing(n_ids, 1, _CSR, _CSR);
 
     graph_ptr = graph_ptr->Divide(divisor, 1, _CSR);
-    graph_ptr = graph_ptr->Normalize(0, _CSC);
+    auto sum_result = graph_ptr->Sum(0, 1, _CSC);
+    graph_ptr = graph_ptr->Divide(sum_result, 0, _CSC);
     auto result = graph_ptr->GetData().value();
 
     EXPECT_TRUE(result.equal(expected));
@@ -294,7 +299,8 @@ TEST(GraphNormalize, test6)
     auto graph_ptr = A.Slicing(n_ids, 1, _CSR, _CSR);
 
     graph_ptr = graph_ptr->Divide(divisor, 1, _CSR);
-    graph_ptr = graph_ptr->Normalize(0, _COO);
+    auto sum_result = graph_ptr->Sum(0, 1, _COO);
+    graph_ptr = graph_ptr->Divide(sum_result, 0, _COO);
     auto result = graph_ptr->GetData().value();
 
     EXPECT_TRUE(result.equal(expected));

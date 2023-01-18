@@ -54,13 +54,6 @@ void COOGraphDiv(std::shared_ptr<COO> coo, torch::Tensor data,
                  torch::Tensor divisor, torch::Tensor out_data,
                  int target_side);
 
-void CSCGraphNormalize(std::shared_ptr<CSC> csc, torch::Tensor data,
-                       torch::Tensor out_data);
-
-void COOGraphNormalize(std::shared_ptr<COO> coo, torch::Tensor data,
-                       torch::Tensor out_data, int64_t side_len,
-                       int target_side);
-
 std::shared_ptr<COO> GraphCSC2COO(std::shared_ptr<CSC> csc, bool CSC2COO);
 
 std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
