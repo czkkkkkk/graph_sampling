@@ -216,7 +216,7 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
       // for col
       std::tie(tmp_ptr, select_index) = CSCRowSlicing(csr_, n_ids, with_coo);
       new_val_rows = val_row_ids_;
-      
+
       if (relabel)
         LOG(FATAL) << "Not implemented warning";
     } else {
@@ -754,7 +754,7 @@ std::vector<torch::Tensor> Graph::MetaData() {
                           torch::dtype(torch::kFloat32).device(torch::kCUDA));
     return {col_ids, row_ids, data, csr_->indptr, csr_->indices};
   } else {
-    LOG(FATAL) << "Error in MetaData: no CSC nor CSR.";
+    LOG(INFO) << "Warning in MetaData: no CSC nor CSR.";
     return {coo_->row, coo_->col};
   }
 }
