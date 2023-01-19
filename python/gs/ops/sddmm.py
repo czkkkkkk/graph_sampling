@@ -1,5 +1,5 @@
 from itertools import product
-from .sparse import *
+from .sparse import gsddmm as gsddmm_internal
 from gs.format import _COO, _CSC, _CSR, _DCSC, _DCSR
 import sys
 
