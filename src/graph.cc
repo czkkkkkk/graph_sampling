@@ -135,31 +135,35 @@ void Graph::SetNumEdges(int64_t num_edges) { num_edges_ = num_edges; }
 // axis = 0 for col; axis = 1 for row.
 c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
                                          int64_t on_format,
-                                         int64_t output_format) {
+                                         int64_t output_format, bool relabel) {
   CreateSparseFormat(on_format);
   std::shared_ptr<COO> coo_ptr;
+  std::shared_ptr<CSC> csc_ptr;
+  std::shared_ptr<CSR> csr_ptr;
   std::shared_ptr<_TMP> tmp_ptr;
   torch::Tensor select_index;
-  torch::optional<torch::Tensor> e_ids;
+  torch::optional<torch::Tensor> e_ids, new_col_ids, new_row_ids, new_val_cols,
+      new_val_rows;
+  int64_t new_num_cols, new_num_rows, new_num_edges;
   bool with_coo = output_format & _COO;
 
-  c10::intrusive_ptr<Graph> ret;
   if (axis == 0) {
-    auto new_col_ids =
+    new_col_ids =
         col_ids_.has_value() ? col_ids_.value().index({n_ids}) : n_ids;
-    ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
-        new Graph(true, new_col_ids, row_ids_, n_ids.numel(), num_rows_)));
+    new_row_ids = row_ids_;
+    new_num_cols = n_ids.numel();
+    new_num_rows = num_rows_;
   } else {
-    auto new_row_ids =
+    new_col_ids = col_ids_;
+    new_row_ids =
         row_ids_.has_value() ? row_ids_.value().index({n_ids}) : n_ids;
-    ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
-        new Graph(true, col_ids_, new_row_ids, num_cols_, n_ids.numel())));
+    new_num_cols = num_cols_;
+    new_num_rows = n_ids.numel();
   }
 
   if (on_format == _COO) {
     std::tie(coo_ptr, select_index) = COOColSlicing(coo_, n_ids, axis);
-    ret->SetCOO(coo_ptr);
-    ret->SetNumEdges(coo_ptr->row.numel());
+    new_num_edges = coo_ptr->row.numel();
     e_ids = coo_->e_ids;
 
   } else if (on_format == _CSC || on_format == _DCSC) {
@@ -174,20 +178,33 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
             DCSCColSlicing(csc_, val_col_ids_.value(), n_ids, with_coo);
       else
         std::tie(tmp_ptr, select_index) = CSCColSlicing(csc_, n_ids, with_coo);
+
+      if (relabel) {
+        torch::Tensor frontier;
+        std::vector<torch::Tensor> relabeled_result;
+        std::tie(frontier, relabeled_result) = BatchTensorRelabel(
+            {tmp_ptr->coo_in_indices}, {tmp_ptr->coo_in_indices});
+        tmp_ptr->coo_in_indices = relabeled_result[0];
+        new_row_ids = frontier;
+        new_num_rows = frontier.numel();
+      }
     } else {
       // for row
       std::tie(tmp_ptr, select_index) = CSCRowSlicing(csc_, n_ids, with_coo);
-      if (val_col_ids_.has_value()) ret->SetValidCols(val_col_ids_.value());
+      new_val_cols = val_col_ids_;
+
+      if (relabel)
+        LOG(FATAL) << "Not implemented warning";
     }
 
     if (output_format & _CSC)
-      ret->SetCSC(std::make_shared<CSC>(
-          CSC{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+      csc_ptr = std::make_shared<CSC>(
+          CSC{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt});
     if (output_format & _COO)
-      ret->SetCOO(std::make_shared<COO>(COO{tmp_ptr->coo_in_indices,
-                                            tmp_ptr->coo_in_indptr,
-                                            torch::nullopt, false, true}));
-    ret->SetNumEdges(tmp_ptr->coo_in_indices.numel());
+      coo_ptr = std::make_shared<COO>(COO{tmp_ptr->coo_in_indices,
+                                          tmp_ptr->coo_in_indptr,
+                                          torch::nullopt, false, true});
+    new_num_edges = tmp_ptr->coo_in_indices.numel();
     e_ids = csc_->e_ids;
 
   } else if (on_format == _CSR || on_format == _DCSR) {
@@ -198,28 +215,48 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
     if (axis == 0) {
       // for col
       std::tie(tmp_ptr, select_index) = CSCRowSlicing(csr_, n_ids, with_coo);
-      if (val_row_ids_.has_value()) ret->SetValidRows(val_row_ids_.value());
+      new_val_rows = val_row_ids_;
 
+      if (relabel)
+        LOG(FATAL) << "Not implemented warning";
     } else {
       if (val_row_ids_.has_value())
         std::tie(tmp_ptr, select_index) =
             DCSCColSlicing(csr_, val_row_ids_.value(), n_ids, with_coo);
       else
         std::tie(tmp_ptr, select_index) = CSCColSlicing(csr_, n_ids, with_coo);
+
+      if (relabel) {
+        torch::Tensor frontier;
+        std::vector<torch::Tensor> relabeled_result;
+        std::tie(frontier, relabeled_result) = BatchTensorRelabel(
+            {tmp_ptr->coo_in_indices}, {tmp_ptr->coo_in_indices});
+        tmp_ptr->coo_in_indices = relabeled_result[0];
+        new_col_ids = frontier;
+        new_num_cols = frontier.numel();
+      }
     }
 
     if (output_format & _CSR)
-      ret->SetCSR(std::make_shared<CSR>(
-          CSR{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+      csr_ptr = std::make_shared<CSR>(
+          CSR{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt});
     if (output_format & _COO)
-      ret->SetCOO(std::make_shared<COO>(COO{tmp_ptr->coo_in_indptr,
-                                            tmp_ptr->coo_in_indices,
-                                            torch::nullopt, true, false}));
-    ret->SetNumEdges(tmp_ptr->coo_in_indices.numel());
+      coo_ptr = std::make_shared<COO>(COO{tmp_ptr->coo_in_indptr,
+                                          tmp_ptr->coo_in_indices,
+                                          torch::nullopt, true, false});
+    new_num_edges = tmp_ptr->coo_in_indices.numel();
     e_ids = csr_->e_ids;
   } else {
     LOG(FATAL) << "Not implemented warning";
   }
+  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
+      new Graph(true, new_col_ids, new_row_ids, new_num_cols, new_num_rows)));
+  ret->SetNumEdges(new_num_edges);
+  ret->SetCOO(coo_ptr);
+  ret->SetCSC(csc_ptr);
+  ret->SetCSR(csr_ptr);
+  if (new_val_cols.has_value()) ret->SetValidCols(new_val_cols.value());
+  if (new_val_rows.has_value()) ret->SetValidRows(new_val_rows.value());
   if (data_.has_value()) {
     torch::Tensor out_data, data_index;
     if (e_ids.has_value())
@@ -717,7 +754,7 @@ std::vector<torch::Tensor> Graph::MetaData() {
                           torch::dtype(torch::kFloat32).device(torch::kCUDA));
     return {col_ids, row_ids, data, csr_->indptr, csr_->indices};
   } else {
-    LOG(FATAL) << "Error in MetaData: no CSC nor CSR.";
+    LOG(INFO) << "Warning in MetaData: no CSC nor CSR.";
     return {coo_->row, coo_->col};
   }
 }

@@ -64,13 +64,13 @@ class Matrix(object):
         return block
 
     def columnwise_slicing(self, t):
-        return Matrix(self._graph._CAPI_columnwise_slicing(t, _CSC, _COO))
+        return Matrix(self._graph._CAPI_slicing(t, 0, _CSC, _COO, False))
 
     def columnwise_sampling(self, fanout, replace=True, bias=None):
         if bias is None:
-            return Matrix(self._graph._CAPI_columnwise_sampling(fanout, replace, _CSC, _COO))
+            return Matrix(self._graph._CAPI_sampling(0, fanout, replace, _CSC, _COO))
         else:
-            return Matrix(self._graph._CAPI_columnwise_sampling_with_probs(bias, fanout, replace, _CSC, _COO))
+            return Matrix(self._graph._CAPI_sampling_with_probs(0, bias, fanout, replace, _CSC, _COO))
 
     def sum(self, axis, powk=1) -> torch.Tensor:
         if axis == 0:
@@ -99,10 +99,10 @@ class Matrix(object):
         c_slice = data[1]
 
         if isinstance(c_slice, Proxy) or isinstance(c_slice, torch.Tensor):
-            ret = ret._CAPI_columnwise_slicing(c_slice, _CSC, _COO)
+            ret = ret._CAPI_slicing(c_slice, 0, _CSC, _COO, False)
 
         if isinstance(r_slice, Proxy) or isinstance(r_slice, torch.Tensor):
-            ret = ret._CAPI_rowwise_slicing(r_slice, _CSR, _COO)
+            ret = ret._CAPI_slicing(r_slice, 0, _CSR, _COO, False)
 
         return Matrix(ret)
 
