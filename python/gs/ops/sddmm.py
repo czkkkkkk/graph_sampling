@@ -1,7 +1,8 @@
 from itertools import product
-from .sparse import gsddmm as gsddmm_internal
-from gs.format import _COO, _CSC, _CSR, _DCSC, _DCSR
 import sys
+
+from .sparse import gsddmm as gsddmm_internal
+from ..format import _COO, _CSC, _CSR, _DCSC, _DCSR
 
 __all__ = ['gsddmm']
 
@@ -66,7 +67,8 @@ def gsddmm(g, op, lhs_data, rhs_data, lhs_target='u', rhs_target='v', on_format=
     tensor
         The result tensor.
     """
-    lhs_data, rhs_data = reshape_lhs_rhs(lhs_data, rhs_data)
+    if op not in ["copy_lhs", "copy_rhs"]:
+        lhs_data, rhs_data = reshape_lhs_rhs(lhs_data, rhs_data)
     return gsddmm_internal(
         g._graph, op, lhs_data, rhs_data, lhs_target, rhs_target, on_format)
 
@@ -126,6 +128,50 @@ def _register_sddmm_func():
                 func = _gen_sddmm_func(lhs, rhs, binary_op)
                 setattr(sys.modules[__name__], func.__name__, func)
                 __all__.append(func.__name__)
+
+
+def copy_u(g, x):
+    r"""Generalized SDDMM function that copies source node features to edges.
+
+    Parameters
+    ----------
+    g : DGLGraph
+        The input graph.
+    x : tensor
+        The source node features.
+
+    Returns
+    -------
+    tensor
+        The result tensor.
+
+    Notes
+    -----
+    This function supports autograd (computing input gradients given the output gradient).
+    """
+    return gsddmm(g, "copy_lhs", x, None)
+
+
+def copy_v(g, x):
+    r"""Generalized SDDMM function that copies destination node features to edges.
+
+    Parameters
+    ----------
+    g : DGLGraph
+        The input graph.
+    x : tensor
+        The destination node features.
+
+    Returns
+    -------
+    tensor
+        The result tensor.
+
+    Notes
+    -----
+    This function supports autograd (computing input gradients given the output gradient).
+    """
+    return gsddmm(g, "copy_rhs", None, x)
 
 
 _register_sddmm_func()

@@ -1,5 +1,6 @@
 import torch
-from gs.format import _COO, _CSC, _CSR, _DCSC, _DCSR
+
+from ..format import _COO, _CSC, _CSR, _DCSC, _DCSR
 
 target_mapping = {
     'u': 0,
@@ -53,7 +54,7 @@ def infer_broadcast_shape(op, shp1, shp2):
     return rst[:-1] + (1,) if op == "dot" else rst
 
 
-def _gspmm(gidx, op, reduce_op, u, e, u_target):
+def _gspmm(gidx, op, reduce_op, u, e, on_format=_CSC):
     r"""Generalized Sparse Matrix Multiplication interface. It takes the result of
     :attr:`op` on source node feature and edge feature, leads to a message on edge.
     Then aggregates the message by :attr:`reduce_op` on destination nodes.
@@ -104,26 +105,24 @@ def _gspmm(gidx, op, reduce_op, u, e, u_target):
                 u.dtype, e.dtype)
     # deal with scalar features.
     expand_u, expand_e = False, False
-    if use_u:
-        if u.dim() == 1:
-            u = torch.unsqueeze(u, -1)
-            expand_u = True
-    if use_e:
-        if e.dim() == 1:
-            e = torch.unsqueeze(e, -1)
-            expand_e = True
+    if use_u and u.dim() == 1:
+        u = torch.unsqueeze(u, -1)
+        expand_u = True
+    if use_e and e.dim() == 1:
+        e = torch.unsqueeze(e, -1)
+        expand_e = True
 
     dtype = u.dtype if use_u else e.dtype
     u_shp = u.shape if use_u else (0,)
     e_shp = e.shape if use_e else (0,)
-    v_shp = (gidx._CAPI_get_num_nodes(u_target),) + infer_broadcast_shape(
+    v_shp = (gidx._CAPI_get_num_nodes(0),) + infer_broadcast_shape(
         op, u_shp[1:], e_shp[1:]
     )
     v = torch.zeros(v_shp, dtype=dtype)
     use_cmp = reduce_op in ["max", "min"]
     arg_u, arg_e = None, None
     if gidx._CAPI_get_num_edges() > 0:
-        arg_u, arg_e = gidx._CAPI_spmm(gidx, op, reduce_op, u, e, v)
+        arg_u, arg_e = gidx._CAPI_spmm(gidx, op, reduce_op, u, e, v, on_format)
     # To deal with scalar node/edge features.
     if (expand_u or not use_u) and (expand_e or not use_e):
         v = torch.squeeze(v, -1)
@@ -173,28 +172,35 @@ def _gsddmm(gidx, op, lhs, rhs, lhs_target='u', rhs_target='v', on_format=_COO):
     -----
     This function does not handle gradients.
     """
-    if lhs.device != rhs.device:
-        raise "The operands data device don't match: {} and {}, please move them to the same device.".format(
-            lhs.device, rhs.device)
-    if lhs.dtype != rhs.dtype:
-        raise "The operands data type don't match: {} and {}, please convert them to the same type.".format(
-            lhs.dtype, rhs.dtype)
+    use_lhs = op != "copy_rhs"
+    use_rhs = op != "copy_lhs"
+    if use_lhs and use_rhs:
+        if lhs.device != rhs.device:
+            raise "The operands data device don't match: {} and {}, please move them to the same device.".format(
+                lhs.device, rhs.device)
+        if lhs.dtype != rhs.dtype:
+            raise "The operands data type don't match: {} and {}, please convert them to the same type.".format(
+                lhs.dtype, rhs.dtype)
     # deal with scalar features.
     expand_lhs, expand_rhs = False, False
-    if lhs.dim() == 1:
+    if use_lhs and lhs.dim() == 1:
         lhs = torch.unsqueeze(lhs, -1)
         expand_lhs = True
-    if rhs.dim() == 1:
+    if use_rhs and rhs.dim() == 1:
         rhs = torch.unsqueeze(rhs, -1)
         expand_rhs = True
     lhs_target = target_mapping[lhs_target]
     rhs_target = target_mapping[rhs_target]
 
+    device = lhs.device if use_lhs else rhs.device
+    dtype = lhs.dtype if use_lhs else rhs.dtype
+    lhs_shp = lhs.shape if use_lhs else (0,)
+    rhs_shp = rhs.shape if use_rhs else (0,)
     out_shp = (gidx._CAPI_get_num_edges(), ) +\
-        infer_broadcast_shape(op, lhs.shape[1:], rhs.shape[1:])
-    out = torch.zeros(out_shp, dtype=lhs.dtype, device=lhs.device)
+        infer_broadcast_shape(op, lhs_shp[1:], rhs_shp[1:])
+    out = torch.zeros(out_shp, dtype=dtype, device=device)
     if gidx._CAPI_get_num_edges() > 0:
         gidx._CAPI_sddmm(op, lhs, rhs, out, lhs_target, rhs_target, on_format)
-    if expand_lhs and expand_rhs:
+    if (expand_lhs or not use_lhs) and (expand_rhs or not use_rhs):
         out = torch.squeeze(out, -1)
     return out

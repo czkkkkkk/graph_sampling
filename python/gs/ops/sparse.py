@@ -1,6 +1,7 @@
 import torch
+
 from .sparse_ops import _gsddmm, _gspmm
-from gs.format import _COO, _CSC, _CSR, _DCSC, _DCSR
+from ..format import _COO, _CSC, _CSR, _DCSC, _DCSR
 
 
 def _reduce_grad(grad, shape):
@@ -93,8 +94,8 @@ def spmm_cache_argY(binary_op, reduce_op, req_grad_X, req_grad_Y):
 
 class GSpMM(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, gidx, op, reduce_op, X, Y):
-        out, (argX, argY) = _gspmm(gidx, op, reduce_op, X, Y)
+    def forward(ctx, gidx, op, reduce_op, X, Y, on_format):
+        out, (argX, argY) = _gspmm(gidx, op, reduce_op, X, Y, on_format)
         reduce_last = _need_reduce_last_dim(X, Y)
         X_shape = X.shape if X is not None else None
         Y_shape = Y.shape if Y is not None else None
@@ -109,6 +110,7 @@ class GSpMM(torch.autograd.Function):
             dtype,
             device,
             reduce_last,
+            on_format,
         )
         req_grad_X = X.requires_grad if X is not None else False
         req_grad_Y = Y.requires_grad if Y is not None else False
@@ -134,17 +136,18 @@ class GSpMM(torch.autograd.Function):
             dtype,
             device,
             reduce_last,
+            on_format,
         ) = ctx.backward_cache
         X, Y, argX, argY = ctx.saved_tensors
         if op != "copy_rhs" and ctx.needs_input_grad[3]:
             g_rev = gidx.reverse()
             if reduce_op == "sum":
                 if op == "mul":
-                    dX = gspmm(g_rev, "mul", "sum", dZ, Y)
+                    dX = gspmm(g_rev, "mul", "sum", dZ, Y, on_format)
                 elif op == "add":
-                    dX = gspmm(g_rev, "copy_lhs", "sum", dZ, Y)
+                    dX = gspmm(g_rev, "copy_lhs", "sum", dZ, Y, on_format)
                 elif op == "copy_lhs":
-                    dX = gspmm(g_rev, "copy_lhs", "sum", dZ, None)
+                    dX = gspmm(g_rev, "copy_lhs", "sum", dZ, None, on_format)
             else:  # max/min
                 dX = torch.zeros(
                     (X_shape[0],) + dZ.shape[1:], dtype=dtype, device=device
@@ -160,11 +163,11 @@ class GSpMM(torch.autograd.Function):
         if op != "copy_lhs" and ctx.needs_input_grad[4]:
             if reduce_op == "sum":
                 if op == "mul" and reduce_last:
-                    dY = gsddmm(gidx, "dot", X, dZ)
+                    dY = gsddmm(gidx, "dot", X, dZ, on_format=on_format)
                 elif op == "mul":
-                    dY = gsddmm(gidx, "mul", X, dZ)
+                    dY = gsddmm(gidx, "mul", X, dZ, on_format=on_format)
                 elif op in ["add", "copy_rhs"]:
-                    dY = gsddmm(gidx, "copy_rhs", X, dZ)
+                    dY = gsddmm(gidx, "copy_rhs", X, dZ, on_format=on_format)
             else:  # max/min
                 dY = torch.zeros(
                     (Y_shape[0],) + dZ.shape[1:], dtype=dtype, device=device
@@ -200,7 +203,7 @@ class GSDDMM(torch.autograd.Function):
         out = _gsddmm(gidx, op, X, Y, lhs_target, rhs_target, on_format)
         X_shape = X.shape if X is not None else None
         Y_shape = Y.shape if Y is not None else None
-        ctx.backward_cache = gidx, op, lhs_target, rhs_target, X_shape, Y_shape
+        ctx.backward_cache = gidx, op, lhs_target, rhs_target, X_shape, Y_shape, on_format
         req_grad_X = X.requires_grad if X is not None else False
         req_grad_Y = Y.requires_grad if Y is not None else False
         if not sddmm_cache_X(op, req_grad_X, req_grad_Y):
@@ -212,53 +215,55 @@ class GSDDMM(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, dZ):
-        gidx, op, lhs_target, rhs_target, X_shape, Y_shape = ctx.backward_cache
+        gidx, op, lhs_target, rhs_target, X_shape, Y_shape, on_format = ctx.backward_cache
         X, Y = ctx.saved_tensors
         if op != "copy_rhs" and ctx.needs_input_grad[2]:
             if lhs_target in ["u", "v"]:
                 _gidx = gidx if lhs_target == "v" else gidx.reverse()
+                rev_format = _COO if on_format == _COO else _CSC
                 if op in ["add", "copy_lhs"]:
-                    dX = gspmm(_gidx, "copy_rhs", "sum", None, dZ)
+                    dX = gspmm(_gidx, "copy_rhs", "sum", None, dZ, rev_format)
                 else:  # mul, dot
                     if rhs_target == lhs_target:
-                        dX = gspmm(_gidx, "copy_rhs", "sum", None, dZ) * Y
+                        dX = gspmm(_gidx, "copy_rhs", "sum", None, dZ, rev_format) * Y
                     elif rhs_target == "e":
-                        dX = gspmm(_gidx, "copy_rhs", "sum", None, dZ * Y)
+                        dX = gspmm(_gidx, "copy_rhs", "sum", None, dZ * Y, rev_format)
                     else:  # rhs_target = !lhs_target
-                        dX = gspmm(_gidx, "mul", "sum", Y, dZ)
+                        dX = gspmm(_gidx, "mul", "sum", Y, dZ, rev_format)
             else:  # lhs_target == 'e'
                 if op in ["add", "copy_lhs"]:
                     dX = dZ
                 else:  # mul, dot
-                    dX = gsddmm(gidx, "mul", dZ, Y, "e", rhs_target)
+                    dX = gsddmm(gidx, "mul", dZ, Y, "e", rhs_target, on_format)
             dX = _reduce_grad(dX, X_shape)
         else:
             dX = None
         if op != "copy_lhs" and ctx.needs_input_grad[3]:
             if rhs_target in ["u", "v"]:
                 _gidx = gidx if rhs_target == "v" else gidx.reverse()
+                rev_format = _COO if on_format == _COO else _CSC
                 if op in ["add", "copy_rhs"]:
-                    dY = gspmm(_gidx, "copy_rhs", "sum", None, dZ)
+                    dY = gspmm(_gidx, "copy_rhs", "sum", None, dZ, rev_format)
                 else:  # mul, dot
                     if lhs_target == rhs_target:
-                        dY = gspmm(_gidx, "copy_rhs", "sum", None, dZ) * X
+                        dY = gspmm(_gidx, "copy_rhs", "sum", None, dZ, rev_format) * X
                     elif lhs_target == "e":
-                        dY = gspmm(_gidx, "copy_rhs", "sum", None, dZ * X)
+                        dY = gspmm(_gidx, "copy_rhs", "sum", None, dZ * X, rev_format)
                     else:  # rhs_target = !lhs_target
-                        dY = gspmm(_gidx, "mul", "sum", X, dZ)
+                        dY = gspmm(_gidx, "mul", "sum", X, dZ, rev_format)
             else:
                 if op in ["add", "copy_rhs"]:
                     dY = dZ
                 else:  # mul, dot
-                    dY = gsddmm(gidx, "mul", dZ, X, "e", lhs_target)
+                    dY = gsddmm(gidx, "mul", dZ, X, "e", lhs_target, on_format)
             dY = _reduce_grad(dY, Y_shape)
         else:
             dY = None
         return None, None, dX, dY, None, None
 
 
-def gspmm(gidx, op, reduce_op, lhs_data, rhs_data, on_format=_COO):
-    return GSpMM.apply(gidx, op, reduce_op, lhs_data, rhs_data)
+def gspmm(gidx, op, reduce_op, lhs_data, rhs_data, on_format=_CSC):
+    return GSpMM.apply(gidx, op, reduce_op, lhs_data, rhs_data, on_format)
 
 
 def gsddmm(gidx, op, lhs_data, rhs_data, lhs_target='u', rhs_target='v', on_format=_COO):

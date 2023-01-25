@@ -2,8 +2,9 @@ import torch
 from torch.fx import Proxy
 from dgl import DGLHeteroGraph
 from typing import Optional
-from gs.utils import create_block_from_coo, create_block_from_csc
-from gs.format import _COO, _CSC, _CSR, _DCSC, _DCSR
+
+from ..utils import create_block_from_coo, create_block_from_csc
+from ..format import _COO, _CSC, _CSR, _DCSC, _DCSR
 
 torch.fx.wrap('create_block')
 torch.fx.wrap('create_block_from_coo')
