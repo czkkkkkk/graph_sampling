@@ -13,8 +13,8 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_set_data", &Graph::SetData)
       .def("_CAPI_get_data", &Graph::GetData)
       .def("_CAPI_fusion_slicing", &Graph::FusedBidirSlicing)
-      .def("_CAPI_get_num_rows", &Graph::GetNumRows)
-      .def("_CAPI_get_num_cols", &Graph::GetNumCols)
+      .def("_CAPI_get_idtype", &Graph::GetIdType)
+      .def("_CAPI_get_num_nodes", &Graph::GetNumNodes)
       .def("_CAPI_get_num_edges", &Graph::GetNumEdges)
       .def("_CAPI_slicing", &Graph::Slicing)
       .def("_CAPI_sampling", &Graph::Sampling)
@@ -35,7 +35,9 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_divide", &Graph::Divide)
       .def("_CAPI_metadata", &Graph::MetaData)
       .def("_CAPI_random_walk", &Graph::RandomWalk)
-      .def("_CAPI_sddmm", &Graph::SDDMM);
+      .def("_CAPI_sddmm", &Graph::SDDMM)
+      .def("_CAPI_spmm", &Graph::SpMM)
+      .def("_CAPI_reverse", &Graph::Reverse);
   m.class_<HeteroGraph>("HeteroGraph")
       .def(torch::init<>())
       .def("load_from_homo", &HeteroGraph::LoadFromHomo)

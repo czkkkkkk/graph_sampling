@@ -163,7 +163,7 @@ __global__ void SDDMMCSCKernel(
  */
 template <typename Idx, typename DType, typename Op, int LhsTarget = 0,
           int RhsTarget = 2>
-void SDDMMCOOCUDA(const BcastOff& bcast, std::shared_ptr<COO> coo,
+void SDDMMCOOCUDA(const BcastOff& bcast, const std::shared_ptr<COO> coo,
                   torch::Tensor lhs, torch::Tensor rhs, torch::Tensor out) {
   const int64_t nnz = coo->row.numel();
   const bool use_idx = coo->e_ids.has_value();
@@ -220,7 +220,7 @@ void SDDMMCOOCUDA(const BcastOff& bcast, std::shared_ptr<COO> coo,
  */
 template <typename Idx, typename DType, typename Op, int LhsTarget = 0,
           int RhsTarget = 2>
-void SDDMMCSCCUDA(const BcastOff& bcast, std::shared_ptr<CSC> csc,
+void SDDMMCSCCUDA(const BcastOff& bcast, const std::shared_ptr<CSC> csc,
                   torch::optional<torch::Tensor> n_ids, torch::Tensor lhs,
                   torch::Tensor rhs, torch::Tensor out) {
   const bool use_idx = csc->e_ids.has_value();
@@ -261,30 +261,36 @@ void SDDMMCSCCUDA(const BcastOff& bcast, std::shared_ptr<CSC> csc,
  * @brief CUDA implementation of g-SDDMM on CSC format.
  */
 void SDDMMCSC(const std::string& op, const BcastOff& bcast,
-              std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
-              torch::Tensor lhs, torch::Tensor rhs, torch::Tensor out,
-              int lhs_target, int rhs_target) {
-  SWITCH_BITS(32, DType, {
-    SWITCH_OP(op, Op, {
-      SWITCH_TARGET(lhs_target, rhs_target, LhsTarget, RhsTarget, {
-        SDDMMCSCCUDA<int64_t, DType, Op, LhsTarget, RhsTarget>(
-            bcast, csc, n_ids, lhs, rhs, out);
+              const std::shared_ptr<CSC> csc,
+              torch::optional<torch::Tensor> n_ids, torch::Tensor lhs,
+              torch::Tensor rhs, torch::Tensor out, int lhs_target,
+              int rhs_target) {
+  ID_TYPE_SWITCH(csc->indices.scalar_type(), IdType, {
+    FLOAT_TYPE_SWITCH(out.scalar_type(), DType, {
+      SWITCH_OP(op, Op, {
+        SWITCH_TARGET(lhs_target, rhs_target, LhsTarget, RhsTarget, {
+          SDDMMCSCCUDA<int64_t, DType, Op, LhsTarget, RhsTarget>(
+              bcast, csc, n_ids, lhs, rhs, out);
+        });
       });
     });
   });
 }
 
 /**
- * @brief CUDA implementation of g-SDDMM on Coo format.
+ * @brief CUDA implementation of g-SDDMM on COO format.
  */
 void SDDMMCOO(const std::string& op, const BcastOff& bcast,
-              std::shared_ptr<COO> coo, torch::Tensor lhs, torch::Tensor rhs,
-              torch::Tensor out, int lhs_target, int rhs_target) {
-  SWITCH_BITS(32, DType, {
-    SWITCH_OP(op, Op, {
-      SWITCH_TARGET(lhs_target, rhs_target, LhsTarget, RhsTarget, {
-        SDDMMCOOCUDA<int64_t, DType, Op, LhsTarget, RhsTarget>(bcast, coo, lhs,
-                                                               rhs, out);
+              const std::shared_ptr<COO> coo, torch::Tensor lhs,
+              torch::Tensor rhs, torch::Tensor out, int lhs_target,
+              int rhs_target) {
+  ID_TYPE_SWITCH(coo->row.scalar_type(), IdType, {
+    FLOAT_TYPE_SWITCH(out.scalar_type(), DType, {
+      SWITCH_OP(op, Op, {
+        SWITCH_TARGET(lhs_target, rhs_target, LhsTarget, RhsTarget, {
+          SDDMMCOOCUDA<IdType, DType, Op, LhsTarget, RhsTarget>(bcast, coo, lhs,
+                                                                rhs, out);
+        });
       });
     });
   });

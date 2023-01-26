@@ -3,6 +3,7 @@
 #include <sstream>
 #include "bcast.h"
 #include "cuda/sddmm.h"
+#include "cuda/spmm.h"
 #include "cuda/tensor_ops.h"
 #include "graph_ops.h"
 
@@ -62,7 +63,7 @@ std::shared_ptr<CSR> Graph::GetCSR() { return csr_; }
 
 std::shared_ptr<COO> Graph::GetCOO() { return coo_; }
 
-torch::optional<torch::Tensor> Graph::GetData(std::string order) {
+torch::Tensor Graph::GetData(std::string order) {
   auto data =
       data_.has_value()
           ? data_.value()
@@ -86,9 +87,21 @@ torch::optional<torch::Tensor> Graph::GetData(std::string order) {
   return need_idx ? data[idx] : data;
 }
 
-int64_t Graph::GetNumCols() { return num_cols_; }
+torch::ScalarType Graph::GetIdType() {
+  if (csc_ != nullptr)
+    return csc_->indices.scalar_type();
+  else if (csr_ != nullptr)
+    return csr_->indices.scalar_type();
+  else if (coo_ != nullptr)
+    return coo_->row.scalar_type();
+  else
+    LOG(FATAL) << "Graph has no CSC, CSR, nor COO.";
+}
 
-int64_t Graph::GetNumRows() { return num_rows_; }
+int64_t Graph::GetNumNodes(int64_t axis) {
+  if (axis != 0 && axis != 1) LOG(FATAL) << "axis should be 0 or 1";
+  return axis == 0 ? num_rows_ : num_cols_;
+}
 
 int64_t Graph::GetNumEdges() { return num_edges_; }
 
@@ -193,8 +206,7 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
       std::tie(tmp_ptr, select_index) = CSCRowSlicing(csc_, n_ids, with_coo);
       new_val_cols = val_col_ids_;
 
-      if (relabel)
-        LOG(FATAL) << "Not implemented warning";
+      if (relabel) LOG(FATAL) << "Not implemented warning";
     }
 
     if (output_format & _CSC)
@@ -217,8 +229,7 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
       std::tie(tmp_ptr, select_index) = CSCRowSlicing(csr_, n_ids, with_coo);
       new_val_rows = val_row_ids_;
 
-      if (relabel)
-        LOG(FATAL) << "Not implemented warning";
+      if (relabel) LOG(FATAL) << "Not implemented warning";
     } else {
       if (val_row_ids_.has_value())
         std::tie(tmp_ptr, select_index) =
@@ -528,11 +539,7 @@ torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length) {
 
 torch::Tensor Graph::Sum(int64_t axis, int64_t powk, int64_t on_format) {
   CreateSparseFormat(on_format);
-  auto in_data =
-      data_.has_value()
-          ? data_.value()
-          : torch::ones(num_edges_,
-                        torch::dtype(torch::kFloat32).device(torch::kCUDA));
+  auto in_data = GetData();
   auto out_size = (axis == 0) ? num_cols_ : num_rows_;
   torch::Tensor out_data = torch::zeros(out_size, in_data.options());
 
@@ -553,11 +560,7 @@ c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis,
   CreateSparseFormat(on_format);
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
       new Graph(is_subgraph_, col_ids_, row_ids_, num_cols_, num_rows_)));
-  auto in_data =
-      data_.has_value()
-          ? data_.value()
-          : torch::ones(num_edges_,
-                        torch::dtype(torch::kFloat32).device(torch::kCUDA));
+  auto in_data = GetData();
   torch::Tensor out_data = torch::zeros(num_edges_, in_data.options());
   if (on_format == _COO) {
     COOGraphDiv(coo_, in_data, divisor, out_data, 1 - axis);
@@ -740,18 +743,10 @@ std::vector<torch::Tensor> Graph::MetaData() {
   col_ids = (col_ids_.has_value()) ? col_ids_.value() : torch::Tensor();
   row_ids = (row_ids_.has_value()) ? row_ids_.value() : torch::Tensor();
   if (csc_ != nullptr) {
-    data =
-        (data_.has_value())
-            ? data_.value()
-            : torch::ones(csc_->indices.numel(),
-                          torch::dtype(torch::kFloat32).device(torch::kCUDA));
+    data = GetData();
     return {col_ids, row_ids, data, csc_->indptr, csc_->indices};
   } else if (csr_ != nullptr) {
-    data =
-        (data_.has_value())
-            ? data_.value()
-            : torch::ones(csr_->indices.numel(),
-                          torch::dtype(torch::kFloat32).device(torch::kCUDA));
+    data = GetData();
     return {col_ids, row_ids, data, csr_->indptr, csr_->indices};
   } else {
     LOG(INFO) << "Warning in MetaData: no CSC nor CSR.";
@@ -776,8 +771,52 @@ void Graph::SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
     impl::SDDMMCSC(op, bcast, csc_, val_col_ids_, lhs, rhs, out, lhs_target,
                    rhs_target);
   } else {
-    LOG(FATAL) << "SDDMM only supports CSR and COO formats";
+    LOG(FATAL) << "SDDMM only supports CSC/DCSC, CSR/DCSR and COO formats";
   }
+}
+
+std::tuple<torch::Tensor, torch::Tensor> Graph::SpMM(
+    const std::string& op, const std::string& reduce, torch::Tensor ufeat,
+    torch::Tensor efeat, torch::Tensor out, int64_t on_format) {
+  torch::Tensor ArgU, ArgE;
+  CreateSparseFormat(on_format);
+  const auto& bcast = CalcBcastOff(op, ufeat, efeat);
+
+  if (reduce == "max" || reduce == "min") {
+    if (op != "copy_rhs")
+      ArgU = torch::zeros_like(out,
+                               torch::dtype(GetIdType()).device(torch::kCUDA));
+    if (op != "copy_lhs")
+      ArgE = torch::zeros_like(out,
+                               torch::dtype(GetIdType()).device(torch::kCUDA));
+  }
+
+  if (on_format == _COO) {
+    impl::SpMMCOO(op, reduce, bcast, coo_, ufeat, efeat, out, {ArgU, ArgE});
+  } else if (on_format == _CSC || on_format == _DCSC) {
+    impl::SpMMCSC(op, reduce, bcast, csc_, val_col_ids_, ufeat, efeat, out,
+                  {ArgU, ArgE});
+  } else {
+    LOG(FATAL) << "SpMM only supports CSC and COO formats";
+  }
+  return {ArgU, ArgE};
+}
+
+c10::intrusive_ptr<Graph> Graph::Reverse() {
+  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
+      new Graph(is_subgraph_, row_ids_, col_ids_, num_rows_, num_cols_)));
+  ret->SetCSC(csr_);
+  ret->SetCSR(csc_);
+  if (coo_ != nullptr) {
+    auto rev_coo = std::make_shared<COO>(COO{
+        coo_->col, coo_->row, coo_->e_ids, coo_->col_sorted, coo_->row_sorted});
+    ret->SetCOO(rev_coo);
+  }
+  ret->SetNumEdges(num_edges_);
+  if (data_.has_value()) ret->SetData(data_.value());
+  if (val_row_ids_.has_value()) ret->SetValidCols(val_row_ids_.value());
+  if (val_col_ids_.has_value()) ret->SetValidRows(val_col_ids_.value());
+  return ret;
 }
 
 }  // namespace gs
