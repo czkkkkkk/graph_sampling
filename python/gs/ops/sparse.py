@@ -140,7 +140,7 @@ class GSpMM(torch.autograd.Function):
         ) = ctx.backward_cache
         X, Y, argX, argY = ctx.saved_tensors
         if op != "copy_rhs" and ctx.needs_input_grad[3]:
-            g_rev = gidx.reverse()
+            g_rev = gidx._CAPI_reverse()
             if reduce_op == "sum":
                 if op == "mul":
                     dX = gspmm(g_rev, "mul", "sum", dZ, Y, on_format)
@@ -219,7 +219,7 @@ class GSDDMM(torch.autograd.Function):
         X, Y = ctx.saved_tensors
         if op != "copy_rhs" and ctx.needs_input_grad[2]:
             if lhs_target in ["u", "v"]:
-                _gidx = gidx if lhs_target == "v" else gidx.reverse()
+                _gidx = gidx if lhs_target == "v" else gidx._CAPI_reverse()
                 rev_format = _COO if on_format == _COO else _CSC
                 if op in ["add", "copy_lhs"]:
                     dX = gspmm(_gidx, "copy_rhs", "sum", None, dZ, rev_format)
@@ -240,7 +240,7 @@ class GSDDMM(torch.autograd.Function):
             dX = None
         if op != "copy_lhs" and ctx.needs_input_grad[3]:
             if rhs_target in ["u", "v"]:
-                _gidx = gidx if rhs_target == "v" else gidx.reverse()
+                _gidx = gidx if rhs_target == "v" else gidx._CAPI_reverse()
                 rev_format = _COO if on_format == _COO else _CSC
                 if op in ["add", "copy_rhs"]:
                     dY = gspmm(_gidx, "copy_rhs", "sum", None, dZ, rev_format)

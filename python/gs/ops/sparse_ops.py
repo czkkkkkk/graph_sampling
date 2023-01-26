@@ -122,7 +122,7 @@ def _gspmm(gidx, op, reduce_op, u, e, on_format=_CSC):
     use_cmp = reduce_op in ["max", "min"]
     arg_u, arg_e = None, None
     if gidx._CAPI_get_num_edges() > 0:
-        arg_u, arg_e = gidx._CAPI_spmm(gidx, op, reduce_op, u, e, v, on_format)
+        arg_u, arg_e = gidx._CAPI_spmm(op, reduce_op, u, e, v, on_format)
     # To deal with scalar node/edge features.
     if (expand_u or not use_u) and (expand_e or not use_e):
         v = torch.squeeze(v, -1)
