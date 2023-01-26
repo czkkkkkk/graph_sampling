@@ -15,10 +15,10 @@ TEST(SlicingRelabel, test1)
 
     torch::Tensor ids = torch::arange(1, 4, options);
     auto subA = A.Slicing(ids, 0, _CSC, _CSC, true);
-    EXPECT_EQ(A.GetNumCols(), 20);
-    EXPECT_EQ(A.GetNumRows(), 100);
-    EXPECT_EQ(subA->GetNumCols(), 3);
-    EXPECT_EQ(subA->GetNumRows(), 15);
+    EXPECT_EQ(A.GetNumNodes(1), 20);
+    EXPECT_EQ(A.GetNumNodes(0), 100);
+    EXPECT_EQ(subA->GetNumNodes(1), 3);
+    EXPECT_EQ(subA->GetNumNodes(0), 15);
 
     auto csc_ptr = subA->GetCSC();
     EXPECT_TRUE(csc_ptr->indptr.equal(torch::arange(0, 4, options) * 5));
@@ -37,10 +37,10 @@ TEST(SlicingRelabel, test2)
 
     torch::Tensor row_ids = torch::arange(5, 6, options);
     auto subA = A.Slicing(row_ids, 1, _DCSR, _CSR, true);
-    EXPECT_EQ(A.GetNumCols(), 12);
-    EXPECT_EQ(A.GetNumRows(), 12);
-    EXPECT_EQ(subA->GetNumCols(), 2);
-    EXPECT_EQ(subA->GetNumRows(), 1);
+    EXPECT_EQ(A.GetNumNodes(1), 12);
+    EXPECT_EQ(A.GetNumNodes(0), 12);
+    EXPECT_EQ(subA->GetNumNodes(1), 2);
+    EXPECT_EQ(subA->GetNumNodes(0), 1);
 
     auto csr_ptr = subA->GetCSR();
     EXPECT_EQ(csr_ptr->indptr.numel(), 2);

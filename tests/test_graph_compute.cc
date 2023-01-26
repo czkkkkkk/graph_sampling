@@ -139,7 +139,7 @@ TEST(GraphDiv, test1)
     A.LoadCSC(indptr, indices);
 
     auto graph_ptr = A.Divide(divisor, 0, _CSC);
-    auto result = graph_ptr->GetData().value();
+    auto result = graph_ptr->GetData();
 
     EXPECT_EQ(result.numel(), expected.numel());
     EXPECT_TRUE(result.isclose(expected).all().item<bool>());
@@ -157,7 +157,7 @@ TEST(GraphDiv, test2)
     A.LoadCSC(indptr, indices);
 
     auto graph_ptr = A.Divide(divisor, 0, _CSC);
-    auto result = graph_ptr->GetData().value();
+    auto result = graph_ptr->GetData();
 
     EXPECT_EQ(result.numel(), expected.numel());
     EXPECT_TRUE(result.isclose(expected).all().item<bool>());
@@ -175,7 +175,7 @@ TEST(GraphDiv, test3)
     A.LoadCSC(indptr, indices);
 
     auto graph_ptr = A.Divide(divisor, 0, _COO);
-    auto result = graph_ptr->GetData().value();
+    auto result = graph_ptr->GetData();
 
     EXPECT_EQ(result.numel(), expected.numel());
     EXPECT_TRUE(result.isclose(expected).all().item<bool>());
@@ -193,7 +193,7 @@ TEST(GraphNormalize, test1)
 
     auto sum_result = A.Sum(0, 1, _CSC);
     auto graph_ptr = A.Divide(sum_result, 0, _CSC);
-    auto result = graph_ptr->GetData().value();
+    auto result = graph_ptr->GetData();
 
     EXPECT_EQ(result.numel(), expected.numel());
     EXPECT_TRUE(result.isclose(expected).all().item<bool>());
@@ -213,7 +213,7 @@ TEST(GraphNormalize, test2)
 
     auto sum_result = A.Sum(0, 1, _CSC);
     auto graph_ptr = A.Divide(sum_result, 0, _CSC);
-    auto result = graph_ptr->GetData().value();
+    auto result = graph_ptr->GetData();
 
     EXPECT_EQ(result.numel(), expected.numel());
     EXPECT_TRUE(result.isclose(expected).all().item<bool>());
@@ -233,7 +233,7 @@ TEST(GraphNormalize, test3)
 
     auto sum_result = A.Sum(0, 1, _COO);
     auto graph_ptr = A.Divide(sum_result, 0, _COO);
-    auto result = graph_ptr->GetData().value();
+    auto result = graph_ptr->GetData();
 
     EXPECT_EQ(result.numel(), expected.numel());
     EXPECT_TRUE(result.isclose(expected).all().item<bool>());
@@ -255,7 +255,7 @@ TEST(GraphNormalize, test4)
     auto graph_ptr = A.Slicing(n_ids, 0, _CSC, _CSC);
     auto sum_result = graph_ptr->Sum(1, 1, _CSR);
     graph_ptr = graph_ptr->Divide(sum_result, 1, _CSR);
-    auto result = graph_ptr->GetData().value();
+    auto result = graph_ptr->GetData();
 
     EXPECT_TRUE(result.equal(expected));
 }
@@ -278,7 +278,7 @@ TEST(GraphNormalize, test5)
     graph_ptr = graph_ptr->Divide(divisor, 1, _CSR);
     auto sum_result = graph_ptr->Sum(0, 1, _CSC);
     graph_ptr = graph_ptr->Divide(sum_result, 0, _CSC);
-    auto result = graph_ptr->GetData().value();
+    auto result = graph_ptr->GetData();
 
     EXPECT_TRUE(result.equal(expected));
 }
@@ -301,7 +301,7 @@ TEST(GraphNormalize, test6)
     graph_ptr = graph_ptr->Divide(divisor, 1, _CSR);
     auto sum_result = graph_ptr->Sum(0, 1, _COO);
     graph_ptr = graph_ptr->Divide(sum_result, 0, _COO);
-    auto result = graph_ptr->GetData().value();
+    auto result = graph_ptr->GetData();
 
     EXPECT_TRUE(result.equal(expected));
 }
