@@ -41,10 +41,10 @@ std::tuple<torch::Tensor, std::vector<torch::Tensor>> BatchTensorRelabel(
     std::vector<torch::Tensor> to_be_relabeled_tensors);
 
 void CSCGraphSum(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
-                 torch::Tensor data, torch::Tensor out_data, int64_t powk);
+                 torch::Tensor data, torch::Tensor out_data);
 
 void COOGraphSum(std::shared_ptr<COO> coo, torch::Tensor data,
-                 torch::Tensor out_data, int64_t powk, int target_side);
+                 torch::Tensor out_data);
 
 void CSCGraphDiv(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
                  torch::Tensor data, torch::Tensor divisor,

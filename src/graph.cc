@@ -539,16 +539,23 @@ torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length) {
 
 torch::Tensor Graph::Sum(int64_t axis, int64_t powk, int64_t on_format) {
   CreateSparseFormat(on_format);
-  auto in_data = GetData();
+  auto in_data = powk == 1 ? GetData() : torch::pow(GetData(), powk);
   auto out_size = (axis == 0) ? num_cols_ : num_rows_;
   torch::Tensor out_data = torch::zeros(out_size, in_data.options());
 
   if (on_format == _COO) {
-    COOGraphSum(coo_, in_data, out_data, powk, 1 - axis);
+    if (axis == 0)
+      COOGraphSum(coo_, in_data, out_data);
+    else if (axis == 1) {
+      auto rev_coo =
+          std::make_shared<COO>(COO{coo_->col, coo_->row, coo_->e_ids,
+                                    coo_->col_sorted, coo_->row_sorted});
+      COOGraphSum(rev_coo, in_data, out_data);
+    }
   } else if (axis == 0 && (on_format == _CSC || on_format == _DCSC)) {
-    CSCGraphSum(csc_, val_col_ids_, in_data, out_data, powk);
+    CSCGraphSum(csc_, val_col_ids_, in_data, out_data);
   } else if (axis == 1 && (on_format == _CSR || on_format == _DCSR)) {
-    CSCGraphSum(csr_, val_row_ids_, in_data, out_data, powk);
+    CSCGraphSum(csr_, val_row_ids_, in_data, out_data);
   } else {
     LOG(FATAL) << "axis should be 0 or 1? on_format and axis do not match?";
   }

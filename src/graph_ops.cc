@@ -6,6 +6,7 @@
 #include "cuda/fusion/slice_sampling.h"
 #include "cuda/graph_ops.h"
 #include "cuda/sddmm.h"
+#include "cuda/spmm.h"
 #include "cuda/tensor_ops.h"
 
 namespace gs {
@@ -270,19 +271,27 @@ std::tuple<torch::Tensor, std::vector<torch::Tensor>> BatchTensorRelabel(
 }
 
 void CSCGraphSum(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
-                 torch::Tensor data, torch::Tensor out_data, int64_t powk) {
+                 torch::Tensor data, torch::Tensor out_data) {
   if (csc->indptr.device().type() == torch::kCUDA) {
-    impl::CSCSumCUDA(csc->indptr, csc->e_ids, n_ids, data, out_data, powk);
+    // impl::CSCSumCUDA(csc->indptr, csc->e_ids, n_ids, data, out_data, powk);
+    torch::Tensor ArgU, ArgE, ufeat;
+    const auto& bcast = CalcBcastOff("copy_rhs", ufeat, data);
+    impl::SpMMCSC("copy_rhs", "sum", bcast, csc, n_ids, ufeat, data, out_data,
+                  {ArgU, ArgE});
   } else {
     LOG(FATAL) << "Not implemented warning";
   }
 }
 
 void COOGraphSum(std::shared_ptr<COO> coo, torch::Tensor data,
-                 torch::Tensor out_data, int64_t powk, int target_side) {
+                 torch::Tensor out_data) {
   if (coo->col.device().type() == torch::kCUDA) {
-    auto target = (target_side == 0) ? coo->row : coo->col;
-    impl::COOSumCUDA(target, coo->e_ids, data, out_data, powk);
+    // auto target = (target_side == 0) ? coo->row : coo->col;
+    // impl::COOSumCUDA(target, coo->e_ids, data, out_data, powk);
+    torch::Tensor ArgU, ArgE, ufeat;
+    const auto& bcast = CalcBcastOff("copy_rhs", ufeat, data);
+    impl::SpMMCOO("copy_rhs", "sum", bcast, coo, ufeat, data, out_data,
+                  {ArgU, ArgE});
   } else {
     LOG(FATAL) << "Not implemented warning";
   }

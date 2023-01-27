@@ -254,24 +254,24 @@ void SpMMCSCCUDA(const BcastOff& bcast, const std::shared_ptr<CSC> csc,
   const dim3 nthrs(ntx, nty);
 
   BCAST_IDX_CTX_SWITCH(bcast, use_idx, ubcast_off, ebcast_off, {
-    SWITCH_IDX(use_idx, use_nid,
-               {CUDA_KERNEL_CALL((SpMMCSCKernel<Idx, DType, BinaryOp, ReduceOp,
-                                                UseBcast, UseIdx, UseNMap>),
-                                 nblks, nthrs, ufeat_data, efeat_data, out_data,
-                                 argu_data, arge_data, indptr, indices,
-                                 edge_map, nid_map, num_cols, ubcast_off,
-                                 ebcast_off, lhs_len, rhs_len, len)});
+    SWITCH_IDX(use_idx, use_nid, {
+      CUDA_KERNEL_CALL((SpMMCSCKernel<Idx, DType, BinaryOp, ReduceOp, UseBcast,
+                                      UseIdx, UseNMap>),
+                       nblks, nthrs, ufeat_data, efeat_data, out_data,
+                       argu_data, arge_data, indptr, indices, edge_map, nid_map,
+                       num_cols, ubcast_off, ebcast_off, lhs_len, rhs_len, len);
+    });
   });
 }
 
 /**
  * @brief CUDA implementation of g-SpMM on CSC format.
  */
-std::pair<torch::Tensor, torch::Tensor> SpMMCSC(
-    const std::string& op, const std::string& reduce, const BcastOff& bcast,
-    const std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
-    torch::Tensor ufeat, torch::Tensor efeat, torch::Tensor out,
-    std::vector<torch::Tensor> out_aux) {
+void SpMMCSC(const std::string& op, const std::string& reduce,
+             const BcastOff& bcast, const std::shared_ptr<CSC> csc,
+             torch::optional<torch::Tensor> n_ids, torch::Tensor ufeat,
+             torch::Tensor efeat, torch::Tensor out,
+             std::vector<torch::Tensor> out_aux) {
   if (out.scalar_type() != torch::kFloat32)
     LOG(FATAL)
         << "Currently g-SpMM on COO format only support 32 bits float data.";
@@ -300,17 +300,17 @@ std::pair<torch::Tensor, torch::Tensor> SpMMCSC(
       });
     });
   } else {
-    LOG(FATAL) << "Not implemented";
+    LOG(FATAL) << "Not implemented warning";
   }
 }
 
 /**
  * @brief CUDA implementation of g-SpMM on COO format.
  */
-std::pair<torch::Tensor, torch::Tensor> SpMMCOO(
-    const std::string& op, const std::string& reduce, const BcastOff& bcast,
-    const std::shared_ptr<COO> coo, torch::Tensor ufeat, torch::Tensor efeat,
-    torch::Tensor out, std::vector<torch::Tensor> out_aux) {
+void SpMMCOO(const std::string& op, const std::string& reduce,
+             const BcastOff& bcast, const std::shared_ptr<COO> coo,
+             torch::Tensor ufeat, torch::Tensor efeat, torch::Tensor out,
+             std::vector<torch::Tensor> out_aux) {
   if (out.scalar_type() != torch::kFloat32)
     LOG(FATAL)
         << "Currently g-SpMM on COO format only support 32 bits float data.";
