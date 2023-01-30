@@ -113,16 +113,16 @@ TEST(GraphSum, test7)
     Graph A(false);
     auto options = torch::TensorOptions().dtype(torch::kInt64).device(torch::kCUDA);
     auto data_options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCUDA);
-    torch::Tensor n_ids = torch::arange(10, 12, options);
-    torch::Tensor indptr = torch::cat({torch::zeros(10, options), torch::arange(0, 3, options) * 2});
-    torch::Tensor indices = torch::arange(1, 4, 2, options).repeat({2});
-    torch::Tensor data = torch::arange(3, 7, data_options);
-    torch::Tensor expected = torch::cat({torch::arange(0, 9, 8, data_options), torch::arange(0, 11, 10, data_options), torch::zeros(8, data_options)});
+    torch::Tensor n_ids = torch::arange(10, 13, 2, options);
+    torch::Tensor indptr = torch::cat({torch::zeros(10, options), torch::arange(0, 4, options) * 2});
+    torch::Tensor indices = torch::arange(1, 4, 2, options).repeat({3});
+    torch::Tensor data = torch::arange(3, 9, data_options);
+    torch::Tensor expected = torch::cat({torch::arange(0, 11, 10, data_options), torch::arange(0, 13, 12, data_options), torch::zeros(9, data_options)});
     A.LoadCSC(indptr, indices);
     A.SetData(data);
-    A.Slicing(n_ids, 0, _CSC, _CSC);
+    auto B = A.Slicing(n_ids, 0, _CSC, _CSC);
 
-    auto result = A.Sum(1, 1, _CSR);
+    auto result = B->Sum(1, 1, _CSR);
 
     EXPECT_TRUE(result.equal(expected));
 }
