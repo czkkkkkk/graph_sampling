@@ -40,7 +40,6 @@ class Graph : public torch::CustomClassHolder {
   std::shared_ptr<CSR> GetCSR();
   std::shared_ptr<COO> GetCOO();
   torch::Tensor GetData(std::string order = "default");
-  torch::ScalarType GetIdType();
   int64_t GetNumNodes(int64_t axis);
   int64_t GetNumEdges();
   c10::intrusive_ptr<Graph> FusedBidirSlicing(torch::Tensor column_seeds,
@@ -81,10 +80,11 @@ class Graph : public torch::CustomClassHolder {
   void SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
              torch::Tensor out, int64_t lhs_target, int64_t rhs_target,
              int64_t on_format);
-  std::tuple<torch::Tensor, torch::Tensor> SpMM(
-      const std::string& op, const std::string& reduce, torch::Tensor ufeat,
-      torch::Tensor efeat, torch::Tensor out, int64_t on_format);
+  void SpMM(const std::string& op, const std::string& reduce,
+            torch::Tensor ufeat, torch::Tensor efeat, torch::Tensor out,
+            torch::Tensor argu, torch::Tensor arge, int64_t on_format);
   c10::intrusive_ptr<Graph> Reverse();
+  c10::intrusive_ptr<Graph> Copy();
 
   // todo: return global_e_id
  private:

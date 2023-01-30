@@ -87,17 +87,6 @@ torch::Tensor Graph::GetData(std::string order) {
   return need_idx ? data[idx] : data;
 }
 
-torch::ScalarType Graph::GetIdType() {
-  if (csc_ != nullptr)
-    return csc_->indices.scalar_type();
-  else if (csr_ != nullptr)
-    return csr_->indices.scalar_type();
-  else if (coo_ != nullptr)
-    return coo_->row.scalar_type();
-  else
-    LOG(FATAL) << "Graph has no CSC, CSR, nor COO.";
-}
-
 int64_t Graph::GetNumNodes(int64_t axis) {
   if (axis != 0 && axis != 1) LOG(FATAL) << "axis should be 0 or 1";
   return axis == 0 ? num_rows_ : num_cols_;
@@ -782,31 +771,21 @@ void Graph::SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
   }
 }
 
-std::tuple<torch::Tensor, torch::Tensor> Graph::SpMM(
-    const std::string& op, const std::string& reduce, torch::Tensor ufeat,
-    torch::Tensor efeat, torch::Tensor out, int64_t on_format) {
-  torch::Tensor ArgU, ArgE;
+void Graph::SpMM(const std::string& op, const std::string& reduce,
+                 torch::Tensor ufeat, torch::Tensor efeat, torch::Tensor out,
+                 torch::Tensor argu, torch::Tensor arge, int64_t on_format) {
   CreateSparseFormat(on_format);
   const auto& bcast = CalcBcastOff(op, ufeat, efeat);
 
-  if (reduce == "max" || reduce == "min") {
-    if (op != "copy_rhs")
-      ArgU = torch::zeros_like(out,
-                               torch::dtype(GetIdType()).device(torch::kCUDA));
-    if (op != "copy_lhs")
-      ArgE = torch::zeros_like(out,
-                               torch::dtype(GetIdType()).device(torch::kCUDA));
-  }
-
   if (on_format == _COO) {
-    impl::SpMMCOO(op, reduce, bcast, coo_, ufeat, efeat, out, {ArgU, ArgE});
+    LOG(INFO) << op << " " << reduce;
+    impl::SpMMCOO(op, reduce, bcast, coo_, ufeat, efeat, out, {argu, arge});
   } else if (on_format == _CSC || on_format == _DCSC) {
     impl::SpMMCSC(op, reduce, bcast, csc_, val_col_ids_, ufeat, efeat, out,
-                  {ArgU, ArgE});
+                  {argu, arge});
   } else {
     LOG(FATAL) << "SpMM only supports CSC and COO formats";
   }
-  return {ArgU, ArgE};
 }
 
 c10::intrusive_ptr<Graph> Graph::Reverse() {
@@ -819,6 +798,19 @@ c10::intrusive_ptr<Graph> Graph::Reverse() {
         coo_->col, coo_->row, coo_->e_ids, coo_->col_sorted, coo_->row_sorted});
     ret->SetCOO(rev_coo);
   }
+  ret->SetNumEdges(num_edges_);
+  if (data_.has_value()) ret->SetData(data_.value());
+  if (val_row_ids_.has_value()) ret->SetValidCols(val_row_ids_.value());
+  if (val_col_ids_.has_value()) ret->SetValidRows(val_col_ids_.value());
+  return ret;
+}
+
+c10::intrusive_ptr<Graph> Graph::Copy() {
+  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
+      new Graph(is_subgraph_, col_ids_, row_ids_, num_cols_, num_rows_)));
+  ret->SetCOO(coo_);
+  ret->SetCSC(csr_);
+  ret->SetCSR(csc_);
   ret->SetNumEdges(num_edges_);
   if (data_.has_value()) ret->SetData(data_.value());
   if (val_row_ids_.has_value()) ret->SetValidCols(val_row_ids_.value());
