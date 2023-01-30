@@ -100,6 +100,9 @@ def _gspmm(gidx, op, reduce_op, u, e, on_format=_CSC):
     use_u = op != "copy_rhs"
     use_e = op != "copy_lhs"
     if use_u and use_e:
+        if u.device != e.device:
+            raise "The operands data device don't match: {} and {}, please move them to the same device.".format(
+                u.device, e.device)
         if u.dtype != e.dtype:
             raise "The node features' data type {} doesn't match edge features' data type {}, please convert them to the same type.".format(
                 u.dtype, e.dtype)
@@ -112,17 +115,23 @@ def _gspmm(gidx, op, reduce_op, u, e, on_format=_CSC):
         e = torch.unsqueeze(e, -1)
         expand_e = True
 
+    device = u.device if use_u else e.device
     dtype = u.dtype if use_u else e.dtype
     u_shp = u.shape if use_u else (0,)
     e_shp = e.shape if use_e else (0,)
-    v_shp = (gidx._CAPI_get_num_nodes(0),) + infer_broadcast_shape(
+    v_shp = (gidx._CAPI_get_num_nodes(1),) + infer_broadcast_shape(
         op, u_shp[1:], e_shp[1:]
     )
-    v = torch.zeros(v_shp, dtype=dtype)
+    v = torch.zeros(v_shp, dtype=dtype, device=device)
     use_cmp = reduce_op in ["max", "min"]
     arg_u, arg_e = None, None
+    if use_cmp:
+        if use_u:
+            arg_u = torch.zeros(v_shp, dtype=torch.int64, device=device)
+        if use_e:
+            arg_e = torch.zeros(v_shp, dtype=torch.int64, device=device)
     if gidx._CAPI_get_num_edges() > 0:
-        arg_u, arg_e = gidx._CAPI_spmm(op, reduce_op, u, e, v, on_format)
+        gidx._CAPI_spmm(op, reduce_op, u, e, v, arg_u, arg_e, on_format)
     # To deal with scalar node/edge features.
     if (expand_u or not use_u) and (expand_e or not use_e):
         v = torch.squeeze(v, -1)

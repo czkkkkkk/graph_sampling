@@ -3,6 +3,8 @@ from torch.fx import Proxy
 from dgl import DGLHeteroGraph
 from typing import Optional
 
+from ..ops.spmm import gspmm
+from ..ops.sddmm import gsddmm
 from ..utils import create_block_from_coo, create_block_from_csc
 from ..format import _COO, _CSC, _CSR, _DCSC, _DCSR
 
@@ -24,10 +26,10 @@ class Matrix(object):
         return self._graph._CAPI_get_data(order)
 
     def get_num_rows(self):
-        return self._graph._CAPI_get_num_rows()
+        return self._graph._CAPI_get_num_nodes(0)
 
     def get_num_cols(self):
-        return self._graph._CAPI_get_num_cols()
+        return self._graph._CAPI_get_num_nodes(1)
 
     def load_dgl_graph(self, g, weight=None):
         # import csc
@@ -74,13 +76,27 @@ class Matrix(object):
             return Matrix(self._graph._CAPI_sampling_with_probs(0, bias, fanout, replace, _CSC, _COO))
 
     def sum(self, axis, powk=1) -> torch.Tensor:
+        rhs = self.get_data() if powk == 1 else self.get_data() ** powk
         if axis == 0:
-            return self._graph._CAPI_sum(axis, powk, _CSC)
+            return gspmm(self, 'copy_rhs', 'sum', None, rhs, _CSC)
+        elif axis == 1:
+            rev_m = Matrix(self._graph._CAPI_reverse())
+            return gspmm(rev_m, 'copy_rhs', 'sum', None, rhs, _CSC)
         else:
-            return self._graph._CAPI_sum(axis, powk, _CSR)
+            raise "axis should be 0 or 1"
 
     def divide(self, divisor, axis):
-        return Matrix(self._graph._CAPI_divide(divisor, axis, _COO))
+        ret_m = Matrix(self._graph._CAPI_copy())
+        if axis == 0:
+            ret_data = gsddmm(ret_m, 'div',
+                              ret_m.get_data(), divisor, 'e', 'v', _COO)
+        elif axis == 1:
+            ret_data = gsddmm(ret_m, 'div',
+                              ret_m.get_data(), divisor, 'e', 'u', _COO)
+        else:
+            raise "axis should be 0 or 1"
+        ret_m.set_data(ret_data)
+        return ret_m
 
     def row_ids(self, remove_isolated=True) -> torch.Tensor:
         if remove_isolated:
@@ -103,7 +119,7 @@ class Matrix(object):
             ret = ret._CAPI_slicing(c_slice, 0, _CSC, _COO, False)
 
         if isinstance(r_slice, Proxy) or isinstance(r_slice, torch.Tensor):
-            ret = ret._CAPI_slicing(r_slice, 0, _CSR, _COO, False)
+            ret = ret._CAPI_slicing(r_slice, 1, _CSR, _COO, False)
 
         return Matrix(ret)
 

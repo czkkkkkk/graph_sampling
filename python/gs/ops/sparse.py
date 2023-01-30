@@ -180,7 +180,7 @@ class GSpMM(torch.autograd.Function):
             dY = _reduce_grad(dY, Y_shape)
         else:  # Y has no gradient
             dY = None
-        return None, None, None, dX, dY
+        return None, None, None, dX, dY, None
 
 
 def sddmm_cache_X(op, req_grad_X, req_grad_Y):
@@ -225,9 +225,11 @@ class GSDDMM(torch.autograd.Function):
                     dX = gspmm(_gidx, "copy_rhs", "sum", None, dZ, rev_format)
                 else:  # mul, dot
                     if rhs_target == lhs_target:
-                        dX = gspmm(_gidx, "copy_rhs", "sum", None, dZ, rev_format) * Y
+                        dX = gspmm(_gidx, "copy_rhs", "sum",
+                                   None, dZ, rev_format) * Y
                     elif rhs_target == "e":
-                        dX = gspmm(_gidx, "copy_rhs", "sum", None, dZ * Y, rev_format)
+                        dX = gspmm(_gidx, "copy_rhs", "sum",
+                                   None, dZ * Y, rev_format)
                     else:  # rhs_target = !lhs_target
                         dX = gspmm(_gidx, "mul", "sum", Y, dZ, rev_format)
             else:  # lhs_target == 'e'
@@ -246,9 +248,11 @@ class GSDDMM(torch.autograd.Function):
                     dY = gspmm(_gidx, "copy_rhs", "sum", None, dZ, rev_format)
                 else:  # mul, dot
                     if lhs_target == rhs_target:
-                        dY = gspmm(_gidx, "copy_rhs", "sum", None, dZ, rev_format) * X
+                        dY = gspmm(_gidx, "copy_rhs", "sum",
+                                   None, dZ, rev_format) * X
                     elif lhs_target == "e":
-                        dY = gspmm(_gidx, "copy_rhs", "sum", None, dZ * X, rev_format)
+                        dY = gspmm(_gidx, "copy_rhs", "sum",
+                                   None, dZ * X, rev_format)
                     else:  # rhs_target = !lhs_target
                         dY = gspmm(_gidx, "mul", "sum", X, dZ, rev_format)
             else:
@@ -259,12 +263,24 @@ class GSDDMM(torch.autograd.Function):
             dY = _reduce_grad(dY, Y_shape)
         else:
             dY = None
-        return None, None, dX, dY, None, None
+        return None, None, dX, dY, None, None, None
 
 
 def gspmm(gidx, op, reduce_op, lhs_data, rhs_data, on_format=_CSC):
+    if op == "sub":
+        op = "add"
+        rhs_data = -rhs_data
+    if op == "div":
+        op = "mul"
+        rhs_data = 1.0 / rhs_data
     return GSpMM.apply(gidx, op, reduce_op, lhs_data, rhs_data, on_format)
 
 
 def gsddmm(gidx, op, lhs_data, rhs_data, lhs_target='u', rhs_target='v', on_format=_COO):
+    if op == "sub":
+        op = "add"
+        rhs_data = -rhs_data
+    if op == "div":
+        op = "mul"
+        rhs_data = 1.0 / rhs_data
     return GSDDMM.apply(gidx, op, lhs_data, rhs_data, lhs_target, rhs_target, on_format)
