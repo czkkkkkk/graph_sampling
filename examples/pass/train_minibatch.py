@@ -9,6 +9,8 @@ import tqdm
 import argparse
 from model import *
 
+torch.autograd.set_detect_anomaly(True)
+
 
 def matrix_sampler(A: gs.Matrix, seeds, fanouts, features, W_1, W_2, sample_a, use_uva):
     blocks = []
@@ -30,7 +32,7 @@ def matrix_sampler(A: gs.Matrix, seeds, fanouts, features, W_1, W_2, sample_a, u
                          v_feats @ W_1), dim=1).unsqueeze(1)
         att2 = torch.sum(gs.ops.u_mul_v(subA, u_feats @ W_2,
                          v_feats @ W_2), dim=1).unsqueeze(1)
-        att3 = subA.normalize(axis=0).get_data().unsqueeze(1)
+        att3 = subA.divide(subA.sum(0, 1), 0).get_data().unsqueeze(1)
         att = torch.cat([att1, att2, att3], dim=1)
         att = F.relu(att @ F.softmax(sample_a, dim=0))
         att = att + 10e-10 * torch.ones_like(att)
@@ -143,17 +145,19 @@ def train(dataset, args):
             batch_labels = batch_labels[is_labeled].long()
             batch_pred = batch_pred[is_labeled]
             train_loss = F.cross_entropy(batch_pred, batch_labels)
-            train_loss.backward()
+            with torch.autograd.detect_anomaly():
+                train_loss.backward()
             # Loss for sampling probability function
             # Gradient of intermediate tensor
             chain_grad = model.X1.grad
             # Compute intermediate loss for sampling probability parameters
             sample_loss = sampler_loss(
                 loss_tuple, chain_grad.detach(), features, use_uva)
-            sample_loss.backward()
+            with torch.autograd.detect_anomaly():
+                sample_loss.backward()
             opt.step()
             total_train_loss += train_loss.item()
-            total_sample_loss += sample_loss.item()
+            # total_sample_loss += sample_loss.item()
             torch.cuda.synchronize()
             tic = time.time()
 

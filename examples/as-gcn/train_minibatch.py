@@ -1,5 +1,5 @@
 import gs
-from gs.utils import SeedGenerator, load_reddit, load_ogbn_products
+from gs.utils import SeedGenerator, load_reddit, load_ogb
 import torch
 import torch.nn.functional as F
 from torch.nn.functional import normalize, relu
@@ -226,6 +226,6 @@ if __name__ == '__main__':
     if args.dataset == 'reddit':
         dataset = load_reddit()
     elif args.dataset == 'products':
-        dataset = load_ogbn_products()
+        dataset = load_ogb('~/datasets')
     print(dataset[0])
     train(dataset, args)
