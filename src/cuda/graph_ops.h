@@ -57,7 +57,7 @@ std::pair<torch::Tensor, torch::Tensor> DCSC2COOCUDA(torch::Tensor indptr,
 
 std::vector<std::vector<torch::Tensor>> CSCSplitCUDA(
     torch::Tensor indptr, torch::Tensor indices,
-    torch::optional<torch::Tensor> nid, int64_t split_size);
+    torch::optional<torch::Tensor> eid, int64_t split_size);
 }  // namespace impl
 }  // namespace gs
 

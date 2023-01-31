@@ -18,9 +18,9 @@ def graphsage_sampler(A: gs.Matrix, seeds, fanouts):
     ret = []
     for fanout in fanouts:
         subA = A.fused_columnwise_slicing_sampling(seeds, fanout, True)
-        # block = subA.to_dgl_block()
-        # seeds = block.srcdata['_ID']
-        # ret.insert(0, block)
+        block = subA.to_dgl_block()
+        seeds = block.srcdata['_ID']
+        ret.insert(0, block)
     input_nodes = seeds
     return input_nodes, output_nodes, ret
 
@@ -35,12 +35,12 @@ def graphsage_sampler_batching(A: gs.Matrix, seeds, fanouts):
         batchAs = subA._graph._CAPI_split(256)
         # torch.cuda.nvtx.range_pop()
         # torch.cuda.nvtx.range_push('toblock')
-        # for bachA in batchAs:
-        #     # torch.cuda.nvtx.range_push('single')
-        #     block = gs.Matrix(bachA).to_dgl_block()
-        #     # torch.cuda.nvtx.range_pop()
-        #     seeds = block.srcdata['_ID']
-        #     ret.insert(0, block)
+        for bachA in batchAs:
+            # torch.cuda.nvtx.range_push('single')
+            block = gs.Matrix(bachA).to_dgl_block()
+            # torch.cuda.nvtx.range_pop()
+            seeds = block.srcdata['_ID']
+            ret.insert(0, block)
         # torch.cuda.nvtx.range_pop()
     input_nodes = seeds
     # torch.cuda.nvtx.range_pop()
@@ -90,12 +90,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--fmode", default='cuda', choices=['cpu', 'cuda'],
                         help="Feature reside device. To cpu or gpu")
-    parser.add_argument("--batchsize", type=int, default=256,
+    parser.add_argument("--batchsize", type=int, default=65536,
                         help="batch size for training")
     parser.add_argument("--fanout", default='10',
                         help="sample size for each layer")
     args = parser.parse_args()
-    args.batching = False
+    args.batching = True
     print(args)
     args.fanout = [int(x.strip()) for x in args.fanout.split(',')]
     feat_device = args.fmode

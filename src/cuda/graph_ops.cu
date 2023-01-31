@@ -124,17 +124,6 @@ void COOSumCUDA(torch::Tensor target, torch::optional<torch::Tensor> e_ids,
   COOSum<int64_t, float>(target, e_ids, data, out_data, powk);
 }
 
-#define SWITCH_NID(NODE_MAP, ...)    \
-  do {                               \
-    if ((NODE_MAP)) {                \
-      constexpr bool UseNid = true;  \
-      { __VA_ARGS__ }                \
-    } else {                         \
-      constexpr bool UseNid = false; \
-      { __VA_ARGS__ }                \
-    }                                \
-  } while (0)
-
 template <typename IdType>
 __global__ void _CSCSplitKernel(IdType* indptr, IdType* out, IdType* out_sizes,
                                 int64_t num_split, int64_t split_size,
@@ -154,121 +143,13 @@ __global__ void _CSCSplitKernel(IdType* indptr, IdType* out, IdType* out_sizes,
   }
 }
 
-template <typename IdType, bool UseNid>
-__global__ void _CSCSplitIndptrKernel(IdType* indptr, IdType* nid, IdType** out,
-                                      IdType** out_nid, IdType* out_range,
-                                      int64_t num_split, int64_t split_size,
-                                      int64_t last_size) {
-  int64_t row = blockIdx.x * blockDim.y + threadIdx.y;
-  while (row < num_split) {
-    int64_t inoff = row * split_size;
-    int64_t size = (row == num_split - 1) ? last_size : split_size;
-    IdType prefix = indptr[inoff];
-    out[row][0] = 0;
-    out_range[row + 1] = indptr[inoff + size];
-    for (int idx = threadIdx.x; idx < size; idx += blockDim.x) {
-      out[row][idx + 1] = indptr[inoff + idx + 1] - prefix;
-      if (UseNid) out_nid[row][idx] = nid[inoff + idx];
-    }
-    row += gridDim.x * blockDim.y;
-  }
-}
-
-template <typename IdType>
-__global__ void _CSCSplitIndicesKernel(IdType* indices, IdType* split_index,
-                                       IdType** out, int64_t num_split) {
-  int64_t row = blockIdx.x * blockDim.y + threadIdx.y;
-  while (row < num_split) {
-    int64_t size = split_index[row + 1] - split_index[row];
-    for (int idx = threadIdx.x; idx < size; idx += blockDim.x) {
-      out[row][idx] = indices[split_index[row] + idx];
-    }
-    row += gridDim.x * blockDim.y;
-  }
-}
-
-// template <typename IdType>
-// std::vector<std::vector<torch::Tensor>> _CSCSplit(
-//     torch::Tensor indptr, torch::Tensor indices,
-//     torch::optional<torch::Tensor> nid, int64_t split_size) {
-//   std::vector<torch::Tensor> sub_indptrs;
-//   std::vector<torch::Tensor> sub_indices;
-//   std::vector<torch::Tensor> sub_nids;
-//   torch::Tensor sub_ind;
-
-//   auto use_nid = nid.has_value();
-//   auto total_element = indptr.numel() - 1;
-//   auto num_split = (total_element + split_size - 1) / split_size;
-//   auto last_size = total_element - (num_split - 1) * split_size;
-
-//   torch::Tensor indices_range = torch::zeros(num_split + 1,
-//   indices.options()); IdType *indptr_data = indptr.data_ptr<IdType>(),
-//          *range_data = indices_range.data_ptr<IdType>();
-//   IdType* nid_data = use_nid ? nid.value().data_ptr<IdType>() : nullptr;
-//   IdType* temp[num_split];
-//   IdType* nid_temp[num_split];
-//   IdType **d_ptr, **d_ptr_nid;
-//   d_ptr = (IdType**)c10::cuda::CUDACachingAllocator::raw_alloc(
-//       sizeof(IdType**) * num_split);
-//   if (use_nid)
-//     d_ptr_nid = (IdType**)c10::cuda::CUDACachingAllocator::raw_alloc(
-//         sizeof(IdType**) * num_split);
-
-//   for (int i = 0; i < num_split; ++i) {
-//     auto size = (i == num_split - 1) ? last_size + 1 : split_size + 1;
-//     sub_ind = torch::empty(size, indptr.options());
-//     sub_indptrs.push_back(sub_ind);
-//     temp[i] = sub_ind.data_ptr<IdType>();
-//     if (use_nid) {
-//       sub_ind = torch::empty(size - 1, indptr.options());
-//       sub_nids.push_back(sub_ind);
-//       nid_temp[i] = sub_ind.data_ptr<IdType>();
-//     }
-//   }
-//   cudaMemcpy(d_ptr, temp, sizeof(IdType**) * num_split,
-//   cudaMemcpyHostToDevice); if (use_nid)
-//     cudaMemcpy(d_ptr_nid, nid_temp, sizeof(IdType**) * num_split,
-//                cudaMemcpyHostToDevice);
-
-//   dim3 block(64, 8);
-//   dim3 grid((num_split + block.y - 1) / block.y);
-//   SWITCH_NID(use_nid, {
-//     CUDA_KERNEL_CALL((_CSCSplitIndptrKernel<IdType, UseNid>), grid, block,
-//                      indptr_data, nid_data, d_ptr, d_ptr_nid, range_data,
-//                      num_split, split_size, last_size);
-//   });
-//   auto range_host = indices_range.to(torch::kCPU, false, true);
-//   range_data = range_host.data_ptr<IdType>();
-//   for (int i = 0; i < num_split; ++i) {
-//     sub_ind =
-//         torch::empty(range_data[i + 1] - range_data[i], indices.options());
-//     sub_indices.push_back(sub_ind);
-//     temp[i] = sub_ind.data_ptr<IdType>();
-//   }
-//   cudaMemcpy(d_ptr, temp, sizeof(IdType**) * num_split,
-//   cudaMemcpyHostToDevice);
-
-//   dim3 nthrs(64, 8);
-//   dim3 nblks((num_split + block.y - 1) / block.y);
-//   CUDA_KERNEL_CALL((_CSCSplitIndicesKernel<IdType>), nblks, nthrs,
-//                    indices.data_ptr<IdType>(),
-//                    indices_range.data_ptr<IdType>(), d_ptr, num_split);
-
-//   c10::cuda::CUDACachingAllocator::raw_delete(d_ptr);
-//   if (use_nid) c10::cuda::CUDACachingAllocator::raw_delete(d_ptr_nid);
-
-//   return {sub_indptrs, sub_indices, sub_nids};
-// }
-
 template <typename IdType>
 std::vector<std::vector<torch::Tensor>> _CSCSplit(
     torch::Tensor indptr, torch::Tensor indices,
-    torch::optional<torch::Tensor> nid, int64_t split_size) {
+    torch::optional<torch::Tensor> eid, int64_t split_size) {
   std::vector<torch::Tensor> sub_indptrs;
   std::vector<torch::Tensor> sub_indices;
-  std::vector<torch::Tensor> sub_nids;
-
-  if (nid.has_value()) sub_nids = torch::split(nid.value(), split_size);
+  std::vector<torch::Tensor> sub_eids;
 
   auto total_element = indptr.numel() - 1;
   auto num_split = total_element / split_size;
@@ -297,14 +178,16 @@ std::vector<std::vector<torch::Tensor>> _CSCSplit(
   auto data_ptr = indices_split_sizes.data_ptr<IdType>();
   std::vector<IdType> subindices_sizes(data_ptr, data_ptr + num_split);
   sub_indices = torch::split_with_sizes(indices, subindices_sizes);
+  if (eid.has_value())
+    sub_eids = torch::split_with_sizes(eid.value(), subindices_sizes);
 
-  return {sub_indptrs, sub_indices, sub_nids};
+  return {sub_indptrs, sub_indices, sub_eids};
 }
 
 std::vector<std::vector<torch::Tensor>> CSCSplitCUDA(
     torch::Tensor indptr, torch::Tensor indices,
-    torch::optional<torch::Tensor> nid, int64_t split_size) {
-  return _CSCSplit<int64_t>(indptr, indices, nid, split_size);
+    torch::optional<torch::Tensor> eid, int64_t split_size) {
+  return _CSCSplit<int64_t>(indptr, indices, eid, split_size);
 }
 }  // namespace impl
 }  // namespace gs

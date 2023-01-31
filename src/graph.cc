@@ -782,15 +782,20 @@ void Graph::SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
 std::vector<c10::intrusive_ptr<Graph>> Graph::Split(int64_t split_size) {
   std::vector<c10::intrusive_ptr<Graph>> ret;
   std::vector<torch::Tensor> splitted_colid;
-  std::vector<torch::Tensor> indptr, indices, nid;
+  std::vector<torch::Tensor> indptr, indices, eid, nid;
   std::shared_ptr<CSC> csc_ptr;
   c10::intrusive_ptr<Graph> ret_graph;
 
+  if (col_ids_.has_value()) nid = torch::split(col_ids_.value(), split_size);
   auto ret_vec =
-      impl::CSCSplitCUDA(csc_->indptr, csc_->indices, col_ids_, split_size);
-  indptr = ret_vec[0], indices = ret_vec[1], nid = ret_vec[2];
+      impl::CSCSplitCUDA(csc_->indptr, csc_->indices, csc_->e_ids, split_size);
+  indptr = ret_vec[0], indices = ret_vec[1], eid = ret_vec[2];
   for (int i = 0; i < indptr.size(); ++i) {
-    csc_ptr = std::make_shared<CSC>(CSC{indptr[i], indices[i], torch::nullopt});
+    if (csc_->e_ids.has_value())
+      csc_ptr = std::make_shared<CSC>(CSC{indptr[i], indices[i], eid[i]});
+    else
+      csc_ptr =
+          std::make_shared<CSC>(CSC{indptr[i], indices[i], torch::nullopt});
     if (col_ids_.has_value())
       ret_graph = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
           new Graph(true, nid[i], row_ids_, nid[i].numel(), num_rows_)));
