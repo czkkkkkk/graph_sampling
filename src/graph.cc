@@ -420,7 +420,7 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
                               ? col_ids_.value().index({column_index})
                               : column_index;
   auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
-      new Graph(true, col_ids, row_ids_, num_cols_, num_rows_)));
+      new Graph(true, col_ids, row_ids_, col_ids.numel(), num_rows_)));
   std::tie(csc_ptr, select_index) =
       FusedCSCColSlicingAndSampling(csc_, column_index, fanout, replace);
   ret->SetCSC(csc_ptr);
