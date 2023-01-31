@@ -2,6 +2,7 @@
 
 #include <sstream>
 #include "bcast.h"
+#include "cuda/graph_ops.h"
 #include "cuda/sddmm.h"
 #include "cuda/tensor_ops.h"
 #include "graph_ops.h"
@@ -193,8 +194,7 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
       std::tie(tmp_ptr, select_index) = CSCRowSlicing(csc_, n_ids, with_coo);
       new_val_cols = val_col_ids_;
 
-      if (relabel)
-        LOG(FATAL) << "Not implemented warning";
+      if (relabel) LOG(FATAL) << "Not implemented warning";
     }
 
     if (output_format & _CSC)
@@ -217,8 +217,7 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
       std::tie(tmp_ptr, select_index) = CSCRowSlicing(csr_, n_ids, with_coo);
       new_val_rows = val_row_ids_;
 
-      if (relabel)
-        LOG(FATAL) << "Not implemented warning";
+      if (relabel) LOG(FATAL) << "Not implemented warning";
     } else {
       if (val_row_ids_.has_value())
         std::tie(tmp_ptr, select_index) =
@@ -780,4 +779,29 @@ void Graph::SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
   }
 }
 
+std::vector<c10::intrusive_ptr<Graph>> Graph::Split(int64_t split_size) {
+  std::vector<c10::intrusive_ptr<Graph>> ret;
+  std::vector<torch::Tensor> splitted_colid;
+  std::vector<torch::Tensor> indptr, indices, nid;
+  std::shared_ptr<CSC> csc_ptr;
+  c10::intrusive_ptr<Graph> ret_graph;
+
+  auto ret_vec =
+      impl::CSCSplitCUDA(csc_->indptr, csc_->indices, col_ids_, split_size);
+  indptr = ret_vec[0], indices = ret_vec[1], nid = ret_vec[2];
+  for (int i = 0; i < indptr.size(); ++i) {
+    csc_ptr = std::make_shared<CSC>(CSC{indptr[i], indices[i], torch::nullopt});
+    if (col_ids_.has_value())
+      ret_graph = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
+          new Graph(true, nid[i], row_ids_, nid[i].numel(), num_rows_)));
+    else
+      ret_graph = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(new Graph(
+          true, torch::nullopt, row_ids_, indptr[i].numel() - 1, num_rows_)));
+    ret_graph->SetCSC(csc_ptr);
+    ret_graph->SetNumEdges(indices[i].numel());
+    ret.push_back(ret_graph);
+  }
+
+  return ret;
+}
 }  // namespace gs

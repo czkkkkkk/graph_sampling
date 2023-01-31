@@ -81,6 +81,7 @@ class Graph : public torch::CustomClassHolder {
   void SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
              torch::Tensor out, int64_t lhs_target, int64_t rhs_target,
              int64_t on_format);
+  std::vector<c10::intrusive_ptr<Graph>> Split(int64_t split_size);
 
   // todo: return global_e_id
  private:
