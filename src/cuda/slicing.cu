@@ -157,8 +157,8 @@ _OnIndptrSlicing(torch::Tensor indptr, torch::Tensor indices,
     coo_col_ptr = nullptr;
   }
 
-  dim3 block(32, 16);
-  dim3 grid((num_items + block.x - 1) / block.x);
+  dim3 block(16, 32);
+  dim3 grid((num_items + block.y - 1) / block.y);
   _GetSubIndicesKernel<IdType, WITH_COO><<<grid, block>>>(
       sub_indices.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
       coo_col_ptr, indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
@@ -271,8 +271,8 @@ _OnIndptrSlicingWithIdMapping(torch::Tensor indptr, torch::Tensor indices,
     coo_col_ptr = nullptr;
   }
 
-  dim3 block(32, 16);
-  dim3 grid((num_items + block.x - 1) / block.x);
+  dim3 block(16, 32);
+  dim3 grid((num_items + block.y - 1) / block.y);
   _GetSubIndicesKernelWithIdMapping<IdType, WITH_COO><<<grid, block>>>(
       sub_indices.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
       coo_col_ptr, indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
