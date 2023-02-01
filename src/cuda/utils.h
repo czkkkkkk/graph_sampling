@@ -83,6 +83,27 @@ void cub_sortPairsDescending(KeyType* d_keys_in, KeyType* d_keys_out,
   c10::cuda::CUDACachingAllocator::raw_delete(d_temp_storage);
 }
 
+template <typename KeyType, typename ValueType>
+void cub_segmentedSortPairsDescending(KeyType* d_keys_in, KeyType* d_keys_out,
+                                      ValueType* d_values_in,
+                                      ValueType* d_values_out,
+                                      int64_t* d_offsets, int32_t num_items,
+                                      int32_t num_segments) {
+  void* d_temp_storage = NULL;
+  size_t temp_storage_bytes = 0;
+  cub::DeviceSegmentedRadixSort::SortPairsDescending(
+      d_temp_storage, temp_storage_bytes, d_keys_in, d_keys_out, d_values_in,
+      d_values_out, num_items, num_segments, d_offsets, d_offsets + 1);
+  // Allocate temporary storage
+  d_temp_storage =
+      c10::cuda::CUDACachingAllocator::raw_alloc(temp_storage_bytes);
+  // Run sorting operation
+  cub::DeviceSegmentedRadixSort::SortPairsDescending(
+      d_temp_storage, temp_storage_bytes, d_keys_in, d_keys_out, d_values_in,
+      d_values_out, num_items, num_segments, d_offsets, d_offsets + 1);
+  c10::cuda::CUDACachingAllocator::raw_delete(d_temp_storage);
+}
+
 template <typename IdType, typename DType>
 void cub_segmentedSum(DType* d_in, DType* d_out, IdType* d_offsets,
                       int64_t num_segments) {

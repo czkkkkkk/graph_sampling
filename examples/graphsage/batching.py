@@ -11,14 +11,24 @@ from tqdm import tqdm
 
 device = torch.device('cuda')
 time_list = []
+sampling_list = []
+split_list = []
+relabel_list = []
 
 
 def graphsage_sampler(A: gs.Matrix, seeds, fanouts):
     output_nodes = seeds
     ret = []
     for fanout in fanouts:
+        torch.cuda.synchronize()
+        start = time.time()
         subA = A.fused_columnwise_slicing_sampling(seeds, fanout, True)
+        torch.cuda.synchronize()
+        sampling_list[-1] += time.time() - start
+        start = time.time()
         block = subA.to_dgl_block()
+        torch.cuda.synchronize()
+        relabel_list[-1] += time.time() - start
         seeds = block.srcdata['_ID']
         ret.insert(0, block)
     input_nodes = seeds
@@ -30,14 +40,25 @@ def graphsage_sampler_batching(A: gs.Matrix, seeds, fanouts):
     output_nodes = seeds
     ret = []
     for fanout in fanouts:
+        torch.cuda.synchronize()
+        start = time.time()
         subA = A.fused_columnwise_slicing_sampling(seeds, fanout, True)
+        torch.cuda.synchronize()
+        sampling_list[-1] += time.time() - start
+        start = time.time()
         # torch.cuda.nvtx.range_push('split')
         batchAs = subA._graph._CAPI_split(256)
+        torch.cuda.synchronize()
+        split_list[-1] += time.time() - start
         # torch.cuda.nvtx.range_pop()
         # torch.cuda.nvtx.range_push('toblock')
         for bachA in batchAs:
             # torch.cuda.nvtx.range_push('single')
+            torch.cuda.synchronize()
+            start = time.time()
             block = gs.Matrix(bachA).to_dgl_block()
+            torch.cuda.synchronize()
+            relabel_list[-1] += time.time() - start
             # torch.cuda.nvtx.range_pop()
             seeds = block.srcdata['_ID']
             ret.insert(0, block)
@@ -66,6 +87,9 @@ def train(g, dataset, feat_device):
     n_epoch = 5
 
     for epoch in range(n_epoch):
+        sampling_list.append(0)
+        split_list.append(0)
+        relabel_list.append(0)
         torch.cuda.synchronize()
         start = time.time()
         model.train()
@@ -84,18 +108,21 @@ def train(g, dataset, feat_device):
         time_list.append(time.time() - start)
 
     print('Average epoch time:', np.mean(time_list[3:]))
+    print('Average epoch sample time:', np.mean(sampling_list[3:]))
+    print('Average epoch split time:', np.mean(split_list[3:]))
+    print('Average epoch relabel time:', np.mean(relabel_list[3:]))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--fmode", default='cuda', choices=['cpu', 'cuda'],
                         help="Feature reside device. To cpu or gpu")
-    parser.add_argument("--batchsize", type=int, default=65536,
+    parser.add_argument("--batchsize", type=int, default=256,
                         help="batch size for training")
     parser.add_argument("--fanout", default='10',
                         help="sample size for each layer")
     args = parser.parse_args()
-    args.batching = True
+    args.batching = False
     print(args)
     args.fanout = [int(x.strip()) for x in args.fanout.split(',')]
     feat_device = args.fmode

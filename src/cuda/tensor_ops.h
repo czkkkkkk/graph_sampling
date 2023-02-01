@@ -15,6 +15,11 @@ std::tuple<torch::Tensor, torch::Tensor> ListSamplingCUDA(torch::Tensor data,
 std::tuple<torch::Tensor, torch::Tensor> ListSamplingProbsCUDA(
     torch::Tensor data, torch::Tensor probs, int64_t num_picks, bool replace);
 
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+BatchListSamplingProbsCUDA(torch::Tensor data, torch::Tensor probs,
+                           int64_t num_picks, bool replace,
+                           torch::Tensor range);
+
 torch::Tensor TensorUniqueCUDA(torch::Tensor input);
 
 // RelabelCUDA leverages vector<Tensor> mapping_tensor to create the hashmap
