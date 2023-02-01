@@ -34,6 +34,17 @@ std::tuple<torch::Tensor, torch::Tensor> IndexHashMapInsertCUDA(
 torch::Tensor IndexHashMapSearchCUDA(torch::Tensor key_buffer,
                                      torch::Tensor value_buffer,
                                      torch::Tensor keys);
+
+std::tuple<torch::Tensor, torch::Tensor> BatchUniqueCUDA(
+    std::vector<torch::Tensor> batch_tensors,
+    std::vector<torch::Tensor> segment_ptrs, int64_t num_batchs);
+
+std::tuple<torch::Tensor, torch::Tensor, std::vector<torch::Tensor>,
+           std::vector<torch::Tensor>>
+BatchRelabelCUDA(std::vector<torch::Tensor> batch_tensors,
+                 std::vector<torch::Tensor> segment_ptrs, int64_t num_batchs);
+std::vector<torch::Tensor> SplitIndptrBySizeCUDA(torch::Tensor indptr,
+                                                 int64_t size);
 }  // namespace impl
 }  // namespace gs
 
