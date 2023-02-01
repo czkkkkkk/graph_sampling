@@ -17,7 +17,7 @@ __global__ void _SplitIndptrBySize(IdType* indptr, IdType* output, int64_t size,
   int laneid = threadIdx.x;
   int warp_id = blockIdx.x * blockDim.y + threadIdx.y;
 
-  for (int i = warp_id; warp_id < num_batchs; i += gridDim.x * blockDim.y) {
+  for (int i = warp_id; i < num_batchs; i += gridDim.x * blockDim.y) {
     int64_t indptr_begin = size * i;
     int64_t out_begin = (size + 1) * i;
     int64_t offset = indptr[indptr_begin];
@@ -38,11 +38,11 @@ std::vector<torch::Tensor> SplitIndptrBySize(torch::Tensor indptr,
   constexpr int64_t BLOCK_WARPS = 4;
   dim3 block(WARP_SIZE, BLOCK_WARPS);
   dim3 grid((num_batchs + BLOCK_WARPS - 1) / BLOCK_WARPS);
-  /*
+
   _SplitIndptrBySize<IdType, BLOCK_WARPS>
       <<<grid, block>>>(indptr.data_ptr<IdType>(),
                         split_indptr.data_ptr<IdType>(), size, num_batchs);
-    */
+
   return torch::split(split_indptr, (size + 1));
 }
 
