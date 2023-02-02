@@ -134,28 +134,36 @@ __global__ void _InsertHashmaps(IdType* key_tensor, IdType* value_tensor,
     int prefix_sum_len = out_end - out_begin;
     int upper_bound = prefix_sum_len / BLOCK_SIZE * BLOCK_SIZE;
     int64_t thread_data = 0;
+    int64_t old_block_aggregate = 0;
     int64_t block_aggregate = 0;
-    for (int k = tid; k < upper_bound; k += thread_stride) {
-      thread_data = tid == 0 ? prefix_tensor[k + out_begin] + block_aggregate
-                             : prefix_tensor[k + out_begin];
+    int64_t count = tid;
+    for (; count < upper_bound; count += thread_stride) {
+      thread_data = tid == 0
+                        ? prefix_tensor[count + out_begin] + block_aggregate
+                        : prefix_tensor[count + out_begin];
       BlockScan(temp_storage)
           .ExclusiveSum(thread_data, thread_data, block_aggregate);
       __syncthreads();
-      prefix_tensor[k + out_begin] = thread_data;
+      prefix_tensor[count + out_begin] =
+          tid == 0 ? old_block_aggregate : thread_data;
+      old_block_aggregate = block_aggregate;
     }
 
-    thread_data = 0;
-    if (tid < prefix_sum_len - upper_bound) {
-      thread_data = tid == 0 ? prefix_tensor[tid + upper_bound + out_begin] +
-                                   block_aggregate
-                             : prefix_tensor[tid + upper_bound + out_begin];
-    }
-    BlockScan(temp_storage)
-        .ExclusiveSum(thread_data, thread_data, block_aggregate);
-    __syncthreads();
+    if (upper_bound != prefix_sum_len) {
+      thread_data = 0;
+      if (count < prefix_sum_len) {
+        thread_data = tid == 0
+                          ? prefix_tensor[count + out_begin] + block_aggregate
+                          : prefix_tensor[count + out_begin];
+      }
 
-    if (tid < prefix_sum_len - upper_bound) {
-      prefix_tensor[tid + upper_bound + out_begin] = thread_data;
+      BlockScan(temp_storage)
+          .ExclusiveSum(thread_data, thread_data, block_aggregate);
+      __syncthreads();
+      if (count < prefix_sum_len) {
+        prefix_tensor[count + out_begin] =
+            tid == 0 ? old_block_aggregate : thread_data;
+      }
     }
 
     if (tid == 0) {
@@ -231,7 +239,7 @@ BatchUnique(thrust::device_vector<IdType*> batch_tensors,
             batch_count += (segments_data[k][i + 1] - segments_data[k][i]);
           }
         }
-        out_item_prefix[i] = total_count + i;
+        out_item_prefix[i] = total_count;
         if (i < num_batchs) {
           out_hashmap[i] =
               2 * (1 << static_cast<uint32_t>(log2(batch_count) + 1));
@@ -253,8 +261,8 @@ BatchUnique(thrust::device_vector<IdType*> batch_tensors,
   torch::Tensor index_tensor = torch::full(
       dir_size, MAX, torch::dtype(IdTypeClass).device(torch::kCUDA));
   torch::Tensor item_prefix_tensor =
-      torch::empty(total_size, torch::dtype(IdTypeClass).device(torch::kCUDA));
-  torch::Tensor unique_tensor_ptr = torch::empty(
+      torch::zeros(total_size, torch::dtype(IdTypeClass).device(torch::kCUDA));
+  torch::Tensor unique_tensor_ptr = torch::zeros(
       num_batchs + 1, torch::dtype(IdTypeClass).device(torch::kCUDA));
 
   constexpr int BLOCK_SIZE = 256;
