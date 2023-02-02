@@ -5,6 +5,7 @@
 #include "./graph_ops.h"
 #include "./hetero_graph.h"
 #include "./tensor_ops.h"
+#include "cuda/tensor_ops.h"
 using namespace gs;
 
 TORCH_LIBRARY(gs_classes, m) {
@@ -36,7 +37,8 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_metadata", &Graph::MetaData)
       .def("_CAPI_random_walk", &Graph::RandomWalk)
       .def("_CAPI_sddmm", &Graph::SDDMM)
-      .def("_CAPI_split", &Graph::Split);
+      .def("_CAPI_split", &Graph::Split)
+      .def("GetBatchCSC", &Graph::GetBatchCSC);
   m.class_<HeteroGraph>("HeteroGraph")
       .def(torch::init<>())
       .def("load_from_homo", &HeteroGraph::LoadFromHomo)
@@ -49,6 +51,10 @@ TORCH_LIBRARY(gs_ops, m) {
   m.def("list_sampling_with_probs", &ListSamplingProbs);
   m.def("batch_list_sampling_with_probs", &BatchListSamplingProbs);
   m.def("index_search", &IndexSearch);
+  m.def("BatchUnique", &BatchUnique);
+  m.def("BatchRelabel", &BatchRelabel);
+  m.def("SplitByOffset", &SplitByOffset);
+  m.def("IndptrSplitBySize", &gs::impl::SplitIndptrBySizeCUDA);
 }
 
 namespace gs {}

@@ -32,4 +32,31 @@ torch::Tensor IndexSearch(torch::Tensor origin_data, torch::Tensor keys) {
   return result;
 }
 
+std::tuple<torch::Tensor, torch::Tensor> BatchUnique(
+    std::vector<torch::Tensor> batch_tensors,
+    std::vector<torch::Tensor> segment_ptrs, int64_t num_batchs) {
+  return impl::BatchUniqueCUDA(batch_tensors, segment_ptrs, num_batchs);
+}
+
+std::tuple<torch::Tensor, torch::Tensor, std::vector<torch::Tensor>,
+           std::vector<torch::Tensor>>
+BatchRelabel(std::vector<torch::Tensor> batch_tensors,
+             std::vector<torch::Tensor> segment_ptrs, int64_t num_batchs) {
+  return impl::BatchRelabelCUDA(batch_tensors, segment_ptrs, num_batchs);
+}
+
+std::vector<torch::Tensor> SplitByOffset(torch::Tensor data,
+                                         torch::Tensor offset) {
+  int64_t numel = offset.numel();
+  torch::Tensor size_tensor =
+      offset.slice(0, 1, numel) - offset.slice(0, 0, numel - 1);
+
+  size_tensor = size_tensor.to(torch::kCPU);
+
+  auto data_ptr = size_tensor.data_ptr<int64_t>();
+  std::vector<int64_t> split(data_ptr, data_ptr + size_tensor.numel());
+
+  return torch::split_with_sizes(data, split);
+}
+
 }  // namespace gs
