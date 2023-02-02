@@ -810,16 +810,16 @@ std::vector<c10::intrusive_ptr<Graph>> Graph::Split(int64_t split_size) {
   return ret;
 }
 
-std::vector<torch::Tensor> Graph::GetBatchCSC(int64_t split_size) {
-  torch::Tensor seeds = col_ids_.value();
+std::vector<torch::Tensor> Graph::GetBatchCSC(torch::Tensor seeds_ptr) {
   torch::Tensor indptr = csc_->indptr;
   torch::Tensor indices = csc_->indices;
 
-  int64_t num_batchs = seeds.numel() / split_size;
-  torch::Tensor seeds_ptr =
-      torch::arange(num_batchs + 1, seeds.options()) * split_size;
+  LOG(INFO) << indptr.numel();
+  LOG(INFO) << seeds_ptr.numel();
+  LOG(INFO) << seeds_ptr.min();
+  LOG(INFO) << seeds_ptr.max();
   torch::Tensor indices_ptr = indptr.index({seeds_ptr});
 
-  return {seeds, seeds_ptr, indptr, indices, indices_ptr};
+  return {indptr, indices, indices_ptr};
 }
 }  // namespace gs

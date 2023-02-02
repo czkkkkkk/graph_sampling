@@ -83,7 +83,7 @@ class Graph : public torch::CustomClassHolder {
              int64_t on_format);
   std::vector<c10::intrusive_ptr<Graph>> Split(int64_t split_size);
 
-  std::vector<torch::Tensor> GetBatchCSC(int64_t split_size);
+  std::vector<torch::Tensor> GetBatchCSC(torch::Tensor seeds_ptr);
 
   // todo: return global_e_id
  private:

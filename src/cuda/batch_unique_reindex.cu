@@ -138,7 +138,6 @@ __global__ void _InsertHashmaps(IdType* key_tensor, IdType* value_tensor,
     for (int k = tid; k < upper_bound; k += thread_stride) {
       thread_data = tid == 0 ? prefix_tensor[k + out_begin] + block_aggregate
                              : prefix_tensor[k + out_begin];
-      thread_data = prefix_tensor[k + out_begin];
       BlockScan(temp_storage)
           .ExclusiveSum(thread_data, thread_data, block_aggregate);
       __syncthreads();

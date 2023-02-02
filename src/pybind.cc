@@ -55,6 +55,7 @@ TORCH_LIBRARY(gs_ops, m) {
   m.def("BatchRelabel", &BatchRelabel);
   m.def("SplitByOffset", &SplitByOffset);
   m.def("IndptrSplitBySize", &gs::impl::SplitIndptrBySizeCUDA);
+  m.def("IndptrSplitByOffset", &gs::impl::SplitIndptrByOffsetCUDA);
 }
 
 namespace gs {}

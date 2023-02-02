@@ -50,6 +50,8 @@ BatchRelabelCUDA(std::vector<torch::Tensor> batch_tensors,
                  std::vector<torch::Tensor> segment_ptrs, int64_t num_batchs);
 std::vector<torch::Tensor> SplitIndptrBySizeCUDA(torch::Tensor indptr,
                                                  int64_t size);
+std::vector<torch::Tensor> SplitIndptrByOffsetCUDA(torch::Tensor indptr,
+                                                   torch::Tensor offsets);
 }  // namespace impl
 }  // namespace gs
 
