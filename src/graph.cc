@@ -814,10 +814,6 @@ std::vector<torch::Tensor> Graph::GetBatchCSC(torch::Tensor seeds_ptr) {
   torch::Tensor indptr = csc_->indptr;
   torch::Tensor indices = csc_->indices;
 
-  LOG(INFO) << indptr.numel();
-  LOG(INFO) << seeds_ptr.numel();
-  LOG(INFO) << seeds_ptr.min();
-  LOG(INFO) << seeds_ptr.max();
   torch::Tensor indices_ptr = indptr.index({seeds_ptr});
 
   return {indptr, indices, indices_ptr};
