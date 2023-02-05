@@ -16,6 +16,7 @@ val_nid = splitted_idx['valid'].cuda()
 nid = torch.cat([train_nid, val_nid])
 indptr, indices, _ = g.adj_sparse('csc')
 
+n_epoch = 5
 batch_size = 65536
 small_batch_size = 256
 num_batchs = int(batch_size / small_batch_size)
@@ -31,12 +32,13 @@ time_list = []
 layer_time = [[], []]
 seedloader = SeedGenerator(nid, batch_size=batch_size,
                            shuffle=False, drop_last=False)
-for epoch in range(5):
+for epoch in range(n_epoch):
     torch.cuda.synchronize()
     begin = time.time()
     batch_layer_time_1 = 0
     batch_layer_time_2 = 0
     for it, seeds in enumerate(tqdm(seedloader)):
+        # torch.cuda.nvtx.range_push('sampling')
         seeds_ptr = orig_seeds_ptr
         if it == 2:
             num_batchs = int(
@@ -49,24 +51,30 @@ for epoch in range(5):
             layer_start = time.time()
             subA = A._CAPI_fused_columnwise_slicing_sampling(
                 seeds, fanout, False)
+            # torch.cuda.nvtx.range_push('getbatchcsc')
             indptr, indices, indices_ptr = subA.GetBatchCSC(seeds_ptr)
+            # torch.cuda.nvtx.range_pop()
+            # torch.cuda.nvtx.range_push('batchrelabel')
             unique_tensor, unique_tensor_ptr, [seeds, indices], [
                 seeds_ptr, indices_ptr
             ] = torch.ops.gs_ops.BatchRelabel([seeds, indices],
                                               [seeds_ptr, indices_ptr], num_batchs)
+            # torch.cuda.nvtx.range_pop()
 
+            # torch.cuda.nvtx.range_push('splitbyoffsets')
             unit = torch.ops.gs_ops.SplitByOffset(unique_tensor,
                                                   unique_tensor_ptr)
             ptrt = torch.ops.gs_ops.IndptrSplitByOffset(indptr, seeds_ptr)
             indt = torch.ops.gs_ops.SplitByOffset(indices, indices_ptr)
+            # torch.cuda.nvtx.range_pop()
 
             for unique, indptr, indices in zip(unit, ptrt, indt):
-                # block = create_block_from_csc(indptr,
-                #                               indices,
-                #                               torch.tensor([]),
-                #                               num_src=unique.numel(),
-                #                               num_dst=indptr.numel() - 1)
-                # block.srcdata['_ID'] = unique
+                block = create_block_from_csc(indptr,
+                                              indices,
+                                              torch.tensor([]),
+                                              num_src=unique.numel(),
+                                              num_dst=indptr.numel() - 1)
+                block.srcdata['_ID'] = unique
                 pass
             seeds, seeds_ptr = unique_tensor, unique_tensor_ptr
             torch.cuda.synchronize()
@@ -75,6 +83,7 @@ for epoch in range(5):
                 batch_layer_time_1 += layer_end - layer_start
             else:
                 batch_layer_time_2 += layer_end - layer_start
+        # torch.cuda.nvtx.range_pop()
     layer_time[0].append(batch_layer_time_1)
     layer_time[1].append(batch_layer_time_2)
     torch.cuda.synchronize()
@@ -89,7 +98,7 @@ time_list = []
 layer_time = [[], []]
 seedloader = SeedGenerator(nid, batch_size=small_batch_size,
                            shuffle=False, drop_last=False)
-for epoch in range(5):
+for epoch in range(n_epoch):
     torch.cuda.synchronize()
     begin = time.time()
     batch_layer_time_1 = 0
@@ -101,12 +110,12 @@ for epoch in range(5):
             subA = A._CAPI_fused_columnwise_slicing_sampling(
                 seeds, fanout, False)
             unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = subA._CAPI_relabel()
-            # block = create_block_from_csc(format_tensor1,
-            #                               format_tensor2,
-            #                               torch.tensor([]),
-            #                               num_src=num_row,
-            #                               num_dst=num_col)
-            # block.srcdata['_ID'] = unique_tensor
+            block = create_block_from_csc(format_tensor1,
+                                          format_tensor2,
+                                          torch.tensor([]),
+                                          num_src=num_row,
+                                          num_dst=num_col)
+            block.srcdata['_ID'] = unique_tensor
             seeds = unique_tensor
             torch.cuda.synchronize()
             layer_end = time.time()

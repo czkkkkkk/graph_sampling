@@ -93,16 +93,19 @@ std::tuple<torch::Tensor, torch::Tensor> _ListSamplingProbs(torch::Tensor data,
 template <typename IdType>
 __global__ void _BatchTensorSlicingKernel(IdType* in_data, IdType* out_data,
                                           int64_t* in_idx, int64_t* out_idx,
-                                          int64_t* offsets, int64_t num_batch,
-                                          int64_t size) {
+                                          int64_t* in_offsets,
+                                          int64_t* out_offsets,
+                                          int64_t num_batch) {
   int64_t row = blockIdx.x * blockDim.y + threadIdx.y;
   while (row < num_batch) {
-    IdType startoff = offsets[row];
-    IdType endoff = offsets[row + 1];
-    int64_t seg_size = min(size, endoff - startoff);
-    for (int idx = threadIdx.x; idx < seg_size; idx += blockDim.x) {
-      out_idx[startoff + idx] = in_idx[startoff + idx];
-      out_data[startoff + idx] = in_data[in_idx[startoff + idx]];
+    int64_t in_startoff = in_offsets[row];
+    int64_t in_endoff = in_offsets[row + 1];
+    int64_t out_startoff = out_offsets[row];
+    int64_t out_endoff = out_offsets[row + 1];
+    int64_t size = out_endoff - out_startoff;
+    for (int64_t idx = threadIdx.x; idx < size; idx += blockDim.x) {
+      out_idx[out_startoff + idx] = in_idx[in_startoff + idx];
+      out_data[out_startoff + idx] = in_data[in_idx[in_startoff + idx]];
     }
     row += gridDim.x * blockDim.y;
   }
@@ -179,7 +182,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _BatchListSamplingProbs(
                      data.data_ptr<IdType>(), out_data.data_ptr<IdType>(),
                      sort_index.data_ptr<int64_t>(),
                      out_idx.data_ptr<int64_t>(), range.data_ptr<int64_t>(),
-                     num_split, num_picks);
+                     out_range.data_ptr<int64_t>(), num_split);
   }
   return {out_data, out_idx, out_range};
 }
