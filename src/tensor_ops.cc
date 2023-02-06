@@ -33,15 +33,16 @@ torch::Tensor IndexSearch(torch::Tensor origin_data, torch::Tensor keys) {
 }
 
 std::tuple<torch::Tensor, torch::Tensor> BatchUnique(
-    std::vector<torch::Tensor> batch_tensors,
-    std::vector<torch::Tensor> segment_ptrs, int64_t num_batchs) {
+    const std::vector<torch::Tensor> &batch_tensors,
+    const std::vector<torch::Tensor> &segment_ptrs, int64_t num_batchs) {
   return impl::BatchUniqueCUDA(batch_tensors, segment_ptrs, num_batchs);
 }
 
 std::tuple<torch::Tensor, torch::Tensor, std::vector<torch::Tensor>,
            std::vector<torch::Tensor>>
-BatchRelabel(std::vector<torch::Tensor> batch_tensors,
-             std::vector<torch::Tensor> segment_ptrs, int64_t num_batchs) {
+BatchRelabel(const std::vector<torch::Tensor> &batch_tensors,
+             const std::vector<torch::Tensor> &segment_ptrs,
+             int64_t num_batchs) {
   return impl::BatchRelabelCUDA(batch_tensors, segment_ptrs, num_batchs);
 }
 

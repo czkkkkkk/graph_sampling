@@ -300,8 +300,8 @@ BatchUnique(thrust::device_vector<IdType*> batch_tensors,
 }
 
 std::tuple<torch::Tensor, torch::Tensor> BatchUniqueCUDA(
-    std::vector<torch::Tensor> batch_tensors,
-    std::vector<torch::Tensor> segment_ptrs, int64_t num_batchs) {
+    const std::vector<torch::Tensor>& batch_tensors,
+    const std::vector<torch::Tensor>& segment_ptrs, int64_t num_batchs) {
   int num_segments = batch_tensors.size();
   thrust::host_vector<int64_t*> h_batch_tensors_ptr(num_segments);
   thrust::host_vector<int64_t*> h_segment_ptrs_ptrs(num_segments);
@@ -375,8 +375,9 @@ void BatchReindex(thrust::device_vector<IdType*> batch_tensors,
 
 std::tuple<torch::Tensor, torch::Tensor, std::vector<torch::Tensor>,
            std::vector<torch::Tensor>>
-BatchRelabelCUDA(std::vector<torch::Tensor> batch_tensors,
-                 std::vector<torch::Tensor> segment_ptrs, int64_t num_batchs) {
+BatchRelabelCUDA(const std::vector<torch::Tensor>& batch_tensors,
+                 const std::vector<torch::Tensor>& segment_ptrs,
+                 int64_t num_batchs) {
   int num_segments = batch_tensors.size();
 
   std::vector<torch::Tensor> relabel_batch_tensor;
