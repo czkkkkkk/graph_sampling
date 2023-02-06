@@ -3,6 +3,7 @@
 
 #include "./cuda_common.h"
 #include "./functor.h"
+#include "../logging.h"
 
 #define SWITCH_OP(op, Op, ...)                                        \
   do {                                                                \

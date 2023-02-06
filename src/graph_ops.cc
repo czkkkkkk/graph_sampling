@@ -7,6 +7,7 @@
 #include "cuda/graph_ops.h"
 #include "cuda/sddmm.h"
 #include "cuda/tensor_ops.h"
+#include "logging.h"
 
 namespace gs {
 

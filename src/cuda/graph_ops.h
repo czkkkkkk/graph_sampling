@@ -2,7 +2,6 @@
 #define GS_CUDA_GRAPH_OPS_H_
 
 #include <torch/torch.h>
-#include "./logging.h"
 
 namespace gs {
 namespace impl {

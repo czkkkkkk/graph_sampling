@@ -1,10 +1,13 @@
 #include "./graph.h"
 
+#include <c10/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAStream.h>
 #include <sstream>
 #include "bcast.h"
 #include "cuda/sddmm.h"
 #include "cuda/tensor_ops.h"
 #include "graph_ops.h"
+#include "logging.h"
 
 namespace gs {
 
@@ -193,8 +196,7 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
       std::tie(tmp_ptr, select_index) = CSCRowSlicing(csc_, n_ids, with_coo);
       new_val_cols = val_col_ids_;
 
-      if (relabel)
-        LOG(FATAL) << "Not implemented warning";
+      if (relabel) LOG(FATAL) << "Not implemented warning";
     }
 
     if (output_format & _CSC)
@@ -217,8 +219,7 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
       std::tie(tmp_ptr, select_index) = CSCRowSlicing(csr_, n_ids, with_coo);
       new_val_rows = val_row_ids_;
 
-      if (relabel)
-        LOG(FATAL) << "Not implemented warning";
+      if (relabel) LOG(FATAL) << "Not implemented warning";
     } else {
       if (val_row_ids_.has_value())
         std::tie(tmp_ptr, select_index) =
@@ -413,28 +414,34 @@ c10::intrusive_ptr<Graph> Graph::SamplingProbs(int64_t axis,
 }
 
 c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
-    torch::Tensor column_index, int64_t fanout, bool replace) {
-  torch::Tensor select_index, out_data;
-  std::shared_ptr<CSC> csc_ptr;
-  torch::Tensor col_ids = (col_ids_.has_value())
-                              ? col_ids_.value().index({column_index})
-                              : column_index;
-  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
-      new Graph(true, col_ids, row_ids_, num_cols_, num_rows_)));
-  std::tie(csc_ptr, select_index) =
-      FusedCSCColSlicingAndSampling(csc_, column_index, fanout, replace);
-  ret->SetCSC(csc_ptr);
-  ret->SetNumEdges(csc_ptr->indices.numel());
-  if (data_.has_value()) {
-    if (csc_->e_ids.has_value()) {
-      out_data =
-          data_.value().index({csc_->e_ids.value().index({select_index})});
-    } else {
-      out_data = data_.value().index({select_index});
+    torch::Tensor column_index, int64_t fanout, bool replace, int64_t rank) {
+  at::cuda::CUDAStream torch_stream = at::cuda::getCurrentCUDAStream();
+  LOG(INFO) << rank << " " << torch_stream.id();
+  {
+    at::cuda::CUDAStreamGuard stream_guard(torch_stream);
+
+    torch::Tensor select_index, out_data;
+    std::shared_ptr<CSC> csc_ptr;
+    torch::Tensor col_ids = (col_ids_.has_value())
+                                ? col_ids_.value().index({column_index})
+                                : column_index;
+    auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
+        new Graph(true, col_ids, row_ids_, num_cols_, num_rows_)));
+    std::tie(csc_ptr, select_index) =
+        FusedCSCColSlicingAndSampling(csc_, column_index, fanout, replace);
+    ret->SetCSC(csc_ptr);
+    ret->SetNumEdges(csc_ptr->indices.numel());
+    if (data_.has_value()) {
+      if (csc_->e_ids.has_value()) {
+        out_data =
+            data_.value().index({csc_->e_ids.value().index({select_index})});
+      } else {
+        out_data = data_.value().index({select_index});
+      }
+      ret->SetData(out_data);
     }
-    ret->SetData(out_data);
+    return ret;
   }
-  return ret;
 }
 
 void Graph::CSC2CSR() {
@@ -601,62 +608,68 @@ torch::Tensor Graph::AllValidNode() {
 
 std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,
            torch::optional<torch::Tensor>, std::string>
-Graph::Relabel() {
-  // for sampling, col_ids_ is necessary!
-  if (!col_ids_.has_value()) {
-    LOG(ERROR) << "For sampling, col_ids_ is necessary!";
-  }
-  torch::Tensor col_ids = col_ids_.value();
+Graph::Relabel(int64_t rank) {
+  at::cuda::CUDAStream torch_stream = at::cuda::getCurrentCUDAStream();
+  LOG(INFO) << rank << " " << torch_stream.id();
+  {
+    at::cuda::CUDAStreamGuard stream_guard(torch_stream);
 
-  if (csc_ != nullptr) {
-    if (val_col_ids_.has_value())
-      col_ids = col_ids.index({val_col_ids_.value()});
-    torch::Tensor row_indices = row_ids_.has_value()
-                                    ? row_ids_.value().index({csc_->indices})
-                                    : csc_->indices;
-
-    torch::Tensor frontier;
-    std::vector<torch::Tensor> relabeled_result;
-
-    std::tie(frontier, relabeled_result) =
-        BatchTensorRelabel({col_ids, row_indices}, {row_indices});
-
-    torch::Tensor relabeled_indptr = csc_->indptr.clone();
-    torch::Tensor relabeled_indices = relabeled_result[0];
-
-    return {frontier,
-            frontier.numel(),
-            col_ids.numel(),
-            relabeled_indptr,
-            relabeled_indices,
-            csc_->e_ids,
-            "csc"};
-
-  } else if (csr_ != nullptr or coo_ != nullptr) {
-    if (coo_ == nullptr) {
-      SetCOO(GraphCSC2COO(csr_, false));
+    // for sampling, col_ids_ is necessary!
+    if (!col_ids_.has_value()) {
+      LOG(ERROR) << "For sampling, col_ids_ is necessary!";
     }
-    torch::Tensor coo_col = col_ids.index({coo_->col});
-    torch::Tensor coo_row = (row_ids_.has_value())
-                                ? row_ids_.value().index({coo_->row})
-                                : coo_->row;
+    torch::Tensor col_ids = col_ids_.value();
 
-    torch::Tensor frontier;
-    std::vector<torch::Tensor> relabeled_result;
-    std::tie(frontier, relabeled_result) =
-        BatchTensorRelabel({col_ids, coo_row}, {coo_col, coo_row});
+    if (csc_ != nullptr) {
+      if (val_col_ids_.has_value())
+        col_ids = col_ids.index({val_col_ids_.value()});
+      torch::Tensor row_indices = row_ids_.has_value()
+                                      ? row_ids_.value().index({csc_->indices})
+                                      : csc_->indices;
 
-    return {frontier,
-            frontier.numel(),
-            col_ids.numel(),
-            relabeled_result[1],
-            relabeled_result[0],
-            coo_->e_ids,
-            "coo"};
+      torch::Tensor frontier;
+      std::vector<torch::Tensor> relabeled_result;
 
-  } else {
-    LOG(ERROR) << "Error in Relabel!";
-    return {};
+      std::tie(frontier, relabeled_result) =
+          BatchTensorRelabel({col_ids, row_indices}, {row_indices});
+
+      torch::Tensor relabeled_indptr = csc_->indptr.clone();
+      torch::Tensor relabeled_indices = relabeled_result[0];
+
+      return {frontier,
+              frontier.numel(),
+              col_ids.numel(),
+              relabeled_indptr,
+              relabeled_indices,
+              csc_->e_ids,
+              "csc"};
+
+    } else if (csr_ != nullptr or coo_ != nullptr) {
+      if (coo_ == nullptr) {
+        SetCOO(GraphCSC2COO(csr_, false));
+      }
+      torch::Tensor coo_col = col_ids.index({coo_->col});
+      torch::Tensor coo_row = (row_ids_.has_value())
+                                  ? row_ids_.value().index({coo_->row})
+                                  : coo_->row;
+
+      torch::Tensor frontier;
+      std::vector<torch::Tensor> relabeled_result;
+      std::tie(frontier, relabeled_result) =
+          BatchTensorRelabel({col_ids, coo_row}, {coo_col, coo_row});
+
+      return {frontier,
+              frontier.numel(),
+              col_ids.numel(),
+              relabeled_result[1],
+              relabeled_result[0],
+              coo_->e_ids,
+              "coo"};
+
+    } else {
+      LOG(ERROR) << "Error in Relabel!";
+      return {};
+    }
   }
 }
 

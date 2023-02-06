@@ -79,6 +79,10 @@ inline int UpPower(int key) {
 // Relabel
 template <typename IdType, bool need_cached>
 inline std::vector<torch::Tensor> Unique(torch::Tensor total_tensor) {
+  at::cuda::CUDAStream torch_stream = at::cuda::getCurrentCUDAStream();
+  LOG(INFO) << torch_stream.id();
+  cudaStream_t stream = torch_stream.stream();
+
   int num_items = total_tensor.numel();
   int dir_size = UpPower(num_items);
 
@@ -89,7 +93,7 @@ inline std::vector<torch::Tensor> Unique(torch::Tensor total_tensor) {
 
   // insert
   using it = thrust::counting_iterator<IdType>;
-  thrust::for_each(it(0), it(num_items),
+  thrust::for_each(thrust::cuda::par.on(stream), it(0), it(num_items),
                    [key = key_tensor.data_ptr<IdType>(),
                     index = index_tensor.data_ptr<IdType>(),
                     in = total_tensor.data_ptr<IdType>(), num_items,
@@ -103,7 +107,7 @@ inline std::vector<torch::Tensor> Unique(torch::Tensor total_tensor) {
       torch::empty(num_items + 1, total_tensor.options());
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(item_prefix_tensor.data_ptr<IdType>()));
-  thrust::for_each(it(0), it(num_items),
+  thrust::for_each(thrust::cuda::par.on(stream), it(0), it(num_items),
                    [key = key_tensor.data_ptr<IdType>(),
                     index = index_tensor.data_ptr<IdType>(),
                     in = total_tensor.data_ptr<IdType>(),
@@ -112,8 +116,8 @@ inline std::vector<torch::Tensor> Unique(torch::Tensor total_tensor) {
                      RelabelHashmap<IdType> table(key, index, dir_size);
                      count[i] = table.SearchForValue(in[i]) == i ? 1 : 0;
                    });
-  cub_exclusiveSum<IdType>(thrust::raw_pointer_cast(item_prefix),
-                           num_items + 1);
+  cub_exclusiveSum<IdType>(thrust::raw_pointer_cast(item_prefix), num_items + 1,
+                           stream);
 
   // unique
   int tot = item_prefix[num_items];
@@ -125,7 +129,7 @@ inline std::vector<torch::Tensor> Unique(torch::Tensor total_tensor) {
   }
 
   thrust::for_each(
-      it(0), it(num_items),
+      thrust::cuda::par.on(stream), it(0), it(num_items),
       [key = key_tensor.data_ptr<IdType>(),
        index = index_tensor.data_ptr<IdType>(),
        in = total_tensor.data_ptr<IdType>(),
@@ -154,12 +158,16 @@ template <typename IdType>
 inline torch::Tensor Relabel(torch::Tensor total_tensor,
                              torch::Tensor key_tensor,
                              torch::Tensor value_tensor) {
+  at::cuda::CUDAStream torch_stream = at::cuda::getCurrentCUDAStream();
+  LOG(INFO) << torch_stream.id();
+  cudaStream_t stream = torch_stream.stream();
+
   int num_items = total_tensor.numel();
   using it = thrust::counting_iterator<IdType>;
   torch::Tensor relabel_tensor = torch::zeros_like(total_tensor);
   int dir_size = key_tensor.numel();
 
-  thrust::for_each(it(0), it(num_items),
+  thrust::for_each(thrust::cuda::par.on(stream), it(0), it(num_items),
                    [key = key_tensor.data_ptr<IdType>(),
                     value = value_tensor.data_ptr<IdType>(),
                     in = total_tensor.data_ptr<IdType>(),

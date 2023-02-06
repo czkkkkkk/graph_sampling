@@ -3,8 +3,9 @@
 
 #include <c10/cuda/CUDACachingAllocator.h>
 #include <cub/cub.cuh>
-#include "../logging.h"
 #include "cuda_common.h"
+
+#include "../logging.h"
 
 namespace gs {
 namespace impl {
@@ -15,15 +16,16 @@ namespace impl {
 #define CUDA_MAX_NUM_THREADS 256  // The max number of threads per block
 
 template <typename IdType>
-void cub_exclusiveSum(IdType* arrays, const IdType array_length) {
+void cub_exclusiveSum(IdType* arrays, const IdType array_length,
+                      cudaStream_t stream = 0) {
   void* d_temp_storage = NULL;
   size_t temp_storage_bytes = 0;
   cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
-                                arrays, array_length);
+                                arrays, array_length, stream);
   d_temp_storage =
       c10::cuda::CUDACachingAllocator::raw_alloc(temp_storage_bytes);
   cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes, arrays,
-                                arrays, array_length);
+                                arrays, array_length, stream);
   c10::cuda::CUDACachingAllocator::raw_delete(d_temp_storage);
 }
 

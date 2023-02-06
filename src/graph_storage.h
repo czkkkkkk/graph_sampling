@@ -1,7 +1,6 @@
 #ifndef GS_GRAPH_STORAGE_H_
 #define GS_GRAPH_STORAGE_H_
 
-#include "./logging.h"
 #include "torch/custom_class.h"
 
 namespace gs {

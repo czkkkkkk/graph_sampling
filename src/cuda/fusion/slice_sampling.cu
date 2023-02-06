@@ -90,12 +90,16 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
 _FusedCSCColSlicingSampling(torch::Tensor indptr, torch::Tensor indices,
                             torch::Tensor column_ids, int64_t fanout,
                             bool replace) {
+  at::cuda::CUDAStream torch_stream = at::cuda::getCurrentCUDAStream();
+  LOG(INFO) << torch_stream.id();
+  cudaStream_t stream = torch_stream.stream();
+  
   int64_t num_items = column_ids.numel();
 
   // compute indptr
   auto sub_indptr = torch::empty(num_items + 1, indptr.options());
   using it = thrust::counting_iterator<IdType>;
-  thrust::for_each(thrust::device, it(0), it(num_items),
+  thrust::for_each(thrust::cuda::par.on(stream), it(0), it(num_items),
                    [in = column_ids.data_ptr<IdType>(),
                     in_indptr = indptr.data_ptr<IdType>(),
                     out = sub_indptr.data_ptr<IdType>(), if_replace = replace,
@@ -109,7 +113,7 @@ _FusedCSCColSlicingSampling(torch::Tensor indptr, torch::Tensor indices,
                      }
                    });
 
-  cub_exclusiveSum<IdType>(sub_indptr.data_ptr<IdType>(), num_items + 1);
+  cub_exclusiveSum<IdType>(sub_indptr.data_ptr<IdType>(), num_items + 1, stream);
 
   // compute indices
   thrust::device_ptr<IdType> item_prefix(
@@ -122,13 +126,13 @@ _FusedCSCColSlicingSampling(torch::Tensor indptr, torch::Tensor indices,
   dim3 block(32, 16);
   dim3 grid((num_items + block.x - 1) / block.x);
   if (replace) {
-    _FusedSliceSampleSubIndicesReplaceKernel<IdType><<<grid, block>>>(
+    _FusedSliceSampleSubIndicesReplaceKernel<IdType><<<grid, block, 0, stream>>>(
         sub_indices.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
         indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
         sub_indptr.data_ptr<IdType>(), column_ids.data_ptr<IdType>(), num_items,
         random_seed);
   } else {
-    _FusedSliceSampleSubIndicesKernel<IdType><<<grid, block>>>(
+    _FusedSliceSampleSubIndicesKernel<IdType><<<grid, block, 0, stream>>>(
         sub_indices.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
         indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
         sub_indptr.data_ptr<IdType>(), column_ids.data_ptr<IdType>(), num_items,
