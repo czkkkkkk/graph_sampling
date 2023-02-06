@@ -476,34 +476,6 @@ __global__ void _InsertHashmaps(IdType* key_tensor, IdType* value_tensor,
 
 // each block work for one batch
 template <typename IdType, int BLOCK_SIZE>
-__global__ void _InsertHashmapsDebug(IdType* key_tensor, IdType* value_tensor,
-                                     IdType* hashmap_ptr, IdType* row_ids,
-                                     IdType* batch_ptr, IdType* indices_ptr,
-                                     int64_t num_batchs, IdType* in_coo_row) {
-  int tid = threadIdx.x;
-  int thread_stride = blockDim.x;
-  assert(thread_stride == BLOCK_SIZE);
-
-  int bid = blockIdx.x;
-  int block_stride = gridDim.x;
-
-  for (int i = bid; i < num_batchs; i += block_stride) {
-    int64_t data_begin = indices_ptr[i];
-    int64_t data_end = indices_ptr[i + 1];
-    int64_t hashmap_begin = hashmap_ptr[i];
-    int64_t dir_size = hashmap_ptr[i + 1] - hashmap_begin;
-    NodeQueryHashmap<IdType> hashmap(key_tensor + hashmap_begin,
-                                     value_tensor + hashmap_begin, dir_size);
-    for (int k = tid; k < data_end - data_begin; k += thread_stride) {
-      IdType value = hashmap.Query(in_coo_row[k + data_begin]);
-      printf("block(i)%d,thread(k)%d,query%ld,get value%ld\n", i, k,
-             in_coo_row[k + data_begin], value);
-    }
-  }
-}
-
-// each block work for one batch
-template <typename IdType, int BLOCK_SIZE>
 __global__ void _QueryHashmaps(IdType* key_tensor, IdType* value_tensor,
                                IdType* hashmap_ptr, IdType* in_coo_row,
                                IdType* batch_ptr, IdType* indices_ptr,
@@ -537,15 +509,10 @@ __global__ void _QueryHashmaps(IdType* key_tensor, IdType* value_tensor,
       }
     }
     __syncthreads();
-    // for (int ii = 0; ii < 6; ii++) {
-    printf("before prefix sum:[%ld,%ld,%ld,%ld,%ld,%ld]\n", out_mask[0],
-           out_mask[1], out_mask[2], out_mask[3], out_mask[4], out_mask[5]);
-    // }
     // prefix sum
     int prefix_sum_len = data_end - data_begin;
     int upper_bound = prefix_sum_len / BLOCK_SIZE * BLOCK_SIZE;
     int64_t thread_data = 0;
-    int64_t old_block_aggregate = 0;
     int64_t block_aggregate = 0;
     int64_t count = tid;
     for (; count < upper_bound; count += thread_stride) {
@@ -554,9 +521,6 @@ __global__ void _QueryHashmaps(IdType* key_tensor, IdType* value_tensor,
       BlockScan(temp_storage)
           .ExclusiveSum(thread_data, thread_data, block_aggregate);
       __syncthreads();
-      // out_mask[count + data_begin] =
-      //     tid == 0 ? old_block_aggregate : thread_data;
-      // old_block_aggregate = block_aggregate;
     }
 
     if (upper_bound != prefix_sum_len) {
@@ -569,27 +533,18 @@ __global__ void _QueryHashmaps(IdType* key_tensor, IdType* value_tensor,
       BlockScan(temp_storage)
           .ExclusiveSum(thread_data, thread_data, block_aggregate);
       __syncthreads();
-      // if (count < prefix_sum_len) {
-      //   out_mask[count + data_begin] =
-      //       tid == 0 ? old_block_aggregate : thread_data;
-      // }
     }
-
     if (tid == 0) {
       out_mask_count[i] = block_aggregate;
     }
-    out_mask_count[0] = 1;
-    out_mask_count[1] = 1;
-
-    // printf("after prefix sum:[%ld,%ld,%ld,%ld,%ld,%ld]\n", out_mask[0],
-    //        out_mask[1], out_mask[2], out_mask[3], out_mask[4], out_mask[5]);
   }
 }
 
 template <typename IdType>
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _BatchCOORowSlicing(
-    torch::Tensor coo_row, torch::Tensor coo_col, torch::Tensor selected_ids,
-    torch::Tensor indices_ptr, torch::Tensor selected_ids_ptr) {
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+_BatchCOORowSlicing(torch::Tensor coo_row, torch::Tensor coo_col,
+                    torch::Tensor selected_ids, torch::Tensor indices_ptr,
+                    torch::Tensor selected_ids_ptr) {
   // coo_row, coo_col, row_ids, indices_ptr, nodeids_ptr
   int num_items = coo_row.numel();
   int num_selected_ids = selected_ids.numel();
@@ -615,50 +570,22 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _BatchCOORowSlicing(
                        log2(batch_prefix[i + 1] - batch_prefix[i]) + 1));
         }
       });
-  std::cout << "hashmap ptr before prefix sum:" << hashmap_ptr << std::endl;
   thrust::device_ptr<IdType> wrapper_hashmap_ptr(
       static_cast<IdType*>(hashmap_ptr.data_ptr<IdType>()));
   cub_exclusiveSum<IdType>(thrust::raw_pointer_cast(wrapper_hashmap_ptr),
                            num_batchs + 1);
-  std::cout << "hashmap ptr before after sum:" << hashmap_ptr << std::endl;
   IdType dir_size = wrapper_hashmap_ptr[num_batchs];
   torch::Tensor key_buffer = torch::full(dir_size, -1, selected_ids.options());
   torch::Tensor value_buffer =
       torch::full(dir_size, -1, selected_ids.options());
   // insert
-  ///
   _InsertHashmaps<IdType, BLOCK_SIZE><<<blocks, BLOCK_SIZE>>>(
       key_buffer.data_ptr<IdType>(), value_buffer.data_ptr<IdType>(),
       hashmap_ptr.data_ptr<IdType>(), selected_ids.data_ptr<IdType>(),
       selected_ids_ptr.data_ptr<IdType>(), indices_ptr.data_ptr<IdType>(),
       num_batchs);
-  // debug
-  _InsertHashmapsDebug<IdType, BLOCK_SIZE><<<blocks, BLOCK_SIZE>>>(
-      key_buffer.data_ptr<IdType>(), value_buffer.data_ptr<IdType>(),
-      hashmap_ptr.data_ptr<IdType>(), selected_ids.data_ptr<IdType>(),
-      selected_ids_ptr.data_ptr<IdType>(), indices_ptr.data_ptr<IdType>(),
-      num_batchs, coo_row.data_ptr<IdType>());
-  // thrust::for_each(
-  //     thrust::device, it(0), it(2),
-  //     [_hashmap_ptr = hashmap_ptr.data_ptr<IdType>(),
-  //      _key_buffer = key_buffer.data_ptr<IdType>(),
-  //      _value_buffer = value_buffer.data_ptr<IdType>(),
-  //      _indices_ptr = indices_ptr.data_ptr<IdType>(),
-  //      in_coo_row = coo_row.data_ptr<IdType>()] __device__(IdType i) {
-  //       int64_t data_begin = _indices_ptr[i];
-  //       int64_t data_end = _indices_ptr[i + 1];
-  //       int64_t hashmap_begin = hashmap_ptr[i];
-  //       int64_t dir_size = hashmap_ptr[i + 1] - hashmap_begin;
-  //       NodeQueryHashmap<IdType> hashmap(_key_buffer, _value_buffer,
-  //       dir_size); for (int k = 0; k < data_end - data_begin; k += 1) {
-  //         IdType value = hashmap.Query(in_coo_row[k + data_begin]);
-  //         printf("block%ld,thread%ld,query%ld,get value%ld", i, k,
-  //                in_coo_row[k + data_begin], value);
-  //       }
-  //     });
 
   // query
-  ///
 
   torch::Tensor out_mask = torch::zeros_like(coo_row);
   torch::Tensor out_mask_count =
@@ -674,16 +601,13 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _BatchCOORowSlicing(
       static_cast<IdType*>(out_mask_count.data_ptr<IdType>()));
   cub_exclusiveSum<IdType>(thrust::raw_pointer_cast(wrapper_out_mask_count),
                            num_batchs + 1);
-  std::cout << "outmask:" << out_mask << std::endl;
-  std::cout << "outmask count:" << out_mask_count << std::endl;
-  // int64_t unique_tensor_size = wrapper_out_mask_count[num_batchs];
 
   // tail
   torch::Tensor select_index = torch::nonzero(out_mask).reshape({
       -1,
   });
   return {coo_row.index({select_index}), coo_col.index({select_index}),
-          out_mask_count};
+          out_mask_count, select_index};
 }
 
 template <typename IdType>
@@ -732,18 +656,14 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COORowSlicingCUDA(
   return _COORowSlicing<int64_t>(coo_row, coo_col, row_ids);
 };
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchCOORowSlicingCUDA(
-    torch::Tensor coo_row, torch::Tensor coo_col, torch::Tensor row_ids,
-    torch::Tensor indices_ptr, torch::Tensor nodeids_ptr) {
-  std::cout << "coo row:" << coo_row << std::endl;
-  std::cout << "coo col:" << coo_col << std::endl;
-  std::cout << "row ids:" << row_ids << std::endl;
-  std::cout << "indices_ptr:" << indices_ptr << std::endl;
-  std::cout << "rowids_ptr:" << nodeids_ptr << std::endl;
-  torch::Tensor row, col, coo_ret_ptr;
-  std::tie(row, col, coo_ret_ptr) = _BatchCOORowSlicing<int64_t>(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+BatchCOORowSlicingCUDA(torch::Tensor coo_row, torch::Tensor coo_col,
+                       torch::Tensor row_ids, torch::Tensor indices_ptr,
+                       torch::Tensor nodeids_ptr) {
+  torch::Tensor row, col, coo_ret_ptr, select_index;
+  std::tie(row, col, coo_ret_ptr, select_index) = _BatchCOORowSlicing<int64_t>(
       coo_row, coo_col, row_ids, indices_ptr, nodeids_ptr);
-  return std::make_tuple(row, col, coo_ret_ptr);
+  return std::make_tuple(row, col, coo_ret_ptr, select_index);
 };
 
 }  // namespace impl

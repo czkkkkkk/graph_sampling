@@ -16,7 +16,7 @@ val_nid = splitted_idx['valid'].cuda()
 nid = torch.cat([train_nid, val_nid])
 indptr, indices, _ = g.adj_sparse('csc')
 
-n_epoch = 1
+n_epoch = 5
 batch_size = 65536
 small_batch_size = 256
 num_batchs = int(batch_size / small_batch_size)

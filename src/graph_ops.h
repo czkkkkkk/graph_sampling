@@ -23,8 +23,10 @@ std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCRowSlicing(
 std::pair<std::shared_ptr<COO>, torch::Tensor> COOColSlicing(
     std::shared_ptr<COO> coo, torch::Tensor node_ids, int64_t axis);
 
-std::tuple<std::shared_ptr<COO>, torch::Tensor, torch::Tensor,torch::Tensor> BatchCOORowSlicing(
-    std::shared_ptr<COO> coo, torch::Tensor node_ids, torch::Tensor indices_ptr,torch::Tensor node_ids_ptr);
+std::tuple<std::shared_ptr<COO>, torch::Tensor, torch::Tensor, torch::Tensor,
+           torch::Tensor>
+BatchCOORowSlicing(std::shared_ptr<COO> coo, torch::Tensor node_ids,
+                   torch::Tensor indices_ptr, torch::Tensor node_ids_ptr);
 
 std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCColSampling(
     std::shared_ptr<CSC> csc, int64_t fanout, bool replace, bool with_coo);
