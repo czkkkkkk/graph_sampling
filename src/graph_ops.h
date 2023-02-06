@@ -37,8 +37,8 @@ std::pair<std::shared_ptr<CSC>, torch::Tensor> FusedCSCColSlicingAndSampling(
 torch::Tensor TensorUnique(torch::Tensor node_ids);
 
 std::tuple<torch::Tensor, std::vector<torch::Tensor>> BatchTensorRelabel(
-    std::vector<torch::Tensor> mapping_tensors,
-    std::vector<torch::Tensor> to_be_relabeled_tensors);
+    const std::vector<torch::Tensor> &mapping_tensors,
+    const std::vector<torch::Tensor> &to_be_relabeled_tensors);
 
 void CSCGraphSum(std::shared_ptr<CSC> csc, torch::optional<torch::Tensor> n_ids,
                  torch::Tensor data, torch::Tensor out_data, int64_t powk);

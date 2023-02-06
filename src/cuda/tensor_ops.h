@@ -28,8 +28,8 @@ torch::Tensor TensorUniqueCUDA(torch::Tensor input);
 // It return {unique_tensor, {tensor1_after_relabeled,
 // tensor2_after_relabeled, ...}}.
 std::tuple<torch::Tensor, std::vector<torch::Tensor>> RelabelCUDA(
-    std::vector<torch::Tensor> mapping_tensor,
-    std::vector<torch::Tensor> data_requiring_relabel);
+    const std::vector<torch::Tensor> &mapping_tensor,
+    const std::vector<torch::Tensor> &data_requiring_relabel);
 
 torch::Tensor IndexSelectCPUFromGPU(torch::Tensor array, torch::Tensor index);
 
@@ -41,13 +41,14 @@ torch::Tensor IndexHashMapSearchCUDA(torch::Tensor key_buffer,
                                      torch::Tensor keys);
 
 std::tuple<torch::Tensor, torch::Tensor> BatchUniqueCUDA(
-    std::vector<torch::Tensor> batch_tensors,
-    std::vector<torch::Tensor> segment_ptrs, int64_t num_batchs);
+    const std::vector<torch::Tensor> &batch_tensors,
+    const std::vector<torch::Tensor> &segment_ptrs, int64_t num_batchs);
 
 std::tuple<torch::Tensor, torch::Tensor, std::vector<torch::Tensor>,
            std::vector<torch::Tensor>>
-BatchRelabelCUDA(std::vector<torch::Tensor> batch_tensors,
-                 std::vector<torch::Tensor> segment_ptrs, int64_t num_batchs);
+BatchRelabelCUDA(const std::vector<torch::Tensor> &batch_tensors,
+                 const std::vector<torch::Tensor> &egment_ptrs,
+                 int64_t num_batchs);
 std::vector<torch::Tensor> SplitIndptrBySizeCUDA(torch::Tensor indptr,
                                                  int64_t size);
 std::vector<torch::Tensor> SplitIndptrByOffsetCUDA(torch::Tensor indptr,
