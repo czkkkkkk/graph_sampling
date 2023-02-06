@@ -15,8 +15,8 @@ class SeedGenerator(object):
 
     def __iter__(self):
         if self.shuffle:
-            indexes = torch.randperm(self.data.shape[0], device='cuda')
-            self.data = self.data[indexes]
+            indexes = torch.randperm(self.data.shape[0], device=self.data.device)
+            self.data = self.data[indexes].to('cuda')
 
         self.step = 0
         if self.drop_last:

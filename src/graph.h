@@ -48,6 +48,15 @@ class Graph : public torch::CustomClassHolder {
   c10::intrusive_ptr<Graph> Slicing(torch::Tensor n_ids, int64_t axis,
                                     int64_t on_format, int64_t output_format,
                                     bool relabel = false);
+  std::tuple<c10::intrusive_ptr<Graph>, 
+  torch::Tensor, torch::Tensor, 
+  torch::Tensor> BatchSlicing(torch::Tensor node_ids,
+  int64_t axis, int64_t on_format, 
+  int64_t output_format, torch::Tensor indices_ptr,
+  torch::Tensor node_ids_ptr);
+  
+
+                                    
   c10::intrusive_ptr<Graph> Sampling(int64_t axis, int64_t fanout, bool replace,
                                      int64_t on_format, int64_t output_format);
   c10::intrusive_ptr<Graph> SamplingProbs(int64_t axis,
