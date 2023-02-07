@@ -80,7 +80,6 @@ inline int UpPower(int key) {
 template <typename IdType, bool need_cached>
 inline std::vector<torch::Tensor> Unique(torch::Tensor total_tensor) {
   at::cuda::CUDAStream torch_stream = at::cuda::getCurrentCUDAStream();
-  LOG(INFO) << torch_stream.id();
   cudaStream_t stream = torch_stream.stream();
 
   int num_items = total_tensor.numel();
@@ -159,7 +158,6 @@ inline torch::Tensor Relabel(torch::Tensor total_tensor,
                              torch::Tensor key_tensor,
                              torch::Tensor value_tensor) {
   at::cuda::CUDAStream torch_stream = at::cuda::getCurrentCUDAStream();
-  LOG(INFO) << torch_stream.id();
   cudaStream_t stream = torch_stream.stream();
 
   int num_items = total_tensor.numel();

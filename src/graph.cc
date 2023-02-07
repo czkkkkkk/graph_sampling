@@ -414,9 +414,8 @@ c10::intrusive_ptr<Graph> Graph::SamplingProbs(int64_t axis,
 }
 
 c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
-    torch::Tensor column_index, int64_t fanout, bool replace, int64_t rank) {
+    torch::Tensor column_index, int64_t fanout, bool replace) {
   at::cuda::CUDAStream torch_stream = at::cuda::getCurrentCUDAStream();
-  LOG(INFO) << rank << " " << torch_stream.id();
   {
     at::cuda::CUDAStreamGuard stream_guard(torch_stream);
 
@@ -608,9 +607,8 @@ torch::Tensor Graph::AllValidNode() {
 
 std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,
            torch::optional<torch::Tensor>, std::string>
-Graph::Relabel(int64_t rank) {
+Graph::Relabel() {
   at::cuda::CUDAStream torch_stream = at::cuda::getCurrentCUDAStream();
-  LOG(INFO) << rank << " " << torch_stream.id();
   {
     at::cuda::CUDAStreamGuard stream_guard(torch_stream);
 

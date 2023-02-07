@@ -56,7 +56,7 @@ class Graph : public torch::CustomClassHolder {
                                           int64_t on_format,
                                           int64_t output_format);
   c10::intrusive_ptr<Graph> ColumnwiseFusedSlicingAndSampling(
-      torch::Tensor column_index, int64_t fanout, bool replace, int64_t rank);
+      torch::Tensor column_index, int64_t fanout, bool replace);
   torch::Tensor Sum(int64_t axis, int64_t powk, int64_t on_format);
   c10::intrusive_ptr<Graph> Divide(torch::Tensor divisor, int64_t axis,
                                    int64_t on_format);
@@ -75,7 +75,7 @@ class Graph : public torch::CustomClassHolder {
                                                // coo[1]
   std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,
              torch::optional<torch::Tensor>, std::string>
-  Relabel(int64_t rank);
+  Relabel();
   std::vector<torch::Tensor> MetaData();
   torch::Tensor RandomWalk(torch::Tensor seeds, int64_t walk_length);
   void SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
