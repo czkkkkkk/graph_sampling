@@ -75,7 +75,6 @@ struct RelabelHashmap {
 
 template <typename IdType>
 __global__ void _InsertHashmaps(IdType* __restrict__ data_tensor,
-                                IdType* __restrict__ data_ptr,
                                 IdType* __restrict__ data_key_tensor,
                                 IdType* __restrict__ hashmap_key_tensor,
                                 IdType* __restrict__ hashmap_value_tensor,
@@ -97,8 +96,7 @@ __global__ void _InsertHashmaps(IdType* __restrict__ data_tensor,
 
 template <typename IdType>
 __global__ void _SearchHashmapsForUnique(
-    IdType* __restrict__ data_tensor, IdType* __restrict__ data_ptr,
-    IdType* __restrict__ data_key_tensor,
+    IdType* __restrict__ data_tensor, IdType* __restrict__ data_key_tensor,
     IdType* __restrict__ hashmap_key_tensor,
     IdType* __restrict__ hashmap_value_tensor, IdType* __restrict__ hashmap_ptr,
     IdType* __restrict__ item_prefix_tensor, int64_t num_items) {
@@ -164,18 +162,17 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _BatchUniqueByKey(
   dim3 grids(num_blocks);
 
   _InsertHashmaps<IdType><<<grids, blocks>>>(
-      data_tensor.data_ptr<IdType>(), data_ptr.data_ptr<IdType>(),
-      data_key.data_ptr<IdType>(), key_tensor.data_ptr<IdType>(),
-      index_tensor.data_ptr<IdType>(), hashmap_ptr.data_ptr<IdType>(),
-      num_items);
+      data_tensor.data_ptr<IdType>(), data_key.data_ptr<IdType>(),
+      key_tensor.data_ptr<IdType>(), index_tensor.data_ptr<IdType>(),
+      hashmap_ptr.data_ptr<IdType>(), num_items);
 
   torch::Tensor mask_tensor = torch::empty(num_items, data_tensor.options());
 
   _SearchHashmapsForUnique<IdType><<<grids, blocks>>>(
-      data_tensor.data_ptr<IdType>(), data_ptr.data_ptr<IdType>(),
-      data_key.data_ptr<IdType>(), key_tensor.data_ptr<IdType>(),
-      index_tensor.data_ptr<IdType>(), hashmap_ptr.data_ptr<IdType>(),
-      mask_tensor.data_ptr<IdType>(), num_items);
+      data_tensor.data_ptr<IdType>(), data_key.data_ptr<IdType>(),
+      key_tensor.data_ptr<IdType>(), index_tensor.data_ptr<IdType>(),
+      hashmap_ptr.data_ptr<IdType>(), mask_tensor.data_ptr<IdType>(),
+      num_items);
 
   torch::Tensor data_unique_index = torch::nonzero(mask_tensor).reshape({-1});
   torch::Tensor sub_data = data_tensor.index({data_unique_index});
