@@ -53,6 +53,10 @@ std::vector<torch::Tensor> SplitIndptrBySizeCUDA(torch::Tensor indptr,
                                                  int64_t size);
 std::vector<torch::Tensor> SplitIndptrByOffsetCUDA(torch::Tensor indptr,
                                                    torch::Tensor offsets);
+
+std::tuple<torch::Tensor, torch::Tensor> BatchConcatCUDA(
+    const std::vector<torch::Tensor> &data_tensors,
+    const std::vector<torch::Tensor> &offset_tensors);
 }  // namespace impl
 }  // namespace gs
 

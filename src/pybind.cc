@@ -40,8 +40,7 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_sddmm", &Graph::SDDMM)
       .def("_CAPI_split", &Graph::Split)
       .def("GetBatchCSC", &Graph::GetBatchCSC)
-      .def("_CAPI_batch_slicing",&Graph::BatchSlicing)
-      ;
+      .def("_CAPI_batch_slicing", &Graph::BatchSlicing);
 
   m.class_<HeteroGraph>("HeteroGraph")
       .def(torch::init<>())
@@ -60,6 +59,7 @@ TORCH_LIBRARY(gs_ops, m) {
   m.def("SplitByOffset", &SplitByOffset);
   m.def("IndptrSplitBySize", &gs::impl::SplitIndptrBySizeCUDA);
   m.def("IndptrSplitByOffset", &gs::impl::SplitIndptrByOffsetCUDA);
+  m.def("BatchConcat", &gs::impl::BatchConcatCUDA);
 }
 
 namespace gs {}
