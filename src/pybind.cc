@@ -54,12 +54,12 @@ TORCH_LIBRARY(gs_ops, m) {
   m.def("list_sampling_with_probs", &ListSamplingProbs);
   m.def("batch_list_sampling_with_probs", &BatchListSamplingProbs);
   m.def("index_search", &IndexSearch);
-  m.def("BatchUnique", &BatchUnique);
   m.def("BatchRelabel", &BatchRelabel);
   m.def("SplitByOffset", &SplitByOffset);
   m.def("IndptrSplitBySize", &gs::impl::SplitIndptrBySizeCUDA);
   m.def("IndptrSplitByOffset", &gs::impl::SplitIndptrByOffsetCUDA);
   m.def("BatchConcat", &gs::impl::BatchConcatCUDA);
+  m.def("BatchUnique", &gs::impl::BatchUniqueCUDA);
   m.def("BatchUniqueByKey", &gs::impl::BatchUniqueByKeyCUDA);
 }
 

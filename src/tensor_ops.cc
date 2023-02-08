@@ -32,12 +32,6 @@ torch::Tensor IndexSearch(torch::Tensor origin_data, torch::Tensor keys) {
   return result;
 }
 
-std::tuple<torch::Tensor, torch::Tensor> BatchUnique(
-    const std::vector<torch::Tensor> &batch_tensors,
-    const std::vector<torch::Tensor> &segment_ptrs, int64_t num_batchs) {
-  return impl::BatchUniqueCUDA(batch_tensors, segment_ptrs, num_batchs);
-}
-
 std::tuple<torch::Tensor, torch::Tensor, std::vector<torch::Tensor>,
            std::vector<torch::Tensor>>
 BatchRelabel(const std::vector<torch::Tensor> &batch_tensors,

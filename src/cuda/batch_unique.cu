@@ -91,7 +91,7 @@ __global__ void _InsertHashmaps(IdType* __restrict__ data_tensor,
     RelabelHashmap<IdType> table(hashmap_key_tensor + hashmap_begin,
                                  hashmap_value_tensor + hashmap_begin,
                                  dir_size);
-    table.Update(data_tensor[index], index - data_ptr[batch_index]);
+    table.Update(data_tensor[index], index);
   }
 }
 
@@ -113,8 +113,7 @@ __global__ void _SearchHashmapsForUnique(
                                  hashmap_value_tensor + hashmap_begin,
                                  dir_size);
     IdType result = table.SearchForValue(data_tensor[index]);
-    item_prefix_tensor[index] =
-        result == (index - data_ptr[batch_index]) ? 1 : 0;
+    item_prefix_tensor[index] = result == index ? 1 : 0;
   }
 }
 
@@ -198,5 +197,28 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchUniqueByKeyCUDA(
   return _BatchUniqueByKey<int64_t>(data_tensor, data_ptr, data_key);
 }
 
+///////////////////////////// BatchUnique ////////////////////////////////
+template <typename IdType>
+__global__ void _RepeatKernel(const IdType* pos, IdType* out, int64_t n_col,
+                              int64_t length) {
+  IdType tx = static_cast<IdType>(blockIdx.x) * blockDim.x + threadIdx.x;
+  const int stride_x = gridDim.x * blockDim.x;
+  while (tx < length) {
+    IdType i = cub::UpperBound(pos, n_col, tx) - 1;
+    out[tx] = i;
+    tx += stride_x;
+  }
+}
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchUniqueCUDA(
+    torch::Tensor data_tensor, torch::Tensor data_ptr) {
+  torch::Tensor data_key = torch::empty_like(data_tensor);
+  dim3 block(128);
+  dim3 grid((data_tensor.numel() + block.x - 1) / block.x);
+  _RepeatKernel<int64_t><<<grid, block>>>(
+      data_ptr.data_ptr<int64_t>(), data_key.data_ptr<int64_t>(),
+      data_ptr.numel(), data_tensor.numel());
+  return _BatchUniqueByKey<int64_t>(data_tensor, data_ptr, data_key);
+}
 }  // namespace impl
 }  // namespace gs

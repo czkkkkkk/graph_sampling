@@ -40,10 +40,6 @@ torch::Tensor IndexHashMapSearchCUDA(torch::Tensor key_buffer,
                                      torch::Tensor value_buffer,
                                      torch::Tensor keys);
 
-std::tuple<torch::Tensor, torch::Tensor> BatchUniqueCUDA(
-    const std::vector<torch::Tensor> &batch_tensors,
-    const std::vector<torch::Tensor> &segment_ptrs, int64_t num_batchs);
-
 std::tuple<torch::Tensor, torch::Tensor, std::vector<torch::Tensor>,
            std::vector<torch::Tensor>>
 BatchRelabelCUDA(const std::vector<torch::Tensor> &batch_tensors,
@@ -60,6 +56,9 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchConcatCUDA(
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchUniqueByKeyCUDA(
     torch::Tensor data_tensor, torch::Tensor data_ptr, torch::Tensor data_key);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchUniqueCUDA(
+    torch::Tensor data_tensor, torch::Tensor data_ptr);
 }  // namespace impl
 }  // namespace gs
 
