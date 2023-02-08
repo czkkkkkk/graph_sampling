@@ -57,6 +57,9 @@ std::vector<torch::Tensor> SplitIndptrByOffsetCUDA(torch::Tensor indptr,
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchConcatCUDA(
     const std::vector<torch::Tensor> &data_tensors,
     const std::vector<torch::Tensor> &offset_tensors);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchUniqueByKeyCUDA(
+    torch::Tensor data_tensor, torch::Tensor data_ptr, torch::Tensor data_key);
 }  // namespace impl
 }  // namespace gs
 

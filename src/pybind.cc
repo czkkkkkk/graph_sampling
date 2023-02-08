@@ -60,6 +60,7 @@ TORCH_LIBRARY(gs_ops, m) {
   m.def("IndptrSplitBySize", &gs::impl::SplitIndptrBySizeCUDA);
   m.def("IndptrSplitByOffset", &gs::impl::SplitIndptrByOffsetCUDA);
   m.def("BatchConcat", &gs::impl::BatchConcatCUDA);
+  m.def("BatchUniqueByKey", &gs::impl::BatchUniqueByKeyCUDA);
 }
 
 namespace gs {}
