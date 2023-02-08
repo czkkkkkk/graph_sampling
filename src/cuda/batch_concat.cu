@@ -15,9 +15,13 @@ __global__ void _BatchConcatKernel(IdType** __restrict__ data_tensors,
                                    IdType* __restrict__ key,
                                    IdType* __restrict__ out_ptr,
                                    int64_t num_segments, int64_t num_batchs) {
-  assert(num_batchs < 8);
   int64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
-  int64_t acc_offset[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+  extern __shared__ int64_t acc_offset[];
+
+  for (int64_t k = threadIdx.x; k < num_batchs; k += blockDim.x) {
+    acc_offset[k] = 0;
+  }
+  __syncthreads();
 
   for (int64_t i = 0; i < num_segments; i++) {
     int64_t data_len = data_ptrs[i][num_batchs];
@@ -33,10 +37,12 @@ __global__ void _BatchConcatKernel(IdType** __restrict__ data_tensors,
           data_tensors[i][index];
       key[out_begin + acc_offset[batch_index] + out_index] = batch_index;
     }
+    __syncthreads();
 
-    for (int64_t k = 0; k < num_batchs; k++) {
+    for (int64_t k = threadIdx.x; k < num_batchs; k += blockDim.x) {
       acc_offset[k] += data_ptrs[i][k + 1] - data_ptrs[i][k];
     }
+    __syncthreads();
   }
 }
 
@@ -88,7 +94,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _BatchConcat(
   int num_blocks = (max_tensor_len + BLOCK_SIZE - 1) / BLOCK_SIZE;
   dim3 blocks(BLOCK_SIZE);
   dim3 grid(num_blocks);
-  _BatchConcatKernel<IdType><<<grid, blocks>>>(
+  _BatchConcatKernel<IdType><<<grid, blocks, num_batchs * sizeof(int64_t)>>>(
       thrust::raw_pointer_cast(d_data_tensor_ptrs.data()),
       thrust::raw_pointer_cast(d_offset_tensor_ptrs.data()),
       total_tensor.data_ptr<IdType>(), key_tensor.data_ptr<IdType>(),

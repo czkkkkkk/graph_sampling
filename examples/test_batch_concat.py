@@ -3,15 +3,13 @@ import torch
 import time
 import numpy as np
 
-tensor1 = torch.tensor([i for i in range(80000)] +
-                       [i for i in range(80000)]).long().cuda()
-tensor2 = torch.tensor([i for i in range(80000)] +
-                       [i for i in range(80000)]).long().cuda()
-offset_ptr1 = torch.tensor([0, 80000, 160000]).long().cuda()
-offset_ptr2 = torch.tensor([0, 80000, 160000]).long().cuda()
+tensor1 = torch.tensor([i for i in range(256 * 256)]).long().cuda()
+tensor2 = torch.tensor([i for i in range(256 * 256)]).long().cuda()
+offset_ptr1 = torch.tensor([i * 256 for i in range(257)]).long().cuda()
+offset_ptr2 = torch.tensor([i * 256 for i in range(257)]).long().cuda()
 
 print(tensor1)
-print(tensor1)
+print(offset_ptr1)
 
 for i in torch.ops.gs_ops.BatchConcat([tensor1, tensor2],
                                       [offset_ptr1, offset_ptr2]):
