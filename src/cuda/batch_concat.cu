@@ -12,6 +12,7 @@ template <typename IdType>
 __global__ void _BatchConcatKernel(IdType** __restrict__ data_tensors,
                                    IdType** __restrict__ data_ptrs,
                                    IdType* __restrict__ out,
+                                   IdType* __restrict__ key,
                                    IdType* __restrict__ out_ptr,
                                    int64_t num_segments, int64_t num_batchs) {
   assert(num_batchs < 8);
@@ -30,6 +31,7 @@ __global__ void _BatchConcatKernel(IdType** __restrict__ data_tensors,
       int64_t out_index = index - data_ptrs[i][batch_index];
       out[out_begin + acc_offset[batch_index] + out_index] =
           data_tensors[i][index];
+      key[out_begin + acc_offset[batch_index] + out_index] = batch_index;
     }
 
     for (int64_t k = 0; k < num_batchs; k++) {
@@ -39,7 +41,7 @@ __global__ void _BatchConcatKernel(IdType** __restrict__ data_tensors,
 }
 
 template <typename IdType>
-std::tuple<torch::Tensor, torch::Tensor> _BatchConcat(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _BatchConcat(
     const std::vector<torch::Tensor>& data_tensors,
     const std::vector<torch::Tensor>& offset_tensors) {
   int64_t num_segments = data_tensors.size();
@@ -61,8 +63,6 @@ std::tuple<torch::Tensor, torch::Tensor> _BatchConcat(
   torch::Tensor total_tensor_ptr = torch::empty(
       num_batchs + 1,
       torch::dtype(offset_tensors[0].dtype()).device(torch::kCUDA));
-  torch::Tensor acc_offset_tensor = torch::zeros(
-      num_batchs, torch::dtype(offset_tensors[0].dtype()).device(torch::kCUDA));
 
   using it = thrust::counting_iterator<IdType>;
   thrust::for_each(
@@ -81,6 +81,8 @@ std::tuple<torch::Tensor, torch::Tensor> _BatchConcat(
   int64_t total_size = wrapper_total_tensor_ptr[num_batchs];
   torch::Tensor total_tensor =
       torch::empty(total_size, data_tensors[0].options());
+  torch::Tensor key_tensor =
+      torch::empty(total_size, data_tensors[0].options());
 
   constexpr int BLOCK_SIZE = 256;
   int num_blocks = (max_tensor_len + BLOCK_SIZE - 1) / BLOCK_SIZE;
@@ -89,13 +91,13 @@ std::tuple<torch::Tensor, torch::Tensor> _BatchConcat(
   _BatchConcatKernel<IdType><<<grid, blocks>>>(
       thrust::raw_pointer_cast(d_data_tensor_ptrs.data()),
       thrust::raw_pointer_cast(d_offset_tensor_ptrs.data()),
-      total_tensor.data_ptr<IdType>(), total_tensor_ptr.data_ptr<IdType>(),
-      num_segments, num_batchs);
+      total_tensor.data_ptr<IdType>(), key_tensor.data_ptr<IdType>(),
+      total_tensor_ptr.data_ptr<IdType>(), num_segments, num_batchs);
 
-  return {total_tensor, total_tensor_ptr};
+  return {total_tensor, key_tensor, total_tensor_ptr};
 }
 
-std::tuple<torch::Tensor, torch::Tensor> BatchConcatCUDA(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchConcatCUDA(
     const std::vector<torch::Tensor>& data_tensors,
     const std::vector<torch::Tensor>& offset_tensors) {
   return _BatchConcat<int64_t>(data_tensors, offset_tensors);
