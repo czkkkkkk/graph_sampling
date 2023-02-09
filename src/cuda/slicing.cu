@@ -501,11 +501,11 @@ __global__ void _QueryHashmaps(IdType* key_tensor, IdType* value_tensor,
                                      value_tensor + hashmap_begin, dir_size);
 
     for (int k = tid; k < data_end - data_begin; k += thread_stride) {
-      IdType value = hashmap.Query(in_coo_row[tid + data_begin]);
+      IdType value = hashmap.Query(in_coo_row[k + data_begin]);
       if (value != -1) {
-        out_mask[tid + data_begin] = 1;
+        out_mask[k + data_begin] = 1;
       } else {
-        out_mask[tid + data_begin] = 0;
+        out_mask[k + data_begin] = 0;
       }
     }
     __syncthreads();

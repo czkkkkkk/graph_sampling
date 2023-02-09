@@ -15,12 +15,15 @@ train_nid = splitted_idx['train'].cuda()
 val_nid = splitted_idx['valid'].cuda()
 nid = torch.cat([train_nid, val_nid])
 indptr, indices, _ = g.adj_sparse('csc')
-
-n_epoch = 5
-batch_size = 65536
-small_batch_size = 256
+del g
+n_epoch = 3
+batch_size = 12800
+# small_batch_size = 1024
+# fanouts = [2000, 2000]
+small_batch_size = 4096
+fanouts = [8000,8000]
 num_batchs = int(batch_size / small_batch_size)
-fanouts = [25, 15]
+
 
 A = gs.Graph(False)
 A._CAPI_load_csc(indptr, indices)
@@ -32,6 +35,8 @@ time_list = []
 layer_time = [[], []]
 seedloader = SeedGenerator(nid, batch_size=batch_size,
                            shuffle=False, drop_last=False)
+last=int((nid.numel()+batch_size-1)/batch_size)-1
+
 for epoch in range(n_epoch):
     # torch.cuda.synchronize()
     begin = time.time()
@@ -40,7 +45,7 @@ for epoch in range(n_epoch):
     for it, seeds in enumerate(tqdm(seedloader)):
         # torch.cuda.nvtx.range_push('sampling')
         seeds_ptr = orig_seeds_ptr
-        if it == 2:
+        if it == last:
             num_batchs = int(
                 (seeds.numel() + small_batch_size - 1) / small_batch_size)
             seeds_ptr = torch.arange(
