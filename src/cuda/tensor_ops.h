@@ -67,6 +67,11 @@ BatchSplit2CUDA(torch::Tensor data_tensor, torch::Tensor data_ptr_tensor,
                 torch::Tensor data_key_tensor,
                 const std::vector<torch::Tensor> &out_tensors,
                 const std::vector<torch::Tensor> &out_ptr_tensors);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchCOOSlicingCUDA(
+    int64_t axis, torch::Tensor coo_row, torch::Tensor coo_col,
+    torch::Tensor batch_ptr, torch::Tensor neigbhors,
+    torch::Tensor neighbors_ptr);
 }  // namespace impl
 }  // namespace gs
 
