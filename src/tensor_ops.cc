@@ -32,14 +32,6 @@ torch::Tensor IndexSearch(torch::Tensor origin_data, torch::Tensor keys) {
   return result;
 }
 
-std::tuple<torch::Tensor, torch::Tensor, std::vector<torch::Tensor>,
-           std::vector<torch::Tensor>>
-BatchRelabel(const std::vector<torch::Tensor> &batch_tensors,
-             const std::vector<torch::Tensor> &segment_ptrs,
-             int64_t num_batchs) {
-  return impl::BatchRelabelCUDA(batch_tensors, segment_ptrs, num_batchs);
-}
-
 std::vector<torch::Tensor> SplitByOffset(torch::Tensor data,
                                          torch::Tensor offset) {
   int64_t numel = offset.numel();
