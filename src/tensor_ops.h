@@ -29,15 +29,6 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchListSamplingProbs(
 
 torch::Tensor IndexSearch(torch::Tensor origin_data, torch::Tensor keys);
 
-std::tuple<torch::Tensor, torch::Tensor> BatchUnique(
-    const std::vector<torch::Tensor> &batch_tensors,
-    const std::vector<torch::Tensor> &segment_ptrs, int64_t num_batchs);
-
-std::tuple<torch::Tensor, torch::Tensor, std::vector<torch::Tensor>,
-           std::vector<torch::Tensor>>
-BatchRelabel(const std::vector<torch::Tensor> &batch_tensors,
-             const std::vector<torch::Tensor> &segment_ptrs,
-             int64_t num_batchs);
 std::vector<torch::Tensor> SplitByOffset(torch::Tensor data,
                                          torch::Tensor offset);
 }  // namespace gs

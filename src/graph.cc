@@ -879,4 +879,10 @@ std::vector<torch::Tensor> Graph::GetBatchCSC(torch::Tensor seeds_ptr) {
 
   return {indptr, indices, indices_ptr};
 }
+
+std::tuple<torch::Tensor, torch::Tensor> Graph::GetBatchCOO() {
+  CreateSparseFormat(_COO);
+  return {coo_->row, coo_->col};
+}
+
 }  // namespace gs

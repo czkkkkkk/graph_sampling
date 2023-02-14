@@ -40,8 +40,8 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_sddmm", &Graph::SDDMM)
       .def("_CAPI_split", &Graph::Split)
       .def("GetBatchCSC", &Graph::GetBatchCSC)
-      .def("_CAPI_batch_slicing",&Graph::BatchSlicing)
-      ;
+      .def("GetBatchCOO", &Graph::GetBatchCOO)
+      .def("_CAPI_batch_slicing", &Graph::BatchSlicing);
 
   m.class_<HeteroGraph>("HeteroGraph")
       .def(torch::init<>())
@@ -55,11 +55,16 @@ TORCH_LIBRARY(gs_ops, m) {
   m.def("list_sampling_with_probs", &ListSamplingProbs);
   m.def("batch_list_sampling_with_probs", &BatchListSamplingProbs);
   m.def("index_search", &IndexSearch);
-  m.def("BatchUnique", &BatchUnique);
-  m.def("BatchRelabel", &BatchRelabel);
   m.def("SplitByOffset", &SplitByOffset);
   m.def("IndptrSplitBySize", &gs::impl::SplitIndptrBySizeCUDA);
   m.def("IndptrSplitByOffset", &gs::impl::SplitIndptrByOffsetCUDA);
+  m.def("BatchConcat", &gs::impl::BatchConcatCUDA);
+  m.def("BatchUnique", &gs::impl::BatchUniqueCUDA);
+  m.def("BatchUniqueByKey", &gs::impl::BatchUniqueByKeyCUDA);
+  m.def("BatchRelabelByKey", &gs::impl::BatchRelabelByKeyCUDA);
+  m.def("BatchRelabel", &gs::impl::BatchRelabelCUDA);
+  m.def("BatchSplit", &gs::impl::BatchSplit2CUDA);
+  m.def("BatchCOOSlicing", &gs::impl::BatchCOOSlicingCUDA);
 }
 
 namespace gs {}

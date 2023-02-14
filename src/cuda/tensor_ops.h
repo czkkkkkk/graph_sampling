@@ -40,19 +40,38 @@ torch::Tensor IndexHashMapSearchCUDA(torch::Tensor key_buffer,
                                      torch::Tensor value_buffer,
                                      torch::Tensor keys);
 
-std::tuple<torch::Tensor, torch::Tensor> BatchUniqueCUDA(
-    const std::vector<torch::Tensor> &batch_tensors,
-    const std::vector<torch::Tensor> &segment_ptrs, int64_t num_batchs);
-
-std::tuple<torch::Tensor, torch::Tensor, std::vector<torch::Tensor>,
-           std::vector<torch::Tensor>>
-BatchRelabelCUDA(const std::vector<torch::Tensor> &batch_tensors,
-                 const std::vector<torch::Tensor> &egment_ptrs,
-                 int64_t num_batchs);
 std::vector<torch::Tensor> SplitIndptrBySizeCUDA(torch::Tensor indptr,
                                                  int64_t size);
 std::vector<torch::Tensor> SplitIndptrByOffsetCUDA(torch::Tensor indptr,
                                                    torch::Tensor offsets);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchConcatCUDA(
+    const std::vector<torch::Tensor> &data_tensors,
+    const std::vector<torch::Tensor> &offset_tensors);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchUniqueByKeyCUDA(
+    torch::Tensor data_tensor, torch::Tensor data_ptr, torch::Tensor data_key);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchUniqueCUDA(
+    torch::Tensor data_tensor, torch::Tensor data_ptr);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+BatchRelabelByKeyCUDA(torch::Tensor data_tensor, torch::Tensor data_ptr,
+                      torch::Tensor data_key);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+BatchRelabelCUDA(torch::Tensor data_tensor, torch::Tensor data_ptr);
+
+std::tuple<std::vector<torch::Tensor>, std::vector<torch::Tensor>>
+BatchSplit2CUDA(torch::Tensor data_tensor, torch::Tensor data_ptr_tensor,
+                torch::Tensor data_key_tensor,
+                const std::vector<torch::Tensor> &out_tensors,
+                const std::vector<torch::Tensor> &out_ptr_tensors);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchCOOSlicingCUDA(
+    int64_t axis, torch::Tensor coo_row, torch::Tensor coo_col,
+    torch::Tensor batch_ptr, torch::Tensor neigbhors,
+    torch::Tensor neighbors_ptr);
 }  // namespace impl
 }  // namespace gs
 
