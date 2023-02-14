@@ -127,6 +127,7 @@ for epoch in range(n_epoch):
                                           num_src=num_row,
                                           num_dst=num_col)
             block.srcdata['_ID'] = unique_tensor
+            seeds = unique_tensor
             # torch.cuda.synchronize()
             layer_end = time.time()
             if layer == 0:
