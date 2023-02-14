@@ -92,7 +92,7 @@ inline std::vector<torch::Tensor> Unique(torch::Tensor total_tensor) {
 
   // insert
   using it = thrust::counting_iterator<IdType>;
-  thrust::for_each(thrust::cuda::par.on(stream), it(0), it(num_items),
+  thrust::for_each(thrust::device.on(stream), it(0), it(num_items),
                    [key = key_tensor.data_ptr<IdType>(),
                     index = index_tensor.data_ptr<IdType>(),
                     in = total_tensor.data_ptr<IdType>(), num_items,
@@ -104,22 +104,25 @@ inline std::vector<torch::Tensor> Unique(torch::Tensor total_tensor) {
   // prefix sum
   torch::Tensor item_prefix_tensor =
       torch::empty(num_items + 1, total_tensor.options());
-  thrust::device_ptr<IdType> item_prefix(
-      static_cast<IdType*>(item_prefix_tensor.data_ptr<IdType>()));
-  thrust::for_each(thrust::cuda::par.on(stream), it(0), it(num_items),
+  IdType* prefix_dptr = item_prefix_tensor.data_ptr<IdType>();
+  thrust::for_each(thrust::device.on(stream), it(0), it(num_items),
                    [key = key_tensor.data_ptr<IdType>(),
                     index = index_tensor.data_ptr<IdType>(),
-                    in = total_tensor.data_ptr<IdType>(),
-                    count = thrust::raw_pointer_cast(item_prefix), num_items,
-                    dir_size] __device__(IdType i) mutable {
+                    in = total_tensor.data_ptr<IdType>(), count = prefix_dptr,
+                    num_items, dir_size] __device__(IdType i) mutable {
                      RelabelHashmap<IdType> table(key, index, dir_size);
                      count[i] = table.SearchForValue(in[i]) == i ? 1 : 0;
                    });
-  cub_exclusiveSum<IdType>(thrust::raw_pointer_cast(item_prefix), num_items + 1,
-                           stream);
+  cub_exclusiveSum<IdType>(prefix_dptr, num_items + 1, stream);
 
   // unique
-  int tot = item_prefix[num_items];
+  // cudaStreamSynchronize(stream);
+  // thrust::device_ptr<IdType> item_prefix(static_cast<IdType*>(prefix_dptr));
+  // int64_t tot = item_prefix[num_items];
+  int64_t tot;
+  CUDA_CALL((cudaMemcpyAsync(&tot, prefix_dptr + num_items, sizeof(IdType),
+                             cudaMemcpyDeviceToHost, stream)));
+  CUDA_CALL((cudaStreamSynchronize(stream)));
   torch::Tensor unique_tensor = torch::empty(tot, total_tensor.options());
 
   torch::Tensor value_tensor;
@@ -128,11 +131,10 @@ inline std::vector<torch::Tensor> Unique(torch::Tensor total_tensor) {
   }
 
   thrust::for_each(
-      thrust::cuda::par.on(stream), it(0), it(num_items),
+      thrust::device.on(stream), it(0), it(num_items),
       [key = key_tensor.data_ptr<IdType>(),
        index = index_tensor.data_ptr<IdType>(),
-       in = total_tensor.data_ptr<IdType>(),
-       prefix = thrust::raw_pointer_cast(item_prefix),
+       in = total_tensor.data_ptr<IdType>(), prefix = prefix_dptr,
        unique = unique_tensor.data_ptr<IdType>(),
        cache_value = need_cached ? value_tensor.data_ptr<IdType>() : nullptr,
        num_items, dir_size] __device__(IdType i) mutable {
@@ -161,11 +163,11 @@ inline torch::Tensor Relabel(torch::Tensor total_tensor,
   cudaStream_t stream = torch_stream.stream();
 
   int num_items = total_tensor.numel();
-  using it = thrust::counting_iterator<IdType>;
   torch::Tensor relabel_tensor = torch::zeros_like(total_tensor);
   int dir_size = key_tensor.numel();
 
-  thrust::for_each(thrust::cuda::par.on(stream), it(0), it(num_items),
+  using it = thrust::counting_iterator<IdType>;
+  thrust::for_each(thrust::device.on(stream), it(0), it(num_items),
                    [key = key_tensor.data_ptr<IdType>(),
                     value = value_tensor.data_ptr<IdType>(),
                     in = total_tensor.data_ptr<IdType>(),

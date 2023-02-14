@@ -98,7 +98,7 @@ _FusedCSCColSlicingSampling(torch::Tensor indptr, torch::Tensor indices,
   // compute indptr
   auto sub_indptr = torch::empty(num_items + 1, indptr.options());
   using it = thrust::counting_iterator<IdType>;
-  thrust::for_each(thrust::cuda::par.on(stream), it(0), it(num_items),
+  thrust::for_each(thrust::device.on(stream), it(0), it(num_items),
                    [in = column_ids.data_ptr<IdType>(),
                     in_indptr = indptr.data_ptr<IdType>(),
                     out = sub_indptr.data_ptr<IdType>(), if_replace = replace,
@@ -116,9 +116,15 @@ _FusedCSCColSlicingSampling(torch::Tensor indptr, torch::Tensor indices,
                            stream);
 
   // compute indices
-  thrust::device_ptr<IdType> item_prefix(
-      static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
-  int n_edges = item_prefix[num_items];  // cpu
+  // CUDA_CALL((cudaStreamSynchronize(stream)));
+  // thrust::device_ptr<IdType> item_prefix(
+  //     static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
+  // int64_t n_edges = item_prefix[num_items];  // cpu
+  int64_t n_edges;
+  IdType* d_ptr = sub_indptr.data_ptr<IdType>();
+  CUDA_CALL((cudaMemcpyAsync(&n_edges, d_ptr + num_items, sizeof(IdType),
+                             cudaMemcpyDeviceToHost, stream)));
+  CUDA_CALL((cudaStreamSynchronize(stream)));
   auto sub_indices = torch::empty(n_edges, indices.options());
   auto select_index = torch::empty(n_edges, indices.options());
 
@@ -139,6 +145,9 @@ _FusedCSCColSlicingSampling(torch::Tensor indptr, torch::Tensor indices,
         sub_indptr.data_ptr<IdType>(), column_ids.data_ptr<IdType>(), num_items,
         random_seed);
   }
+  cudaError_t e = cudaGetLastError();
+  CHECK(e == cudaSuccess || e == cudaErrorCudartUnloading)
+      << "CUDA kernel launch error: " << cudaGetErrorString(e);
 
   return {sub_indptr, sub_indices, select_index};
 }

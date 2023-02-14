@@ -415,32 +415,27 @@ c10::intrusive_ptr<Graph> Graph::SamplingProbs(int64_t axis,
 
 c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
     torch::Tensor column_index, int64_t fanout, bool replace) {
-  at::cuda::CUDAStream torch_stream = at::cuda::getCurrentCUDAStream();
-  {
-    at::cuda::CUDAStreamGuard stream_guard(torch_stream);
-
-    torch::Tensor select_index, out_data;
-    std::shared_ptr<CSC> csc_ptr;
-    torch::Tensor col_ids = (col_ids_.has_value())
-                                ? col_ids_.value().index({column_index})
-                                : column_index;
-    auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
-        new Graph(true, col_ids, row_ids_, num_cols_, num_rows_)));
-    std::tie(csc_ptr, select_index) =
-        FusedCSCColSlicingAndSampling(csc_, column_index, fanout, replace);
-    ret->SetCSC(csc_ptr);
-    ret->SetNumEdges(csc_ptr->indices.numel());
-    if (data_.has_value()) {
-      if (csc_->e_ids.has_value()) {
-        out_data =
-            data_.value().index({csc_->e_ids.value().index({select_index})});
-      } else {
-        out_data = data_.value().index({select_index});
-      }
-      ret->SetData(out_data);
+  torch::Tensor select_index, out_data;
+  std::shared_ptr<CSC> csc_ptr;
+  torch::Tensor col_ids = (col_ids_.has_value())
+                              ? col_ids_.value().index({column_index})
+                              : column_index;
+  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
+      new Graph(true, col_ids, row_ids_, num_cols_, num_rows_)));
+  std::tie(csc_ptr, select_index) =
+      FusedCSCColSlicingAndSampling(csc_, column_index, fanout, replace);
+  ret->SetCSC(csc_ptr);
+  ret->SetNumEdges(csc_ptr->indices.numel());
+  if (data_.has_value()) {
+    if (csc_->e_ids.has_value()) {
+      out_data =
+          data_.value().index({csc_->e_ids.value().index({select_index})});
+    } else {
+      out_data = data_.value().index({select_index});
     }
-    return ret;
+    ret->SetData(out_data);
   }
+  return ret;
 }
 
 void Graph::CSC2CSR() {
@@ -608,66 +603,61 @@ torch::Tensor Graph::AllValidNode() {
 std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,
            torch::optional<torch::Tensor>, std::string>
 Graph::Relabel() {
-  at::cuda::CUDAStream torch_stream = at::cuda::getCurrentCUDAStream();
-  {
-    at::cuda::CUDAStreamGuard stream_guard(torch_stream);
+  // for sampling, col_ids_ is necessary!
+  if (!col_ids_.has_value()) {
+    LOG(ERROR) << "For sampling, col_ids_ is necessary!";
+  }
+  torch::Tensor col_ids = col_ids_.value();
 
-    // for sampling, col_ids_ is necessary!
-    if (!col_ids_.has_value()) {
-      LOG(ERROR) << "For sampling, col_ids_ is necessary!";
+  if (csc_ != nullptr) {
+    if (val_col_ids_.has_value())
+      col_ids = col_ids.index({val_col_ids_.value()});
+    torch::Tensor row_indices = row_ids_.has_value()
+                                    ? row_ids_.value().index({csc_->indices})
+                                    : csc_->indices;
+
+    torch::Tensor frontier;
+    std::vector<torch::Tensor> relabeled_result;
+
+    std::tie(frontier, relabeled_result) =
+        BatchTensorRelabel({col_ids, row_indices}, {row_indices});
+
+    torch::Tensor relabeled_indptr = csc_->indptr.clone();
+    torch::Tensor relabeled_indices = relabeled_result[0];
+
+    return {frontier,
+            frontier.numel(),
+            col_ids.numel(),
+            relabeled_indptr,
+            relabeled_indices,
+            csc_->e_ids,
+            "csc"};
+
+  } else if (csr_ != nullptr or coo_ != nullptr) {
+    if (coo_ == nullptr) {
+      SetCOO(GraphCSC2COO(csr_, false));
     }
-    torch::Tensor col_ids = col_ids_.value();
+    torch::Tensor coo_col = col_ids.index({coo_->col});
+    torch::Tensor coo_row = (row_ids_.has_value())
+                                ? row_ids_.value().index({coo_->row})
+                                : coo_->row;
 
-    if (csc_ != nullptr) {
-      if (val_col_ids_.has_value())
-        col_ids = col_ids.index({val_col_ids_.value()});
-      torch::Tensor row_indices = row_ids_.has_value()
-                                      ? row_ids_.value().index({csc_->indices})
-                                      : csc_->indices;
+    torch::Tensor frontier;
+    std::vector<torch::Tensor> relabeled_result;
+    std::tie(frontier, relabeled_result) =
+        BatchTensorRelabel({col_ids, coo_row}, {coo_col, coo_row});
 
-      torch::Tensor frontier;
-      std::vector<torch::Tensor> relabeled_result;
+    return {frontier,
+            frontier.numel(),
+            col_ids.numel(),
+            relabeled_result[1],
+            relabeled_result[0],
+            coo_->e_ids,
+            "coo"};
 
-      std::tie(frontier, relabeled_result) =
-          BatchTensorRelabel({col_ids, row_indices}, {row_indices});
-
-      torch::Tensor relabeled_indptr = csc_->indptr.clone();
-      torch::Tensor relabeled_indices = relabeled_result[0];
-
-      return {frontier,
-              frontier.numel(),
-              col_ids.numel(),
-              relabeled_indptr,
-              relabeled_indices,
-              csc_->e_ids,
-              "csc"};
-
-    } else if (csr_ != nullptr or coo_ != nullptr) {
-      if (coo_ == nullptr) {
-        SetCOO(GraphCSC2COO(csr_, false));
-      }
-      torch::Tensor coo_col = col_ids.index({coo_->col});
-      torch::Tensor coo_row = (row_ids_.has_value())
-                                  ? row_ids_.value().index({coo_->row})
-                                  : coo_->row;
-
-      torch::Tensor frontier;
-      std::vector<torch::Tensor> relabeled_result;
-      std::tie(frontier, relabeled_result) =
-          BatchTensorRelabel({col_ids, coo_row}, {coo_col, coo_row});
-
-      return {frontier,
-              frontier.numel(),
-              col_ids.numel(),
-              relabeled_result[1],
-              relabeled_result[0],
-              coo_->e_ids,
-              "coo"};
-
-    } else {
-      LOG(ERROR) << "Error in Relabel!";
-      return {};
-    }
+  } else {
+    LOG(ERROR) << "Error in Relabel!";
+    return {};
   }
 }
 
