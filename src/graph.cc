@@ -873,7 +873,9 @@ std::vector<c10::intrusive_ptr<Graph>> Graph::Split(int64_t split_size) {
 
 std::vector<torch::Tensor> Graph::GetBatchCSC(torch::Tensor seeds_ptr) {
   torch::Tensor indptr = csc_->indptr;
-  torch::Tensor indices = csc_->indices;
+  torch::Tensor indices = (row_ids_.has_value())
+                              ? row_ids_.value().index({csc_->indices})
+                              : csc_->indices;
 
   torch::Tensor indices_ptr = indptr.index({seeds_ptr});
 
@@ -882,7 +884,14 @@ std::vector<torch::Tensor> Graph::GetBatchCSC(torch::Tensor seeds_ptr) {
 
 std::tuple<torch::Tensor, torch::Tensor> Graph::GetBatchCOO() {
   CreateSparseFormat(_COO);
-  return {coo_->row, coo_->col};
+  CHECK_EQ(coo_->col_sorted, true);
+  if (!col_ids_.has_value()) {
+    LOG(ERROR) << "For sampling, col_ids_ is necessary!";
+  }
+  torch::Tensor coo_col = col_ids_.value().index({coo_->col});
+  torch::Tensor coo_row =
+      (row_ids_.has_value()) ? row_ids_.value().index({coo_->row}) : coo_->row;
+  return {coo_row, coo_col};
 }
 
 }  // namespace gs
