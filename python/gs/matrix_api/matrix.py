@@ -102,7 +102,7 @@ class Matrix(object):
             ret = ret._CAPI_slicing(c_slice, 0, _CSC, _COO, False)
 
         if isinstance(r_slice, Proxy) or isinstance(r_slice, torch.Tensor):
-            ret = ret._CAPI_slicing(r_slice, 0, _CSR, _COO, False)
+            ret = ret._CAPI_slicing(r_slice, 1, _CSR, _COO, False)
 
         return Matrix(ret)
 
