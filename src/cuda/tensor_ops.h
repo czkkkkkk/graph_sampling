@@ -72,6 +72,14 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchCOOSlicingCUDA(
     int64_t axis, torch::Tensor coo_row, torch::Tensor coo_col,
     torch::Tensor batch_ptr, torch::Tensor neigbhors,
     torch::Tensor neighbors_ptr);
+
+torch::Tensor BatchEncodeCUDA(torch::Tensor data_tensor,
+                              torch::Tensor data_ptr);
+
+torch::Tensor BatchDecodeCUDA(torch::Tensor data_tensor,
+                              torch::Tensor data_ptr);
+
+torch::Tensor GetBatchOffsets(torch::Tensor data_tensor, int64_t num_batches);
 }  // namespace impl
 }  // namespace gs
 

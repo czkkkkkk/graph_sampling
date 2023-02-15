@@ -882,6 +882,7 @@ std::vector<torch::Tensor> Graph::GetBatchCSC(torch::Tensor seeds_ptr) {
 
 std::tuple<torch::Tensor, torch::Tensor> Graph::GetBatchCOO() {
   CreateSparseFormat(_COO);
+  CHECK_EQ(coo_->col_sorted, true);
   return {coo_->row, coo_->col};
 }
 
