@@ -44,22 +44,25 @@ sub_coo_row, sub_coo_col, sub_coo_ptr = torch.ops.gs_ops.BatchCOOSlicing(
     1, coo_row, coo_col, indices_ptr, selected, selected_ptr)
 
 # relabel
+mapping_data, mapping_data_key, mapping_data_ptr = torch.ops.gs_ops.BatchConcat(
+    [seeds, sub_coo_row], [seeds_ptr, sub_coo_ptr])
 data, data_key, data_ptr = torch.ops.gs_ops.BatchConcat(
     [sub_coo_col, sub_coo_row], [sub_coo_ptr, sub_coo_ptr])
 unique_tensor, unique_tensor_ptr, relabel_data, relabel_data_ptr = torch.ops.gs_ops.BatchRelabelByKey(
-    data, data_ptr, data_key)
+    mapping_data, mapping_data_ptr, mapping_data_key, data, data_ptr, data_key)
 torch.ops.gs_ops.BatchSplit(relabel_data, relabel_data_ptr, data_key,
                             [sub_coo_col, sub_coo_row],
                             [sub_coo_ptr, sub_coo_ptr])
 
+seedst = torch.ops.gs_ops.SplitByOffset(seeds, seeds_ptr)
 unit = torch.ops.gs_ops.SplitByOffset(unique_tensor, unique_tensor_ptr)
 colt = torch.ops.gs_ops.SplitByOffset(sub_coo_col, sub_coo_ptr)
 rowt = torch.ops.gs_ops.SplitByOffset(sub_coo_row, sub_coo_ptr)
 # torch.cuda.nvtx.range_pop()
-for unique, col, row in zip(unit, colt, rowt):
+for s, unique, col, row in zip(seedst, unit, colt, rowt):
     block = create_block_from_coo(row,
                                   col,
                                   num_src=unique.numel(),
-                                  num_dst=seeds.numel())
+                                  num_dst=s.numel())
     block.srcdata['_ID'] = unique
     print(block)

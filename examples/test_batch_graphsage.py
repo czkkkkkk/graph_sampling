@@ -35,7 +35,7 @@ indptr, indices, indices_ptr = subA.GetBatchCSC(seeds_ptr)
 data, data_key, data_ptr = torch.ops.gs_ops.BatchConcat(
     [seeds, indices], [seeds_ptr, indices_ptr])
 unique_tensor, unique_tensor_ptr, relabel_data, relabel_data_ptr = torch.ops.gs_ops.BatchRelabelByKey(
-    data, data_ptr, data_key)
+    data, data_ptr, data_key, data, data_ptr, data_key)
 torch.ops.gs_ops.BatchSplit(relabel_data, relabel_data_ptr, data_key,
                             [seeds, indices], [seeds_ptr, indices_ptr])
 

@@ -44,7 +44,8 @@ for epoch in range(n_epoch):
     batch_layer_time_2 = 0
     for it, seeds in enumerate(tqdm(seedloader)):
         # torch.cuda.nvtx.range_push('sampling')
-        num_batchs = int((batch_size + small_batch_size - 1) / small_batch_size)
+        num_batchs = int(
+            (batch_size + small_batch_size - 1) / small_batch_size)
         seeds_ptr = orig_seeds_ptr
         if it == len(seedloader) - 1:
             num_batchs = int(
@@ -75,12 +76,16 @@ for epoch in range(n_epoch):
             sub_coo_row, sub_coo_col, sub_coo_ptr = torch.ops.gs_ops.BatchCOOSlicing(
                 1, coo_row, coo_col, indices_ptr, selected, selected_ptr)
 
-            # relabel (bug here, but only influence training)
+            # relabel
+            mapping_data, mapping_data_key, mapping_data_ptr = torch.ops.gs_ops.BatchConcat(
+                [seeds, sub_coo_row], [seeds_ptr, sub_coo_ptr])
+
             data, data_key, data_ptr = torch.ops.gs_ops.BatchConcat(
                 [sub_coo_col, sub_coo_row], [sub_coo_ptr, sub_coo_ptr])
 
             unique_tensor, unique_tensor_ptr, relabel_data, relabel_data_ptr = torch.ops.gs_ops.BatchRelabelByKey(
-                data, data_ptr, data_key)
+                mapping_data, mapping_data_ptr, mapping_data_key, data,
+                data_ptr, data_key)
             torch.ops.gs_ops.BatchSplit(relabel_data, relabel_data_ptr,
                                         data_key, [sub_coo_col, sub_coo_row],
                                         [sub_coo_ptr, sub_coo_ptr])

@@ -179,17 +179,19 @@ __global__ void _SortedSearchKernelUpperBound(const IdType* __restrict__ hay,
 
 template <typename IdType>
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
-_BatchRelabelByKey(torch::Tensor data_tensor, torch::Tensor data_ptr,
-                   torch::Tensor data_key) {
+_BatchRelabelByKey(torch::Tensor mapping_data_tensor,
+                   torch::Tensor mapping_data_ptr,
+                   torch::Tensor mapping_data_key, torch::Tensor data_tensor,
+                   torch::Tensor data_ptr, torch::Tensor data_key) {
   int64_t num_batchs = data_ptr.numel() - 1;
-  int64_t num_items = data_tensor.numel();
-  torch::Tensor hashmap_ptr = torch::empty_like(data_ptr);
+  int64_t num_mapping_items = mapping_data_tensor.numel();
+  torch::Tensor hashmap_ptr = torch::empty_like(mapping_data_ptr);
 
   // Create Hashmaps
   using it = thrust::counting_iterator<IdType>;
   thrust::for_each(
       it(0), it(num_batchs),
-      [in = data_ptr.data_ptr<IdType>(),
+      [in = mapping_data_ptr.data_ptr<IdType>(),
        out = hashmap_ptr.data_ptr<IdType>()] __device__(IdType i) mutable {
         out[i] = (1 << static_cast<uint32_t>(log2(in[i + 1] - in[i]) + 1));
       });
@@ -201,52 +203,54 @@ _BatchRelabelByKey(torch::Tensor data_tensor, torch::Tensor data_ptr,
 
   IdType MAX = std::numeric_limits<IdType>::max();
   torch::Tensor key_tensor =
-      torch::full(total_dir_size, -1, data_tensor.options());
+      torch::full(total_dir_size, -1, mapping_data_tensor.options());
   torch::Tensor index_tensor =
-      torch::full(total_dir_size, MAX, data_tensor.options());
+      torch::full(total_dir_size, MAX, mapping_data_tensor.options());
 
   constexpr int BLOCK_SIZE = 256;
-  int num_blocks = (num_items + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  int num_blocks = (num_mapping_items + BLOCK_SIZE - 1) / BLOCK_SIZE;
   dim3 blocks(BLOCK_SIZE);
   dim3 grids(num_blocks);
 
   _InsertHashmaps<IdType><<<grids, blocks>>>(
-      data_tensor.data_ptr<IdType>(), data_key.data_ptr<IdType>(),
-      key_tensor.data_ptr<IdType>(), index_tensor.data_ptr<IdType>(),
-      hashmap_ptr.data_ptr<IdType>(), num_items);
+      mapping_data_tensor.data_ptr<IdType>(),
+      mapping_data_key.data_ptr<IdType>(), key_tensor.data_ptr<IdType>(),
+      index_tensor.data_ptr<IdType>(), hashmap_ptr.data_ptr<IdType>(),
+      num_mapping_items);
 
   torch::Tensor prefix_tensor =
-      torch::empty(num_items + 1, data_tensor.options());
+      torch::empty(num_mapping_items + 1, mapping_data_tensor.options());
 
   _SearchHashmapsForPrefix<IdType><<<grids, blocks>>>(
-      data_tensor.data_ptr<IdType>(), data_key.data_ptr<IdType>(),
-      key_tensor.data_ptr<IdType>(), index_tensor.data_ptr<IdType>(),
-      hashmap_ptr.data_ptr<IdType>(), prefix_tensor.data_ptr<IdType>(),
-      num_items);
+      mapping_data_tensor.data_ptr<IdType>(),
+      mapping_data_key.data_ptr<IdType>(), key_tensor.data_ptr<IdType>(),
+      index_tensor.data_ptr<IdType>(), hashmap_ptr.data_ptr<IdType>(),
+      prefix_tensor.data_ptr<IdType>(), num_mapping_items);
 
   thrust::device_ptr<IdType> wrapper_prefix_tensor(
       static_cast<IdType*>(prefix_tensor.data_ptr<IdType>()));
   cub_exclusiveSum<IdType>(thrust::raw_pointer_cast(wrapper_prefix_tensor),
-                           num_items + 1);
+                           num_mapping_items + 1);
 
   torch::Tensor unique_tensor_ptr =
-      prefix_tensor.index({data_ptr.to(torch::kInt64)});
+      prefix_tensor.index({mapping_data_ptr.to(torch::kInt64)});
   // unique
-  int unique_size = wrapper_prefix_tensor[num_items];
+  int unique_size = wrapper_prefix_tensor[num_mapping_items];
   torch::Tensor unique_tensor =
-      torch::empty(unique_size, data_tensor.options());
+      torch::empty(unique_size, mapping_data_tensor.options());
   torch::Tensor value_tensor = torch::empty_like(index_tensor);
 
   _SearchHashmapsForUnique<IdType><<<grids, blocks>>>(
-      data_tensor.data_ptr<IdType>(), data_ptr.data_ptr<IdType>(),
-      data_key.data_ptr<IdType>(), key_tensor.data_ptr<IdType>(),
-      index_tensor.data_ptr<IdType>(), value_tensor.data_ptr<IdType>(),
-      hashmap_ptr.data_ptr<IdType>(), prefix_tensor.data_ptr<IdType>(),
-      unique_tensor.data_ptr<IdType>(), unique_tensor_ptr.data_ptr<IdType>(),
-      num_items);
+      mapping_data_tensor.data_ptr<IdType>(),
+      mapping_data_ptr.data_ptr<IdType>(), mapping_data_key.data_ptr<IdType>(),
+      key_tensor.data_ptr<IdType>(), index_tensor.data_ptr<IdType>(),
+      value_tensor.data_ptr<IdType>(), hashmap_ptr.data_ptr<IdType>(),
+      prefix_tensor.data_ptr<IdType>(), unique_tensor.data_ptr<IdType>(),
+      unique_tensor_ptr.data_ptr<IdType>(), num_mapping_items);
 
   // relabel
   torch::Tensor out_tensor = torch::empty_like(data_tensor);
+  int64_t num_items = data_tensor.numel();
 
   _SearchHashmapsForRelabel<IdType><<<grids, blocks>>>(
       data_tensor.data_ptr<IdType>(), data_key.data_ptr<IdType>(),
@@ -257,9 +261,13 @@ _BatchRelabelByKey(torch::Tensor data_tensor, torch::Tensor data_ptr,
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
-BatchRelabelByKeyCUDA(torch::Tensor data_tensor, torch::Tensor data_ptr,
-                      torch::Tensor data_key) {
-  return _BatchRelabelByKey<int64_t>(data_tensor, data_ptr, data_key);
+BatchRelabelByKeyCUDA(torch::Tensor mapping_data_tensor,
+                      torch::Tensor mapping_data_ptr,
+                      torch::Tensor mapping_data_key, torch::Tensor data_tensor,
+                      torch::Tensor data_ptr, torch::Tensor data_key) {
+  return _BatchRelabelByKey<int64_t>(mapping_data_tensor, mapping_data_ptr,
+                                     mapping_data_key, data_tensor, data_ptr,
+                                     data_key);
 }
 
 ///////////////////////////// BatchRelabel ////////////////////////////////
@@ -276,14 +284,26 @@ __global__ void _RepeatKernel(const IdType* pos, IdType* out, int64_t n_col,
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
-BatchRelabelCUDA(torch::Tensor data_tensor, torch::Tensor data_ptr) {
+BatchRelabelCUDA(torch::Tensor mapping_data_tensor,
+                 torch::Tensor mapping_data_ptr, torch::Tensor data_tensor,
+                 torch::Tensor data_ptr) {
   torch::Tensor data_key = torch::empty_like(data_tensor);
   dim3 block(128);
-  dim3 grid((data_tensor.numel() + block.x - 1) / block.x);
-  _RepeatKernel<int64_t><<<grid, block>>>(
-      data_ptr.data_ptr<int64_t>(), data_key.data_ptr<int64_t>(),
-      data_ptr.numel(), data_tensor.numel());
-  return _BatchRelabelByKey<int64_t>(data_tensor, data_ptr, data_key);
+  dim3 grid((data_key.numel() + block.x - 1) / block.x);
+  _RepeatKernel<int64_t><<<grid, block>>>(data_ptr.data_ptr<int64_t>(),
+                                          data_key.data_ptr<int64_t>(),
+                                          data_ptr.numel(), data_key.numel());
+
+  torch::Tensor mapping_data_key = torch::empty_like(mapping_data_tensor);
+  dim3 block2(128);
+  dim3 grid2((mapping_data_key.numel() + block.x - 1) / block.x);
+  _RepeatKernel<int64_t>
+      <<<grid2, block2>>>(mapping_data_ptr.data_ptr<int64_t>(),
+                          mapping_data_key.data_ptr<int64_t>(),
+                          mapping_data_ptr.numel(), mapping_data_key.numel());
+  return _BatchRelabelByKey<int64_t>(mapping_data_tensor, mapping_data_ptr,
+                                     mapping_data_key, data_tensor, data_ptr,
+                                     data_key);
 }
 
 }  // namespace impl

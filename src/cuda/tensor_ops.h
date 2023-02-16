@@ -56,11 +56,15 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchUniqueCUDA(
     torch::Tensor data_tensor, torch::Tensor data_ptr);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
-BatchRelabelByKeyCUDA(torch::Tensor data_tensor, torch::Tensor data_ptr,
-                      torch::Tensor data_key);
+BatchRelabelByKeyCUDA(torch::Tensor mapping_data_tensor,
+                      torch::Tensor mapping_data_ptr,
+                      torch::Tensor mapping_data_key, torch::Tensor data_tensor,
+                      torch::Tensor data_ptr, torch::Tensor data_key);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
-BatchRelabelCUDA(torch::Tensor data_tensor, torch::Tensor data_ptr);
+BatchRelabelCUDA(torch::Tensor mapping_data_tensor,
+                 torch::Tensor mapping_data_ptr, torch::Tensor data_tensor,
+                 torch::Tensor data_ptr);
 
 std::tuple<std::vector<torch::Tensor>, std::vector<torch::Tensor>>
 BatchSplit2CUDA(torch::Tensor data_tensor, torch::Tensor data_ptr_tensor,
