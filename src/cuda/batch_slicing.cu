@@ -186,7 +186,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _BatchCOOSlicing(
   using it = thrust::counting_iterator<IdType>;
   thrust::for_each(
       it(0), it(num_batchs),
-      [in = batch_ptr.data_ptr<IdType>(),
+      [in = neighbors_ptr.data_ptr<IdType>(),
        out = hashmap_ptr.data_ptr<IdType>()] __device__(IdType i) mutable {
         out[i] = 2 * (1 << static_cast<uint32_t>(log2(in[i + 1] - in[i]) + 1));
       });
