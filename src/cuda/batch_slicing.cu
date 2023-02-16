@@ -7,6 +7,10 @@
 
 namespace gs {
 namespace impl {
+inline __host__ __device__ int UpPower(int key) {
+  int ret = 1 << static_cast<uint32_t>(std::log2(key) + 1);
+  return ret;
+}
 
 __device__ inline uint32_t Hash32Shift(uint32_t key) {
   key = ~key + (key << 15);  // # key = (key << 15) - key - 1;
@@ -248,6 +252,67 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchCOOSlicingCUDA(
 
   return _BatchCOOSlicing<int64_t>(axis, coo_row, coo_col, batch_ptr, neigbhors,
                                    neighbors_ptr, neighbors_key);
+}
+
+template <typename IdType>
+__global__ void _COORowSlicingKernel(const IdType* const in_coo_row,
+                                     IdType* const key_buffer,
+                                     IdType* const value_buffer,
+                                     IdType* const out_mask,
+                                     const int num_items, const int dir_size) {
+  IdType tid = threadIdx.x + blockIdx.x * blockDim.x;
+  IdType stride = gridDim.x * blockDim.x;
+
+  NodeQueryHashmap<IdType> hashmap(key_buffer, value_buffer, dir_size);
+
+  while (tid < num_items) {
+    IdType value = hashmap.Query(in_coo_row[tid]);
+    out_mask[tid] = value != -1 ? 1 : 0;
+    tid += stride;
+  }
+}
+
+template <typename IdType>
+std::tuple<torch::Tensor, torch::Tensor> _COORowSlicing(torch::Tensor coo_row,
+                                                        torch::Tensor coo_col,
+                                                        torch::Tensor row_ids) {
+  int num_items = coo_row.numel();
+  int num_row_ids = row_ids.numel();
+
+  // construct NodeQueryHashMap
+  int dir_size = UpPower(num_row_ids) * 2;
+  torch::Tensor key_buffer = torch::full(dir_size, -1, row_ids.options());
+  torch::Tensor value_buffer = torch::full(dir_size, -1, row_ids.options());
+
+  using it = thrust::counting_iterator<IdType>;
+  thrust::for_each(thrust::device, it(0), it(num_row_ids),
+                   [key = row_ids.data_ptr<IdType>(),
+                    _key_buffer = key_buffer.data_ptr<IdType>(),
+                    _value_buffer = value_buffer.data_ptr<IdType>(),
+                    dir_size] __device__(IdType i) {
+                     NodeQueryHashmap<IdType> hashmap(_key_buffer,
+                                                      _value_buffer, dir_size);
+                     hashmap.Insert(key[i], i);
+                   });
+
+  torch::Tensor out_mask = torch::zeros_like(coo_row);
+
+  constexpr int TILE_SIZE = 16;
+  const dim3 block(256);
+  const dim3 grid((num_items + TILE_SIZE - 1) / TILE_SIZE);
+
+  CUDA_KERNEL_CALL((_COORowSlicingKernel<IdType>), grid, block,
+                   coo_row.data_ptr<IdType>(), key_buffer.data_ptr<IdType>(),
+                   value_buffer.data_ptr<IdType>(), out_mask.data_ptr<IdType>(),
+                   num_items, dir_size);
+
+  torch::Tensor select_index = torch::nonzero(out_mask).reshape(-1);
+  return {coo_row.index({select_index}), coo_col.index({select_index})};
+}
+
+std::tuple<torch::Tensor, torch::Tensor> COORowSlicingGlobalIdCUDA(
+    torch::Tensor coo_row, torch::Tensor coo_col, torch::Tensor row_ids) {
+  return _COORowSlicing<int64_t>(coo_row, coo_col, row_ids);
 }
 
 }  // namespace impl

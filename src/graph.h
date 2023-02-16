@@ -27,6 +27,7 @@ class Graph : public torch::CustomClassHolder {
   void SetCSC(std::shared_ptr<CSC> csc);
   void SetCSR(std::shared_ptr<CSR> csr);
   void SetCOO(std::shared_ptr<COO> coo);
+  void SetCOOByTensor(torch::Tensor row, torch::Tensor col);
   void SetData(torch::Tensor data);
   void SetValidCols(torch::Tensor val_cols);
   void SetValidRows(torch::Tensor val_rows);

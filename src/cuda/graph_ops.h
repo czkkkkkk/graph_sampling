@@ -25,7 +25,8 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COORowSlicingCUDA(
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 BatchCOORowSlicingCUDA(torch::Tensor coo_row, torch::Tensor coo_col,
-                       torch::Tensor row_ids, torch::Tensor indices_ptr, torch::Tensor nodeids_ptr);
+                       torch::Tensor row_ids, torch::Tensor indices_ptr,
+                       torch::Tensor nodeids_ptr);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 CSCColSamplingCUDA(torch::Tensor indptr, torch::Tensor indices, int64_t fanout,
@@ -62,7 +63,6 @@ std::pair<torch::Tensor, torch::Tensor> DCSC2COOCUDA(torch::Tensor indptr,
 std::vector<std::vector<torch::Tensor>> CSCSplitCUDA(
     torch::Tensor indptr, torch::Tensor indices,
     torch::optional<torch::Tensor> eid, int64_t split_size);
-
 
 }  // namespace impl
 }  // namespace gs

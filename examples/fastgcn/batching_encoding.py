@@ -18,7 +18,7 @@ nid = torch.cat([train_nid, val_nid])
 indptr, indices, _ = g.adj_sparse('csc')
 
 n_epoch = 5
-batch_size = 25600
+batch_size = 65536
 small_batch_size = 256
 num_batches = int((batch_size + small_batch_size - 1) / small_batch_size)
 fanouts = [500, 500]
@@ -43,6 +43,8 @@ for epoch in range(n_epoch):
     batch_layer_time_2 = 0
     for it, seeds in enumerate(tqdm(seedloader)):
         # torch.cuda.nvtx.range_push('sampling')
+        num_batches = int(
+            (batch_size + small_batch_size - 1) / small_batch_size)
         seeds_ptr = orig_seeds_ptr
         if it == len(seedloader) - 1:
             num_batches = int(
@@ -72,10 +74,12 @@ for epoch in range(n_epoch):
             # slicing
             coo_row, coo_col = subA.GetBatchCOO()
             # torch.cuda.nvtx.range_push('batch coo slice')
-            sub_coo_row, sub_coo_col, sub_coo_ptr = torch.ops.gs_ops.BatchCOOSlicing(
-                1, encoded_indices, coo_col, indices_ptr, selected, selected_ptr)
-            sub_coo_row = torch.ops.gs_ops.BatchDecode(
-                sub_coo_row, sub_coo_ptr)
+            sub_coo_row, sub_coo_col = torch.ops.gs_ops.COORowSlicingGlobalId(
+                encoded_indices, coo_col, selected)
+            sub_coo_row_batch_mask = sub_coo_row >> 48
+            sub_coo_ptr = torch.ops.gs_ops.GetBatchOffsets(
+                sub_coo_row_batch_mask, num_batches)
+            sub_coo_row = sub_coo_row - (sub_coo_row_batch_mask << 48)
             # torch.cuda.nvtx.range_pop()
 
             # relabel

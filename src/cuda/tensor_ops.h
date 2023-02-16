@@ -80,6 +80,9 @@ torch::Tensor BatchDecodeCUDA(torch::Tensor data_tensor,
                               torch::Tensor data_ptr);
 
 torch::Tensor GetBatchOffsets(torch::Tensor data_tensor, int64_t num_batches);
+
+std::tuple<torch::Tensor, torch::Tensor> COORowSlicingGlobalIdCUDA(
+    torch::Tensor coo_row, torch::Tensor coo_col, torch::Tensor row_ids);
 }  // namespace impl
 }  // namespace gs
 

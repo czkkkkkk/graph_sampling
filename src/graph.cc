@@ -99,6 +99,11 @@ void Graph::SetCSR(std::shared_ptr<CSR> csr) { csr_ = csr; }
 
 void Graph::SetCOO(std::shared_ptr<COO> coo) { coo_ = coo; }
 
+void Graph::SetCOOByTensor(torch::Tensor row, torch::Tensor col) {
+  coo_ = std::make_shared<COO>(
+      COO{row, col, coo_->e_ids, coo_->row_sorted, coo_->col_sorted});
+}
+
 void Graph::SetData(torch::Tensor data) { data_ = data; }
 
 void Graph::SetValidCols(torch::Tensor val_cols) { val_col_ids_ = val_cols; }
