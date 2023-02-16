@@ -42,6 +42,7 @@ for epoch in range(n_epoch):
     batch_layer_time_2 = 0
     for it, seeds in enumerate(tqdm(seedloader)):
         # torch.cuda.nvtx.range_push('sampling')
+        num_batchs = int((batch_size + small_batch_size - 1) / small_batch_size)
         seeds_ptr = orig_seeds_ptr
         if it == len(seedloader) - 1:
             num_batchs = int(
