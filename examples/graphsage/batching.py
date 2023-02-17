@@ -53,8 +53,10 @@ for epoch in range(n_epoch):
         for layer, fanout in enumerate(fanouts):
             torch.cuda.synchronize()
             layer_start = time.time()
+            # torch.cuda.nvtx.range_push('sampling')
             subA = A._CAPI_fused_columnwise_slicing_sampling(
                 seeds, fanout, False)
+            # torch.cuda.nvtx.range_pop()
             # torch.cuda.nvtx.range_push('getbatchcsc')
             indptr, indices, indices_ptr = subA.GetBatchCSC(seeds_ptr)
             # torch.cuda.nvtx.range_pop()
@@ -74,14 +76,14 @@ for epoch in range(n_epoch):
             indt = torch.ops.gs_ops.SplitByOffset(indices, indices_ptr)
             # torch.cuda.nvtx.range_pop()
 
-            for unique, indptr, indices in zip(unit, ptrt, indt):
-                block = create_block_from_csc(indptr,
-                                              indices,
-                                              torch.tensor([]),
-                                              num_src=unique.numel(),
-                                              num_dst=indptr.numel() - 1)
-                block.srcdata['_ID'] = unique
-                pass
+            # for unique, indptr, indices in zip(unit, ptrt, indt):
+            #     block = create_block_from_csc(indptr,
+            #                                   indices,
+            #                                   torch.tensor([]),
+            #                                   num_src=unique.numel(),
+            #                                   num_dst=indptr.numel() - 1)
+            #     block.srcdata['_ID'] = unique
+            #     pass
             seeds, seeds_ptr = unique_tensor, unique_tensor_ptr
             torch.cuda.synchronize()
             layer_end = time.time()
@@ -94,11 +96,58 @@ for epoch in range(n_epoch):
     layer_time[1].append(batch_layer_time_2)
     torch.cuda.synchronize()
     end = time.time()
+    print(end - begin)
     time_list.append(end - begin)
 
 print("w/ batching:", np.mean(time_list[2:]))
 print("w/ batching layer1:", np.mean(layer_time[0][2:]))
 print("w/ batching layer2:", np.mean(layer_time[1][2:]))
+
+time_list = []
+layer_time = [[], []]
+seedloader = SeedGenerator(nid, batch_size=batch_size,
+                           shuffle=False, drop_last=False)
+for epoch in range(n_epoch):
+    torch.cuda.synchronize()
+    begin = time.time()
+    batch_layer_time_1 = 0
+    batch_layer_time_2 = 0
+    for it, seeds in enumerate(tqdm(seedloader)):
+        # torch.cuda.nvtx.range_push('sampling')
+        for layer, fanout in enumerate(fanouts):
+            torch.cuda.synchronize()
+            layer_start = time.time()
+            # torch.cuda.nvtx.range_push('sampling')
+            subA = A._CAPI_fused_columnwise_slicing_sampling(
+                seeds, fanout, False)
+            # torch.cuda.nvtx.range_pop()
+            # torch.cuda.nvtx.range_push('relabel')
+            unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = subA._CAPI_relabel()
+            # torch.cuda.nvtx.range_pop()
+            # block = create_block_from_csc(format_tensor1,
+            #                               format_tensor2,
+            #                               torch.tensor([]),
+            #                               num_src=num_row,
+            #                               num_dst=num_col)
+            # block.srcdata['_ID'] = unique_tensor
+            seeds = unique_tensor
+            torch.cuda.synchronize()
+            layer_end = time.time()
+            if layer == 0:
+                batch_layer_time_1 += layer_end - layer_start
+            else:
+                batch_layer_time_2 += layer_end - layer_start
+        # torch.cuda.nvtx.range_pop()
+    layer_time[0].append(batch_layer_time_1)
+    layer_time[1].append(batch_layer_time_2)
+    torch.cuda.synchronize()
+    end = time.time()
+    print(end - begin)
+    time_list.append(end - begin)
+
+print("w/o batching large batchsize:", np.mean(time_list[2:]))
+print("w/o batching large batchsize layer1:", np.mean(layer_time[0][2:]))
+print("w/o batching large batchsize layer2:", np.mean(layer_time[1][2:]))
 
 time_list = []
 layer_time = [[], []]
@@ -110,18 +159,23 @@ for epoch in range(n_epoch):
     batch_layer_time_1 = 0
     batch_layer_time_2 = 0
     for it, seeds in enumerate(tqdm(seedloader)):
+        # torch.cuda.nvtx.range_push('sampling')
         for layer, fanout in enumerate(fanouts):
             torch.cuda.synchronize()
             layer_start = time.time()
+            # torch.cuda.nvtx.range_push('sampling')
             subA = A._CAPI_fused_columnwise_slicing_sampling(
                 seeds, fanout, False)
+            # torch.cuda.nvtx.range_pop()
+            # torch.cuda.nvtx.range_push('relabel')
             unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = subA._CAPI_relabel()
-            block = create_block_from_csc(format_tensor1,
-                                          format_tensor2,
-                                          torch.tensor([]),
-                                          num_src=num_row,
-                                          num_dst=num_col)
-            block.srcdata['_ID'] = unique_tensor
+            # torch.cuda.nvtx.range_pop()
+            # block = create_block_from_csc(format_tensor1,
+            #                               format_tensor2,
+            #                               torch.tensor([]),
+            #                               num_src=num_row,
+            #                               num_dst=num_col)
+            # block.srcdata['_ID'] = unique_tensor
             seeds = unique_tensor
             torch.cuda.synchronize()
             layer_end = time.time()
@@ -129,12 +183,14 @@ for epoch in range(n_epoch):
                 batch_layer_time_1 += layer_end - layer_start
             else:
                 batch_layer_time_2 += layer_end - layer_start
+        # torch.cuda.nvtx.range_pop()
     layer_time[0].append(batch_layer_time_1)
     layer_time[1].append(batch_layer_time_2)
     torch.cuda.synchronize()
     end = time.time()
+    print(end - begin)
     time_list.append(end - begin)
 
-print("w/o batching:", np.mean(time_list[2:]))
-print("w/o batching layer1:", np.mean(layer_time[0][2:]))
-print("w/o batching layer2:", np.mean(layer_time[1][2:]))
+print("w/o batching small batchsize:", np.mean(time_list[2:]))
+print("w/o batching small batchsize layer1:", np.mean(layer_time[0][2:]))
+print("w/o batching small batchsize layer2:", np.mean(layer_time[1][2:]))
