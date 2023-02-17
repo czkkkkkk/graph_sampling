@@ -15,10 +15,12 @@ probs = g.out_degrees().float().cuda()
 train_nid = splitted_idx['train'].cuda()
 val_nid = splitted_idx['valid'].cuda()
 nid = torch.cat([train_nid, val_nid])
+indexes = torch.randperm(nid.shape[0], device=nid.device)
+nid = nid[indexes].to('cuda')
 indptr, indices, _ = g.adj_sparse('csc')
 
 n_epoch = 5
-batch_size = 12800
+batch_size = 51200
 small_batch_size = 256
 num_batchs = int((batch_size + small_batch_size - 1) / small_batch_size)
 fanouts = [500, 500]
@@ -30,7 +32,7 @@ orig_seeds_ptr = torch.arange(num_batchs + 1, dtype=torch.int64,
                               device='cuda') * small_batch_size
 orig_seeds_ptr[-1] = batch_size
 
-# graphsage (batch)
+# fastgcn (batch)
 time_list = []
 layer_time = [[], []]
 seedloader = SeedGenerator(nid,

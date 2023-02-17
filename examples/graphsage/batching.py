@@ -14,6 +14,8 @@ g = g.long().to('cuda')
 train_nid = splitted_idx['train'].cuda()
 val_nid = splitted_idx['valid'].cuda()
 nid = torch.cat([train_nid, val_nid])
+indexes = torch.randperm(nid.shape[0], device=nid.device)
+nid = nid[indexes].to('cuda')
 indptr, indices, _ = g.adj_sparse('csc')
 
 n_epoch = 5
@@ -49,7 +51,6 @@ for epoch in range(n_epoch):
                 num_batchs + 1, dtype=torch.int64, device='cuda') * small_batch_size
             seeds_ptr[-1] = seeds.numel()
         for layer, fanout in enumerate(fanouts):
-            print(seeds.numel())
             torch.cuda.synchronize()
             layer_start = time.time()
             subA = A._CAPI_fused_columnwise_slicing_sampling(

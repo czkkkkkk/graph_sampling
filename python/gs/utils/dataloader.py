@@ -15,7 +15,8 @@ class SeedGenerator(object):
 
     def __iter__(self):
         if self.shuffle:
-            indexes = torch.randperm(self.data.shape[0], device=self.data.device)
+            indexes = torch.randperm(
+                self.data.shape[0], device=self.data.device)
             self.data = self.data[indexes].to('cuda')
 
         self.step = 0
@@ -32,7 +33,7 @@ class SeedGenerator(object):
             raise StopIteration
 
         ret = self.data[self.step * self.batch_size:(self.step + 1) *
-                        self.batch_size]
+                        self.batch_size].clone()
         self.step += 1
 
         return ret
