@@ -63,8 +63,17 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _BatchConcat(
     max_tensor_len = max(max_tensor_len, data_tensors[i].numel());
   }
 
-  thrust::device_vector<IdType*> d_data_tensor_ptrs = h_data_tensor_ptrs;
-  thrust::device_vector<IdType*> d_offset_tensor_ptrs = h_offset_tensor_ptrs;
+  IdType** d_data_tensor_ptrs =
+      reinterpret_cast<IdType**>(c10::cuda::CUDACachingAllocator::raw_alloc(
+          sizeof(IdType*) * num_segments));
+  cudaMemcpy(d_data_tensor_ptrs, h_data_tensor_ptrs.data(),
+             sizeof(IdType*) * num_segments, cudaMemcpyHostToDevice);
+
+  IdType** d_offset_tensor_ptrs =
+      reinterpret_cast<IdType**>(c10::cuda::CUDACachingAllocator::raw_alloc(
+          sizeof(IdType*) * num_segments));
+  cudaMemcpy(d_offset_tensor_ptrs, h_offset_tensor_ptrs.data(),
+             sizeof(IdType*) * num_segments, cudaMemcpyHostToDevice);
 
   torch::Tensor total_tensor_ptr = torch::empty(
       num_batchs + 1,
@@ -73,7 +82,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _BatchConcat(
   using it = thrust::counting_iterator<IdType>;
   thrust::for_each(
       it(0), it(num_batchs + 1),
-      [in = d_offset_tensor_ptrs.data(), num_segments,
+      [in = d_offset_tensor_ptrs, num_segments,
        out = total_tensor_ptr.data_ptr<IdType>()] __device__(IdType i) mutable {
         IdType sum = 0;
         for (int j = 0; j < num_segments; j++) {
@@ -95,11 +104,12 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _BatchConcat(
   dim3 blocks(BLOCK_SIZE);
   dim3 grid(num_blocks);
   _BatchConcatKernel<IdType><<<grid, blocks, num_batchs * sizeof(int64_t)>>>(
-      thrust::raw_pointer_cast(d_data_tensor_ptrs.data()),
-      thrust::raw_pointer_cast(d_offset_tensor_ptrs.data()),
-      total_tensor.data_ptr<IdType>(), key_tensor.data_ptr<IdType>(),
-      total_tensor_ptr.data_ptr<IdType>(), num_segments, num_batchs);
+      d_data_tensor_ptrs, d_offset_tensor_ptrs, total_tensor.data_ptr<IdType>(),
+      key_tensor.data_ptr<IdType>(), total_tensor_ptr.data_ptr<IdType>(),
+      num_segments, num_batchs);
 
+  c10::cuda::CUDACachingAllocator::raw_delete(d_data_tensor_ptrs);
+  c10::cuda::CUDACachingAllocator::raw_delete(d_offset_tensor_ptrs);
   return {total_tensor, key_tensor, total_tensor_ptr};
 }
 

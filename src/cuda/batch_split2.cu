@@ -53,15 +53,24 @@ std::tuple<std::vector<torch::Tensor>, std::vector<torch::Tensor>> _BatchSplit(
     h_out_ptr_tensors[i] = out_ptr_tensors[i].data_ptr<IdType>();
   }
 
-  thrust::device_vector<IdType*> d_out_tensors = h_out_tensors;
-  thrust::device_vector<IdType*> d_out_ptr_tensors = h_out_ptr_tensors;
+  IdType** d_out_tensors =
+      reinterpret_cast<IdType**>(c10::cuda::CUDACachingAllocator::raw_alloc(
+          sizeof(IdType*) * num_segments));
+  cudaMemcpy(d_out_tensors, h_out_tensors.data(),
+             sizeof(IdType*) * num_segments, cudaMemcpyHostToDevice);
+
+  IdType** d_out_ptr_tensors =
+      reinterpret_cast<IdType**>(c10::cuda::CUDACachingAllocator::raw_alloc(
+          sizeof(IdType*) * num_segments));
+  cudaMemcpy(d_out_ptr_tensors, h_out_ptr_tensors.data(),
+             sizeof(IdType*) * num_segments, cudaMemcpyHostToDevice);
 
   torch::Tensor out_ptr_managed_by_segments =
       torch::empty((num_segments + 1) * num_batchs, data_ptr_tensor.options());
 
   using it = thrust::counting_iterator<IdType>;
   thrust::for_each(it(0), it(num_batchs),
-                   [in = d_out_ptr_tensors.data(),
+                   [in = d_out_ptr_tensors,
                     out = out_ptr_managed_by_segments.data_ptr<IdType>(),
                     num_segments] __device__(IdType i) mutable {
                      IdType acc = 0;
@@ -79,10 +88,11 @@ std::tuple<std::vector<torch::Tensor>, std::vector<torch::Tensor>> _BatchSplit(
 
   _BatchSplitKernel<IdType><<<grid, blocks>>>(
       data_tensor.data_ptr<IdType>(), data_ptr_tensor.data_ptr<IdType>(),
-      data_key_tensor.data_ptr<IdType>(),
-      thrust::raw_pointer_cast(d_out_tensors.data()),
-      thrust::raw_pointer_cast(d_out_ptr_tensors.data()),
+      data_key_tensor.data_ptr<IdType>(), d_out_tensors, d_out_ptr_tensors,
       out_ptr_managed_by_segments.data_ptr<IdType>(), num_segments, num_items);
+
+  c10::cuda::CUDACachingAllocator::raw_delete(d_out_tensors);
+  c10::cuda::CUDACachingAllocator::raw_delete(d_out_ptr_tensors);
 
   return {out_tensors, out_ptr_tensors};
 }
