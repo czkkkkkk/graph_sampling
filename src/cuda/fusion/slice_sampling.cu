@@ -91,9 +91,12 @@ _FusedCSCColSlicingSampling(torch::Tensor indptr, torch::Tensor indices,
                             torch::Tensor column_ids, int64_t fanout,
                             bool replace) {
   int64_t num_items = column_ids.numel();
+  auto Id_option = (indptr.is_pinned())
+                       ? torch::dtype(indptr.dtype()).device(torch::kCUDA)
+                       : indptr.options();
 
   // compute indptr
-  auto sub_indptr = torch::empty(num_items + 1, indptr.options());
+  auto sub_indptr = torch::empty(num_items + 1, Id_option);
   using it = thrust::counting_iterator<IdType>;
   thrust::for_each(thrust::device, it(0), it(num_items),
                    [in = column_ids.data_ptr<IdType>(),
@@ -115,8 +118,8 @@ _FusedCSCColSlicingSampling(torch::Tensor indptr, torch::Tensor indices,
   thrust::device_ptr<IdType> item_prefix(
       static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
   int n_edges = item_prefix[num_items];  // cpu
-  auto sub_indices = torch::empty(n_edges, indices.options());
-  auto select_index = torch::empty(n_edges, indices.options());
+  auto sub_indices = torch::empty(n_edges, Id_option);
+  auto select_index = torch::empty(n_edges, Id_option);
 
   const uint64_t random_seed = 7777;
   dim3 block(16, 32);

@@ -10,15 +10,15 @@ torch.manual_seed(1)
 
 g, features, labels, n_classes, splitted_idx = load_ogb(
     'ogbn-products', '/home/ubuntu/gs-experiments/datasets')
-g = g.long().to('cuda')
 train_nid = splitted_idx['train'].cuda()
 val_nid = splitted_idx['valid'].cuda()
 nid = torch.cat([train_nid, val_nid])
 indexes = torch.randperm(nid.shape[0], device=nid.device)
 nid = nid[indexes].to('cuda')
 indptr, indices, _ = g.adj_sparse('csc')
+indptr, indices = indptr.pin_memory(), indices.pin_memory()
 
-n_epoch = 5
+n_epoch = 1
 batch_size = 65536
 small_batch_size = 256
 num_batchs = int((batch_size + small_batch_size - 1) / small_batch_size)
@@ -33,7 +33,6 @@ orig_seeds_ptr = torch.arange(
 # graphsage (batch)
 time_list = []
 layer_time = [[], []]
-print(nid)
 seedloader = SeedGenerator(nid, batch_size=batch_size,
                            shuffle=False, drop_last=False)
 for epoch in range(n_epoch):
@@ -42,7 +41,7 @@ for epoch in range(n_epoch):
     batch_layer_time_1 = 0
     batch_layer_time_2 = 0
     for it, seeds in enumerate(tqdm(seedloader)):
-        # torch.cuda.nvtx.range_push('sampling')
+        torch.cuda.nvtx.range_push('sampling')
         num_batchs = int(
             (batch_size + small_batch_size - 1) / small_batch_size)
         seeds_ptr = orig_seeds_ptr
@@ -55,28 +54,28 @@ for epoch in range(n_epoch):
         for layer, fanout in enumerate(fanouts):
             torch.cuda.synchronize()
             layer_start = time.time()
-            # torch.cuda.nvtx.range_push('sampling')
+            torch.cuda.nvtx.range_push('sampling')
             subA = A._CAPI_fused_columnwise_slicing_sampling(
                 seeds, fanout, False)
-            # torch.cuda.nvtx.range_pop()
-            # torch.cuda.nvtx.range_push('getbatchcsc')
+            torch.cuda.nvtx.range_pop()
+            torch.cuda.nvtx.range_push('getbatchcsc')
             indptr, indices, indices_ptr = subA.GetBatchCSC(seeds_ptr)
-            # torch.cuda.nvtx.range_pop()
-            # torch.cuda.nvtx.range_push('batchrelabel')
+            torch.cuda.nvtx.range_pop()
+            torch.cuda.nvtx.range_push('batchrelabel')
             data, data_key, data_ptr = torch.ops.gs_ops.BatchConcat(
                 [seeds, indices], [seeds_ptr, indices_ptr])
             unique_tensor, unique_tensor_ptr, relabel_data, relabel_data_ptr = torch.ops.gs_ops.BatchRelabelByKey(
                 data, data_ptr, data_key, data, data_ptr, data_key)
             torch.ops.gs_ops.BatchSplit(relabel_data, relabel_data_ptr, data_key,
                                         [seeds, indices], [seeds_ptr, indices_ptr])
-            # torch.cuda.nvtx.range_pop()
+            torch.cuda.nvtx.range_pop()
 
-            # torch.cuda.nvtx.range_push('splitbyoffsets')
+            torch.cuda.nvtx.range_push('splitbyoffsets')
             unit = torch.ops.gs_ops.SplitByOffset(unique_tensor,
                                                   unique_tensor_ptr)
             ptrt = torch.ops.gs_ops.IndptrSplitByOffset(indptr, seeds_ptr)
             indt = torch.ops.gs_ops.SplitByOffset(indices, indices_ptr)
-            # torch.cuda.nvtx.range_pop()
+            torch.cuda.nvtx.range_pop()
 
             # for unique, indptr, indices in zip(unit, ptrt, indt):
             #     block = create_block_from_csc(indptr,
@@ -92,7 +91,7 @@ for epoch in range(n_epoch):
                 batch_layer_time_1 += layer_end - layer_start
             else:
                 batch_layer_time_2 += layer_end - layer_start
-        # torch.cuda.nvtx.range_pop()
+        torch.cuda.nvtx.range_pop()
     layer_time[0].append(batch_layer_time_1)
     layer_time[1].append(batch_layer_time_2)
     torch.cuda.synchronize()
@@ -114,17 +113,17 @@ for epoch in range(n_epoch):
     batch_layer_time_1 = 0
     batch_layer_time_2 = 0
     for it, seeds in enumerate(tqdm(seedloader)):
-        # torch.cuda.nvtx.range_push('sampling')
+        torch.cuda.nvtx.range_push('sampling')
         for layer, fanout in enumerate(fanouts):
             torch.cuda.synchronize()
             layer_start = time.time()
-            # torch.cuda.nvtx.range_push('sampling')
+            torch.cuda.nvtx.range_push('sampling')
             subA = A._CAPI_fused_columnwise_slicing_sampling(
                 seeds, fanout, False)
-            # torch.cuda.nvtx.range_pop()
-            # torch.cuda.nvtx.range_push('relabel')
+            torch.cuda.nvtx.range_pop()
+            torch.cuda.nvtx.range_push('relabel')
             unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = subA._CAPI_relabel()
-            # torch.cuda.nvtx.range_pop()
+            torch.cuda.nvtx.range_pop()
             # block = create_block_from_csc(format_tensor1,
             #                               format_tensor2,
             #                               torch.tensor([]),
@@ -138,7 +137,7 @@ for epoch in range(n_epoch):
                 batch_layer_time_1 += layer_end - layer_start
             else:
                 batch_layer_time_2 += layer_end - layer_start
-        # torch.cuda.nvtx.range_pop()
+        torch.cuda.nvtx.range_pop()
     layer_time[0].append(batch_layer_time_1)
     layer_time[1].append(batch_layer_time_2)
     torch.cuda.synchronize()
@@ -160,17 +159,17 @@ for epoch in range(n_epoch):
     batch_layer_time_1 = 0
     batch_layer_time_2 = 0
     for it, seeds in enumerate(tqdm(seedloader)):
-        # torch.cuda.nvtx.range_push('sampling')
+        torch.cuda.nvtx.range_push('sampling')
         for layer, fanout in enumerate(fanouts):
             torch.cuda.synchronize()
             layer_start = time.time()
-            # torch.cuda.nvtx.range_push('sampling')
+            torch.cuda.nvtx.range_push('sampling')
             subA = A._CAPI_fused_columnwise_slicing_sampling(
                 seeds, fanout, False)
-            # torch.cuda.nvtx.range_pop()
-            # torch.cuda.nvtx.range_push('relabel')
+            torch.cuda.nvtx.range_pop()
+            torch.cuda.nvtx.range_push('relabel')
             unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = subA._CAPI_relabel()
-            # torch.cuda.nvtx.range_pop()
+            torch.cuda.nvtx.range_pop()
             # block = create_block_from_csc(format_tensor1,
             #                               format_tensor2,
             #                               torch.tensor([]),
@@ -184,7 +183,7 @@ for epoch in range(n_epoch):
                 batch_layer_time_1 += layer_end - layer_start
             else:
                 batch_layer_time_2 += layer_end - layer_start
-        # torch.cuda.nvtx.range_pop()
+        torch.cuda.nvtx.range_pop()
     layer_time[0].append(batch_layer_time_1)
     layer_time[1].append(batch_layer_time_2)
     torch.cuda.synchronize()
@@ -192,6 +191,6 @@ for epoch in range(n_epoch):
     print(end - begin)
     time_list.append(end - begin)
 
-print("w/o batching small batchsize:", np.mean(time_list[2:]))
-print("w/o batching small batchsize layer1:", np.mean(layer_time[0][2:]))
-print("w/o batching small batchsize layer2:", np.mean(layer_time[1][2:]))
+print("w/o batching:", np.mean(time_list[2:]))
+print("w/o batching layer1:", np.mean(layer_time[0][2:]))
+print("w/o batching layer2:", np.mean(layer_time[1][2:]))

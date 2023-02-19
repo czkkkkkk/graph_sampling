@@ -292,7 +292,6 @@ Graph::BatchSlicing(torch::Tensor selected_node_ids, int64_t axis,
   torch::optional<torch::Tensor> e_ids, new_col_ids, new_row_ids, new_val_cols,
       new_val_rows;
   int64_t new_num_cols, new_num_rows, new_num_edges;
-  bool with_coo = output_format & _COO;
 
   if (axis == 0) {
     LOG(FATAL) << "batch slicing just suppurt row slicing now";
@@ -491,12 +490,17 @@ c10::intrusive_ptr<Graph> Graph::ColumnwiseFusedSlicingAndSampling(
   ret->SetCSC(csc_ptr);
   ret->SetNumEdges(csc_ptr->indices.numel());
   if (data_.has_value()) {
-    if (csc_->e_ids.has_value()) {
-      out_data =
-          data_.value().index({csc_->e_ids.value().index({select_index})});
-    } else {
-      out_data = data_.value().index({select_index});
-    }
+    torch::Tensor out_data, data_index;
+    if (csc_->e_ids.has_value())
+      data_index =
+          (csc_->e_ids.value().is_pinned())
+              ? impl::IndexSelectCPUFromGPU(csc_->e_ids.value(), select_index)
+              : csc_->e_ids.value().index({select_index});
+    else
+      data_index = select_index;
+    out_data = (data_.value().is_pinned())
+                   ? impl::IndexSelectCPUFromGPU(data_.value(), data_index)
+                   : data_.value().index({data_index});
     ret->SetData(out_data);
   }
   return ret;
@@ -856,7 +860,8 @@ std::vector<c10::intrusive_ptr<Graph>> Graph::Split(int64_t split_size) {
   auto ret_vec =
       impl::CSCSplitCUDA(csc_->indptr, csc_->indices, csc_->e_ids, split_size);
   indptr = ret_vec[0], indices = ret_vec[1], eid = ret_vec[2];
-  for (int i = 0; i < indptr.size(); ++i) {
+  int64_t num_res = indptr.size();
+  for (int i = 0; i < num_res; ++i) {
     if (csc_->e_ids.has_value())
       csc_ptr = std::make_shared<CSC>(CSC{indptr[i], indices[i], eid[i]});
     else
