@@ -35,20 +35,19 @@ class SAGEConv(nn.Module):
 
 
 class ConvModel(nn.Module):
-    def __init__(self, in_size, hid_size, out_size, feat_device, conv=SAGEConv):
+    def __init__(self, in_size, hid_size, out_size, num_layers, conv=SAGEConv):
         super().__init__()
         self.layers = nn.ModuleList()
-        # three-layer Conv-mean
-        self.layers.append(conv(in_size, hid_size))
-        self.layers.append(conv(hid_size, out_size))
+        self.layers.append(SAGEConv(in_size, hid_size))
+        for i in range(num_layers - 2):
+            self.layers.append(SAGEConv(hid_size, hid_size))
+        self.layers.append(SAGEConv(hid_size, out_size))
         self.dropout = nn.Dropout(0.5)
         self.hid_size = hid_size
         self.out_size = out_size
-        self.feat_device = feat_device
         self.conv = conv
 
-    def forward(self, blocks, x):
-        h = x.to('cuda') if self.feat_device == 'cpu' else x
+    def forward(self, blocks, h):
         for l, (layer, block) in enumerate(zip(self.layers, blocks)):
             if self.conv == GraphConv:
                 h = layer(block, h, block.edata['w'])
@@ -76,8 +75,8 @@ class ConvModel(nn.Module):
             for input_nodes, output_nodes, blocks in tqdm.tqdm(dataloader):
                 block = blocks[0].to(device)
                 x = feat[input_nodes].to(device)
-                w_block = None if w is None else w[block.edata[dgl.EID]].to(device)
-                h = layer(blocks[0], x, w_block)
+                w_block = None if w is None else w[block.edata[dgl.EID]]
+                h = layer(blocks[0], x, w_block.to(device))
                 if l != len(self.layers) - 1:
                     h = F.relu(h)
                     h = self.dropout(h)
