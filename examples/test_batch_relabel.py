@@ -17,3 +17,11 @@ key_tensor = torch.tensor([0 for _ in range(5)] +
 for i in torch.ops.gs_ops.BatchRelabelByKey(data1, offset_ptr1, key_tensor1,
                                             data, offset_ptr, key_tensor):
     print(i)
+
+for i in torch.ops.gs_ops.BatchCSRRelabelByKey(data1, offset_ptr1, key_tensor1,
+                                               data, offset_ptr, key_tensor):
+    print(i)
+
+for i in torch.ops.gs_ops.BatchCSRRelabel(data1, offset_ptr1, data,
+                                          offset_ptr):
+    print(i)

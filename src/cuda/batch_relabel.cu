@@ -434,43 +434,27 @@ __global__ void _2TensorSearchHashmapsForUnique(
 
 template <typename IdType>
 __global__ void _2TensorSearchHashmapsForRelabel(
-    IdType* __restrict__ data1, IdType* __restrict__ data1_key,
-    IdType* __restrict__ out_data1, IdType* __restrict__ data2,
-    IdType* __restrict__ data2_key, IdType* __restrict__ out_data2,
-    IdType* __restrict__ hashmap_key_tensor,
+    IdType* __restrict__ data2, IdType* __restrict__ data2_key,
+    IdType* __restrict__ out_data2, IdType* __restrict__ hashmap_key_tensor,
     IdType* __restrict__ hashmap_value_tensor, IdType* __restrict__ hashmap_ptr,
-    int64_t data1_len, int64_t num_items) {
+    int64_t data2_len) {
   int64_t tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-  for (int64_t index = tid; index < num_items;
+  for (int64_t index = tid; index < data2_len;
        index += gridDim.x * blockDim.x) {
-    if (index < data1_len) {
-      // search data1
-      int64_t batch_index = data1_key[index];
-      int64_t hashmap_begin = hashmap_ptr[batch_index];
-      int64_t dir_size = hashmap_ptr[batch_index + 1] - hashmap_begin;
-      RelabelHashmap<IdType> table(hashmap_key_tensor + hashmap_begin,
-                                   hashmap_value_tensor + hashmap_begin,
-                                   dir_size);
-      out_data1[index] = table.SearchForValue(data1[index]);
-
-    } else {
-      // search data2
-      int64_t local_index = index - data1_len;
-      int64_t batch_index = data2_key[local_index];
-      int64_t hashmap_begin = hashmap_ptr[batch_index];
-      int64_t dir_size = hashmap_ptr[batch_index + 1] - hashmap_begin;
-      RelabelHashmap<IdType> table(hashmap_key_tensor + hashmap_begin,
-                                   hashmap_value_tensor + hashmap_begin,
-                                   dir_size);
-      out_data2[local_index] = table.SearchForValue(data2[local_index]);
-    }
+    // search data2
+    int64_t batch_index = data2_key[index];
+    int64_t hashmap_begin = hashmap_ptr[batch_index];
+    int64_t dir_size = hashmap_ptr[batch_index + 1] - hashmap_begin;
+    RelabelHashmap<IdType> table(hashmap_key_tensor + hashmap_begin,
+                                 hashmap_value_tensor + hashmap_begin,
+                                 dir_size);
+    out_data2[index] = table.SearchForValue(data2[index]);
   }
 }
 
 template <typename IdType>
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor,
-           torch::Tensor, torch::Tensor>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 _BatchCSRRelabelByKey(torch::Tensor seeds, torch::Tensor seeds_ptr,
                       torch::Tensor seeds_key, torch::Tensor indices,
                       torch::Tensor indices_ptr, torch::Tensor indices_key) {
@@ -492,8 +476,6 @@ _BatchCSRRelabelByKey(torch::Tensor seeds, torch::Tensor seeds_ptr,
   thrust::device_ptr<IdType> wrapper_hashmap_ptr(
       static_cast<IdType*>(hashmap_ptr.data_ptr<IdType>()));
   IdType total_dir_size = wrapper_hashmap_ptr[num_batchs];
-
-  printf("total_dir_size %ld\n", total_dir_size);
 
   IdType MAX = std::numeric_limits<IdType>::max();
   torch::Tensor key_tensor = torch::full(total_dir_size, -1, seeds.options());
@@ -544,25 +526,45 @@ _BatchCSRRelabelByKey(torch::Tensor seeds, torch::Tensor seeds_ptr,
       prefix_tensor.data_ptr<IdType>(), unique_tensor.data_ptr<IdType>(),
       unique_tensor_ptr.data_ptr<IdType>(), seeds.numel(), num_items);
 
-  // Relabel
-  torch::Tensor out_seeds = torch::empty_like(seeds);
+  // Relabel indices
   torch::Tensor out_indices = torch::empty_like(indices);
 
-  _2TensorSearchHashmapsForRelabel<IdType><<<grids, blocks>>>(
-      seeds.data_ptr<IdType>(), seeds_key.data_ptr<IdType>(),
-      out_seeds.data_ptr<IdType>(), indices.data_ptr<IdType>(),
-      indices_key.data_ptr<IdType>(), out_indices.data_ptr<IdType>(),
-      key_tensor.data_ptr<IdType>(), value_tensor.data_ptr<IdType>(),
-      hashmap_ptr.data_ptr<IdType>(), seeds.numel(), num_items);
-  return {unique_tensor, unique_tensor_ptr, out_seeds,
-          seeds_ptr,     out_indices,       indices_ptr};
+  dim3 blocks_relabel(BLOCK_SIZE);
+  dim3 grids_relabel((indices.numel() + BLOCK_SIZE - 1) / BLOCK_SIZE);
+
+  _2TensorSearchHashmapsForRelabel<IdType><<<grids_relabel, blocks_relabel>>>(
+      indices.data_ptr<IdType>(), indices_key.data_ptr<IdType>(),
+      out_indices.data_ptr<IdType>(), key_tensor.data_ptr<IdType>(),
+      value_tensor.data_ptr<IdType>(), hashmap_ptr.data_ptr<IdType>(),
+      indices.numel());
+  return {unique_tensor, unique_tensor_ptr, out_indices, indices_ptr};
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor,
-           torch::Tensor, torch::Tensor>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 BatchCSRRelabelByKeyCUDA(torch::Tensor seeds, torch::Tensor seeds_ptr,
                          torch::Tensor seeds_key, torch::Tensor indices,
                          torch::Tensor indices_ptr, torch::Tensor indices_key) {
+  return _BatchCSRRelabelByKey<int64_t>(seeds, seeds_ptr, seeds_key, indices,
+                                        indices_ptr, indices_key);
+}
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+BatchCSRRelabelCUDA(torch::Tensor seeds, torch::Tensor seeds_ptr,
+                    torch::Tensor indices, torch::Tensor indices_ptr) {
+  torch::Tensor seeds_key = torch::empty_like(seeds);
+  dim3 block(128);
+  dim3 grid((seeds_key.numel() + block.x - 1) / block.x);
+  _RepeatKernel<int64_t><<<grid, block>>>(seeds_ptr.data_ptr<int64_t>(),
+                                          seeds_key.data_ptr<int64_t>(),
+                                          seeds_ptr.numel(), seeds_key.numel());
+
+  torch::Tensor indices_key = torch::empty_like(indices);
+  dim3 block2(128);
+  dim3 grid2((indices_key.numel() + block.x - 1) / block.x);
+  _RepeatKernel<int64_t><<<grid2, block2>>>(
+      indices_ptr.data_ptr<int64_t>(), indices_key.data_ptr<int64_t>(),
+      indices_ptr.numel(), indices_key.numel());
+
   return _BatchCSRRelabelByKey<int64_t>(seeds, seeds_ptr, seeds_key, indices,
                                         indices_ptr, indices_key);
 }
