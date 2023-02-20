@@ -217,5 +217,65 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchUniqueCUDA(
       data_ptr.numel(), data_tensor.numel());
   return _BatchUniqueByKey<int64_t>(data_tensor, data_ptr, data_key);
 }
+
+///////////////////////////// BatchUnique2 ////////////////////////////////
+template <typename IdType>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _BatchUniqueByKey2(
+    torch::Tensor data, torch::Tensor data_ptr, torch::Tensor data_key) {
+  torch::Tensor segment_sorted_data = torch::empty_like(data);
+  int64_t num_segments = data_ptr.numel() - 1;
+  int64_t num_items = data.numel();
+
+  cub_segmentSort<IdType>(data.data_ptr<IdType>(),
+                          segment_sorted_data.data_ptr<IdType>(),
+                          data_ptr.data_ptr<IdType>(), num_items, num_segments);
+
+  torch::Tensor unique_data = torch::empty_like(segment_sorted_data);
+  torch::Tensor unique_data_key = torch::empty_like(data_key);
+
+  int64_t* d_num_selected_out = reinterpret_cast<int64_t*>(
+      c10::cuda::CUDACachingAllocator::raw_alloc(sizeof(int64_t)));
+
+  cub_uniqueByKey<IdType, IdType>(
+      segment_sorted_data.data_ptr<IdType>(), unique_data.data_ptr<IdType>(),
+      data_key.data_ptr<IdType>(), unique_data_key.data_ptr<IdType>(),
+      num_items, d_num_selected_out);
+
+  thrust::device_ptr<int64_t> wrapper_d_num_selected_out(d_num_selected_out);
+  int64_t num_unique = wrapper_d_num_selected_out[0];
+
+  torch::Tensor narrow_unique_tensor = unique_data.slice(0, 0, num_unique, 1);
+  torch::Tensor narrow_unique_tensor_key =
+      unique_data_key.slice(0, 0, num_unique, 1);
+
+  torch::Tensor narrow_unique_tensor_ptr = torch::zeros_like(data_ptr);
+
+  dim3 block(128);
+  dim3 grid((num_segments + block.x - 1) / block.x);
+  _SortedSearchKernelUpperBound<IdType>
+      <<<grid, block>>>(narrow_unique_tensor_key.data_ptr<IdType>(),
+                        narrow_unique_tensor_key.numel(), num_segments,
+                        narrow_unique_tensor_ptr.data_ptr<IdType>() + 1);
+
+  return {narrow_unique_tensor, narrow_unique_tensor_ptr,
+          narrow_unique_tensor_key};
+}
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchUniqueByKey2CUDA(
+    torch::Tensor data, torch::Tensor data_ptr, torch::Tensor data_key) {
+  return _BatchUniqueByKey2<int64_t>(data, data_ptr, data_key);
+}
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchUnique2CUDA(
+    torch::Tensor data, torch::Tensor data_ptr) {
+  torch::Tensor data_key = torch::empty_like(data);
+  dim3 block(128);
+  dim3 grid((data.numel() + block.x - 1) / block.x);
+  _RepeatKernel<int64_t><<<grid, block>>>(data_ptr.data_ptr<int64_t>(),
+                                          data_key.data_ptr<int64_t>(),
+                                          data_ptr.numel(), data.numel());
+  return _BatchUniqueByKey2<int64_t>(data, data_ptr, data_key);
+}
+
 }  // namespace impl
 }  // namespace gs

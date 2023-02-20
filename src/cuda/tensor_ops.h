@@ -55,6 +55,12 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchUniqueByKeyCUDA(
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchUniqueCUDA(
     torch::Tensor data_tensor, torch::Tensor data_ptr);
 
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchUniqueByKey2CUDA(
+    torch::Tensor data, torch::Tensor data_ptr, torch::Tensor data_key);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchUnique2CUDA(
+    torch::Tensor data, torch::Tensor data_ptr);
+
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 BatchRelabelByKeyCUDA(torch::Tensor mapping_data_tensor,
                       torch::Tensor mapping_data_ptr,

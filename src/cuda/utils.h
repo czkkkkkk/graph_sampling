@@ -138,6 +138,43 @@ void cub_consecutiveUnique(IdType* d_in, IdType* d_out,
   c10::cuda::CUDACachingAllocator::raw_delete(d_temp_storage);
 }
 
+template <typename KeyType, typename ValueType>
+void cub_uniqueByKey(KeyType* d_keys_in, KeyType* d_keys_out,
+                     ValueType* d_values_in, ValueType* d_values_out,
+                     int64_t num_items, int64_t* d_num_selected_out) {
+  void* d_temp_storage = NULL;
+  size_t temp_storage_bytes = 0;
+  cub::DeviceSelect::UniqueByKey(d_temp_storage, temp_storage_bytes, d_keys_in,
+                                 d_values_in, d_keys_out, d_values_out,
+                                 d_num_selected_out, num_items);
+  // Allocate temporary storage
+  d_temp_storage =
+      c10::cuda::CUDACachingAllocator::raw_alloc(temp_storage_bytes);
+  // Run sorting operation
+  cub::DeviceSelect::UniqueByKey(d_temp_storage, temp_storage_bytes, d_keys_in,
+                                 d_values_in, d_keys_out, d_values_out,
+                                 d_num_selected_out, num_items);
+  c10::cuda::CUDACachingAllocator::raw_delete(d_temp_storage);
+}
+
+template <typename IdType>
+void cub_segmentSort(IdType* d_keys_in, IdType* d_keys_out, IdType* d_offsets,
+                     int64_t num_items, int64_t num_segments) {
+  void* d_temp_storage = NULL;
+  size_t temp_storage_bytes = 0;
+  cub::DeviceSegmentedRadixSort::SortKeys(
+      d_temp_storage, temp_storage_bytes, d_keys_in, d_keys_out, num_items,
+      num_segments, d_offsets, d_offsets + 1);
+  // Allocate temporary storage
+  d_temp_storage =
+      c10::cuda::CUDACachingAllocator::raw_alloc(temp_storage_bytes);
+  // Run sorting operation
+  cub::DeviceSegmentedRadixSort::SortKeys(
+      d_temp_storage, temp_storage_bytes, d_keys_in, d_keys_out, num_items,
+      num_segments, d_offsets, d_offsets + 1);
+  c10::cuda::CUDACachingAllocator::raw_delete(d_temp_storage);
+}
+
 /*! \brief Calculate the number of threads needed given the dimension length.
  *
  * It finds the biggest number that is smaller than min(dim, max_nthrs)
