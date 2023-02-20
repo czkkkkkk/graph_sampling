@@ -72,6 +72,12 @@ BatchRelabelCUDA(torch::Tensor mapping_data_tensor,
                  torch::Tensor mapping_data_ptr, torch::Tensor data_tensor,
                  torch::Tensor data_ptr);
 
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor,
+           torch::Tensor, torch::Tensor>
+BatchCSRRelabelByKeyCUDA(torch::Tensor seeds, torch::Tensor seeds_ptr,
+                         torch::Tensor seeds_key, torch::Tensor indices,
+                         torch::Tensor indices_ptr, torch::Tensor indices_key);
+
 std::tuple<std::vector<torch::Tensor>, std::vector<torch::Tensor>>
 BatchSplit2CUDA(torch::Tensor data_tensor, torch::Tensor data_ptr_tensor,
                 torch::Tensor data_key_tensor,
