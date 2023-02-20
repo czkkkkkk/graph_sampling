@@ -64,8 +64,6 @@ TORCH_LIBRARY(gs_ops, m) {
   m.def("BatchUniqueByKey", &gs::impl::BatchUniqueByKeyCUDA);
   m.def("BatchUnique2", &gs::impl::BatchUnique2CUDA);
   m.def("BatchUniqueByKey2", &gs::impl::BatchUniqueByKey2CUDA);
-  m.def("BatchRelabelByKey", &gs::impl::BatchRelabelByKeyCUDA);
-  m.def("BatchRelabel", &gs::impl::BatchRelabelCUDA);
   m.def("BatchCSRRelabelByKey", &gs::impl::BatchCSRRelabelByKeyCUDA);
   m.def("BatchCSRRelabel", &gs::impl::BatchCSRRelabelCUDA);
   m.def("BatchCOORelabelByKey", &gs::impl::BatchCOORelabelByKeyCUDA);
