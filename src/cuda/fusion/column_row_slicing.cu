@@ -1,3 +1,4 @@
+#include <thrust/execution_policy.h>
 #include "../atomic.h"
 #include "../cuda_common.h"
 #include "../utils.h"

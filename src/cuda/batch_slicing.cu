@@ -1,4 +1,5 @@
 #include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
 #include "atomic.h"
 #include "cuda_common.h"
