@@ -9,7 +9,8 @@ from tqdm import tqdm
 torch.manual_seed(1)
 
 g, features, labels, n_classes, splitted_idx = load_ogb(
-    'ogbn-products', '/home/gpzlx1/.dgl')
+    'ogbn-products','/home/ubuntu/.dgl')
+# g, features, labels, n_classes, splitted_idx = load_reddit()
 g = g.long().to('cuda')
 train_nid = splitted_idx['train'].cuda()
 val_nid = splitted_idx['valid'].cuda()
@@ -99,9 +100,10 @@ for epoch in range(n_epoch):
     print(end - begin)
     time_list.append(end - begin)
 
-print("w/ batching:", np.mean(time_list[2:]))
+
 print("w/ batching layer1:", np.mean(layer_time[0][2:]))
 print("w/ batching layer2:", np.mean(layer_time[1][2:]))
+print("w/ batching:", np.mean(time_list[2:]))
 
 time_list = []
 layer_time = [[], []]
@@ -148,9 +150,10 @@ for epoch in range(n_epoch):
     print(end - begin)
     time_list.append(end - begin)
 
-print("w/o batching large batchsize:", np.mean(time_list[2:]))
+
 print("w/o batching large batchsize layer1:", np.mean(layer_time[0][2:]))
 print("w/o batching large batchsize layer2:", np.mean(layer_time[1][2:]))
+print("w/o batching large batchsize:", np.mean(time_list[2:]))
 
 time_list = []
 layer_time = [[], []]
@@ -197,6 +200,6 @@ for epoch in range(n_epoch):
     print(end - begin)
     time_list.append(end - begin)
 
-print("w/o batching small batchsize:", np.mean(time_list[2:]))
 print("w/o batching small batchsize layer1:", np.mean(layer_time[0][2:]))
 print("w/o batching small batchsize layer2:", np.mean(layer_time[1][2:]))
+print("w/o batching small batchsize:", np.mean(time_list[2:]))
