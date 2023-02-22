@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from dgl.utils import gather_pinned_tensor_rows
 import gs
-from gs.utils import SeedGenerator, load_reddit, load_ogb, ConvModel, create_block_from_csc
+from gs.utils import SeedGenerator, load_reddit, load_ogb, ConvModel, create_block_from_coo
 import numpy as np
 import time
 import tqdm
@@ -15,11 +15,16 @@ def compute_acc(pred, label):
     return (pred.argmax(1) == label).float().mean()
 
 
-def sampler(A: gs.Graph, seeds, fanouts):
+def sampler(A: gs.Graph, seeds, probs, fanouts):
     blocks_tuple = []
     output_nodes = seeds
     for fanout in fanouts:
-        subA = A._CAPI_fused_columnwise_slicing_sampling(seeds, fanout, False)
+        subA = A._CAPI_slicing(seeds, 0, gs._CSC, gs._CSC + gs._COO, False)
+        neighbors = subA._CAPI_get_valid_rows()
+        node_probs = probs[neighbors]
+        selected, _ = torch.ops.gs_ops.list_sampling_with_probs(
+            neighbors, node_probs, fanout, False)
+        subA = subA._CAPI_slicing(selected, 1, gs._COO, gs._COO, False)
         unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = subA._CAPI_relabel()
         blocks_tuple.append((format_tensor1, format_tensor2, num_row, num_col))
         seeds = unique_tensor
@@ -38,11 +43,13 @@ def train(dataset, args):
     train_nid, val_nid = train_nid.to(device), val_nid.to(device)
     features, labels = features.to(device), labels.to(device)
     csc_indptr, csc_indices, edge_ids = g.adj_sparse('csc')
+    probs = g.out_degrees().float().to(device)
     if use_uva and device == 'cpu':
         features, labels = features.pin_memory(), labels.pin_memory()
         csc_indptr = csc_indptr.pin_memory()
         csc_indices = csc_indices.pin_memory()
         train_nid, val_nid = train_nid.pin_memory(), val_nid.pin_memory()
+        probs = probs.pin_memory()
     A = gs.Graph(False)
     A._CAPI_load_csc(csc_indptr, csc_indices)
     print("Check load successfully:", A._CAPI_metadata(), '\n')
@@ -79,15 +86,14 @@ def train(dataset, args):
         for it, seeds in enumerate(tqdm.tqdm(train_seedloader)):
             seeds = seeds.to('cuda')
             input_nodes, output_nodes, blocks_tuple = sampler(
-                A, seeds, fanouts)
+                A, seeds, probs, fanouts)
             torch.cuda.synchronize()
             sample_time += time.time() - tic
 
             blocks = []
             for block_t in blocks_tuple:
-                block = create_block_from_csc(block_t[0],
+                block = create_block_from_coo(block_t[0],
                                               block_t[1],
-                                              torch.tensor([]),
                                               num_src=block_t[2],
                                               num_dst=block_t[3])
                 blocks.insert(0, block.to('cuda'))
@@ -123,16 +129,15 @@ def train(dataset, args):
             for it, seeds in enumerate(tqdm.tqdm(val_seedloader)):
                 seeds = seeds.to('cuda')
                 input_nodes, output_nodes, blocks_tuple = sampler(
-                    A, seeds, fanouts)
+                    A, seeds, probs, fanouts)
                 torch.cuda.synchronize()
                 sample_time += time.time() - tic
 
                 tic = time.time()
                 blocks = []
                 for block_t in blocks_tuple:
-                    block = create_block_from_csc(block_t[0],
+                    block = create_block_from_coo(block_t[0],
                                                   block_t[1],
-                                                  torch.tensor([]),
                                                   num_src=block_t[2],
                                                   num_dst=block_t[3])
                     blocks.insert(0, block.to('cuda'))
@@ -185,7 +190,7 @@ if __name__ == '__main__':
                         help="which dataset to load for training")
     parser.add_argument("--batchsize", type=int, default=1024,
                         help="batch size for training")
-    parser.add_argument("--samples", default='25,15',
+    parser.add_argument("--samples", default='2000,2000',
                         help="sample size for each layer")
     parser.add_argument("--num-workers", type=int, default=0,
                         help="numbers of workers for sampling, must be 0 when gpu or uva is used")

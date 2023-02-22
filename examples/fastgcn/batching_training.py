@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from dgl.utils import gather_pinned_tensor_rows
 import gs
-from gs.utils import SeedGenerator, load_reddit, load_ogb, create_block_from_csc, ConvModel
+from gs.utils import SeedGenerator, load_reddit, load_ogb, create_block_from_coo, ConvModel
 import numpy as np
 import time
 import tqdm
@@ -15,31 +15,52 @@ def compute_acc(pred, label):
     return (pred.argmax(1) == label).float().mean()
 
 
-def sampler(A: gs.Graph, seeds, seeds_ptr, fanouts):
-    units, ptrts, indts = [], [], []
+def sampler(A: gs.Graph, seeds, seeds_ptr, probs, fanouts, num_batches):
+    seedsts, units, colts, rowts = [], [], [], []
     for layer, fanout in enumerate(fanouts):
-        # torch.cuda.nvtx.range_push('sampling')
-        subA = A._CAPI_fused_columnwise_slicing_sampling(seeds, fanout, False)
-        # torch.cuda.nvtx.range_pop()
-        # torch.cuda.nvtx.range_push('getbatchcsc')
-        indptr, indices, indices_ptr = subA.GetBatchCSC(seeds_ptr)
-        # torch.cuda.nvtx.range_pop()
-        # torch.cuda.nvtx.range_push('batchrelabel')
-        unique_tensor, unique_tensor_ptr, indices, indices_ptr = torch.ops.gs_ops.BatchCSRRelabel(
-            seeds, seeds_ptr, indices, indices_ptr)
-        # torch.cuda.nvtx.range_pop()
+        subA = A._CAPI_slicing(seeds, 0, gs._CSC, gs._CSC + gs._COO, False)
 
-        # torch.cuda.nvtx.range_push('splitbyoffsets')
-        unit = torch.ops.gs_ops.SplitByOffset(unique_tensor, unique_tensor_ptr)
-        ptrt = torch.ops.gs_ops.IndptrSplitByOffset(indptr, seeds_ptr)
-        indt = torch.ops.gs_ops.SplitByOffset(indices, indices_ptr)
+        indptr, indices, indices_ptr = subA.GetBatchCSC(seeds_ptr)
+        encoded_indices = torch.ops.gs_ops.BatchEncode(indices, indices_ptr)
+        # torch.cuda.nvtx.range_push('batch unique')
+        neighbors = torch.unique(encoded_indices, sorted=True)
+        neighbors_batch_mask = neighbors >> 48
+        # torch.cuda.nvtx.range_pop()
+        node_probs = probs[neighbors - (neighbors_batch_mask << 48)]
+        # torch.cuda.nvtx.range_push('batch list sample')
+        neighbors_ptr = torch.ops.gs_ops.GetBatchOffsets(
+            neighbors_batch_mask, num_batches)
+        selected, _, selected_ptr = torch.ops.gs_ops.batch_list_sampling_with_probs(
+            neighbors, node_probs, fanout, False, neighbors_ptr)
+
+        # slicing
+
+        coo_row, coo_col = subA.GetBatchCOO()
+        # torch.cuda.nvtx.range_push('batch coo slice')
+        sub_coo_row, sub_coo_col = torch.ops.gs_ops.COORowSlicingGlobalId(
+            encoded_indices, coo_col, selected)
+        sub_coo_row_batch_mask = sub_coo_row >> 48
+        sub_coo_ptr = torch.ops.gs_ops.GetBatchOffsets(
+            sub_coo_row_batch_mask, num_batches)
+        sub_coo_row = sub_coo_row - (sub_coo_row_batch_mask << 48)
+        # torch.cuda.nvtx.range_pop()
+        # relabel
+        unique_tensor, unique_tensor_ptr, sub_coo_row, sub_coo_col, sub_coo_ptr = torch.ops.gs_ops.BatchCOORelabel(
+            seeds, seeds_ptr, sub_coo_col, sub_coo_row, sub_coo_ptr)
+
+        seedst = torch.ops.gs_ops.SplitByOffset(seeds, seeds_ptr)
+        unit = torch.ops.gs_ops.SplitByOffset(unique_tensor,
+                                              unique_tensor_ptr)
+        colt = torch.ops.gs_ops.SplitByOffset(sub_coo_col, sub_coo_ptr)
+        rowt = torch.ops.gs_ops.SplitByOffset(sub_coo_row, sub_coo_ptr)
+        seedsts.append(seedst)
         units.append(unit)
-        ptrts.append(ptrt)
-        indts.append(indt)
+        colts.append(colt)
+        rowts.append(rowt)
         # torch.cuda.nvtx.range_pop()
 
         seeds, seeds_ptr = unique_tensor, unique_tensor_ptr
-    return units, ptrts, indts
+    return seedsts, units, colts, rowts
 
 
 def train(dataset, args):
@@ -54,17 +75,19 @@ def train(dataset, args):
     train_nid, val_nid = train_nid.to(device), val_nid.to(device)
     features, labels = features.to(device), labels.to(device)
     csc_indptr, csc_indices, edge_ids = g.adj_sparse('csc')
+    probs = g.out_degrees().float().to(device)
     if use_uva and device == 'cpu':
         features, labels = features.pin_memory(), labels.pin_memory()
         csc_indptr = csc_indptr.pin_memory()
         csc_indices = csc_indices.pin_memory()
         train_nid, val_nid = train_nid.pin_memory(), val_nid.pin_memory()
+        probs = probs.pin_memory()
     A = gs.Graph(False)
     A._CAPI_load_csc(csc_indptr, csc_indices)
     print("Check load successfully:", A._CAPI_metadata(), '\n')
 
     n_epoch = 5
-    batch_size = 65536
+    batch_size = 51200
     small_batch_size = args.batchsize
     num_batches = int((batch_size + small_batch_size - 1) / small_batch_size)
     orig_seeds_ptr = torch.arange(
@@ -113,22 +136,21 @@ def train(dataset, args):
                                          dtype=torch.int64,
                                          device='cuda') * small_batch_size
                 seeds_ptr[-1] = seeds.numel()
-            units, ptrts, indts = sampler(A, seeds, seeds_ptr, fanouts)
-            seeds = torch.ops.gs_ops.SplitByOffset(seeds, seeds_ptr)
+            seeds, units, colts, rowts = sampler(
+                A, seeds, seeds_ptr, probs, fanouts, num_batches)
             torch.cuda.synchronize()
             sample_time += time.time() - tic
 
             for rank in range(num_batches):
-                batch_seeds = seeds[rank]
+                batch_seeds = seeds[0][rank]
                 blocks = []
                 for layer in range(len(fanouts)):
-                    unique, indptr, indices = units[layer][rank], ptrts[layer][
-                        rank], indts[layer][rank]
-                    block = create_block_from_csc(indptr,
-                                                  indices,
-                                                  torch.tensor([]),
+                    layer_seeds, unique, col, row = seeds[layer][rank], units[
+                        layer][rank], colts[layer][rank], rowts[layer][rank]
+                    block = create_block_from_coo(row,
+                                                  col,
                                                   num_src=unique.numel(),
-                                                  num_dst=indptr.numel() - 1)
+                                                  num_dst=layer_seeds.numel())
                     block.srcdata['_ID'] = unique
                     blocks.insert(0, block)
                 tic = time.time()
@@ -174,23 +196,21 @@ def train(dataset, args):
                                              dtype=torch.int64,
                                              device='cuda') * small_batch_size
                     seeds_ptr[-1] = seeds.numel()
-                units, ptrts, indts = sampler(A, seeds, seeds_ptr, fanouts)
-                seeds = torch.ops.gs_ops.SplitByOffset(seeds, seeds_ptr)
+                seeds, units, colts, rowts = sampler(
+                    A, seeds, seeds_ptr, probs, fanouts, num_batches)
                 torch.cuda.synchronize()
                 sample_time += time.time() - tic
 
                 for rank in range(num_batches):
-                    batch_seeds = seeds[rank]
+                    batch_seeds = seeds[0][rank]
                     blocks = []
                     for layer in range(len(fanouts)):
-                        unique, indptr, indices = units[layer][rank], ptrts[
-                            layer][rank], indts[layer][rank]
-                        block = create_block_from_csc(indptr,
-                                                      indices,
-                                                      torch.tensor([]),
+                        layer_seeds, unique, col, row = seeds[layer][rank], units[
+                            layer][rank], colts[layer][rank], rowts[layer][rank]
+                        block = create_block_from_coo(row,
+                                                      col,
                                                       num_src=unique.numel(),
-                                                      num_dst=indptr.numel() -
-                                                      1)
+                                                      num_dst=layer_seeds.numel())
                         block.srcdata['_ID'] = unique
                         blocks.insert(0, block)
                     tic = time.time()
@@ -254,10 +274,10 @@ if __name__ == '__main__':
                         help="which dataset to load for training")
     parser.add_argument("--batchsize",
                         type=int,
-                        default=256,
+                        default=1024,
                         help="batch size for training")
     parser.add_argument("--samples",
-                        default='25,15',
+                        default='2000,2000',
                         help="sample size for each layer")
     args = parser.parse_args()
     print(args)

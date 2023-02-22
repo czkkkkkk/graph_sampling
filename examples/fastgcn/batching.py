@@ -38,7 +38,7 @@ A._CAPI_load_csc(indptr, indices)
 orig_seeds_ptr = torch.arange(num_batchs + 1, dtype=torch.int64,
                               device='cuda') * small_batch_size
 orig_seeds_ptr[-1] = batch_size
-print("batchsize:",small_batch_size)
+print("batchsize:", small_batch_size)
 # fastgcn (batch)
 time_list = []
 layer_time = [[], []]
@@ -71,7 +71,8 @@ for epoch in range(n_epoch):
             subA = A._CAPI_slicing(seeds, 0, gs._CSC, gs._CSC + gs._COO, False)
 
             indptr, indices, indices_ptr = subA.GetBatchCSC(seeds_ptr)
-            encoded_indices = torch.ops.gs_ops.BatchEncode(indices, indices_ptr)
+            encoded_indices = torch.ops.gs_ops.BatchEncode(
+                indices, indices_ptr)
             # torch.cuda.nvtx.range_push('batch unique')
             neighbors = torch.unique(encoded_indices, sorted=True)
             neighbors_batch_mask = neighbors >> 48
@@ -95,7 +96,8 @@ for epoch in range(n_epoch):
             sub_coo_row = sub_coo_row - (sub_coo_row_batch_mask << 48)
             # torch.cuda.nvtx.range_pop()
             # relabel
-            unique_tensor, unique_tensor_ptr, sub_coo_row, sub_coo_col, sub_coo_ptr = torch.ops.gs_ops.BatchCOORelabel(seeds,seeds_ptr,sub_coo_col,sub_coo_row,sub_coo_ptr)
+            unique_tensor, unique_tensor_ptr, sub_coo_row, sub_coo_col, sub_coo_ptr = torch.ops.gs_ops.BatchCOORelabel(
+                seeds, seeds_ptr, sub_coo_col, sub_coo_row, sub_coo_ptr)
 
             seedst = torch.ops.gs_ops.SplitByOffset(seeds, seeds_ptr)
             unit = torch.ops.gs_ops.SplitByOffset(unique_tensor,
@@ -149,8 +151,7 @@ for epoch in range(n_epoch):
             selected, _ = torch.ops.gs_ops.list_sampling_with_probs(
                 neighbors, node_probs, fanout*num_batchs, False)
             subA = subA._CAPI_slicing(selected, 1, gs._COO, gs._COO, False)
-            unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = subA._CAPI_relabel(
-            )
+            unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = subA._CAPI_relabel()
             block = create_block_from_coo(format_tensor1,
                                           format_tensor2,
                                           num_src=num_row,
