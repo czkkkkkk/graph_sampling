@@ -30,3 +30,14 @@ def load_ogb(name, root):
     g = dgl.remove_self_loop(g)
     g = dgl.add_self_loop(g)
     return g, feat, labels, n_classes, splitted_idx
+
+
+def load_dglgraph(root: str):
+    data, _ = dgl.load_graphs(root)
+    g = data[0]
+    train_nid = torch.nonzero(g.ndata["train_mask"], as_tuple=True)[0]
+    test_nid = torch.nonzero(g.ndata["test_mask"], as_tuple=True)[0]
+    val_nid = torch.nonzero(g.ndata["val_mask"], as_tuple=True)[0]
+    splitted_idx = {"train": train_nid, "test": test_nid, "valid": val_nid}
+    g.ndata.clear()
+    return g, None, None, None, splitted_idx

@@ -188,10 +188,8 @@ COO2DCSCCUDA(torch::Tensor row, torch::Tensor col, int64_t max_num_cols,
   cub_consecutiveUnique<int64_t>(
       sort_col.data_ptr<int64_t>(), d_unique_res.data_ptr<int64_t>(),
       d_num_selected_out.data_ptr<int64_t>(), col.numel());
-  thrust::device_ptr<int64_t> item_prefix(
-      static_cast<int64_t*>(d_num_selected_out.data_ptr<int64_t>()));
-  auto val_col_ids = d_unique_res.index(
-      {torch::indexing::Slice(torch::indexing::None, item_prefix[0])});
+  auto val_col_ids = d_unique_res.index({torch::indexing::Slice(
+      torch::indexing::None, d_num_selected_out.item<int64_t>())});
 
   auto id_size = val_col_ids.numel();
   auto indptr = torch::zeros(id_size + 1, sort_row.options());
