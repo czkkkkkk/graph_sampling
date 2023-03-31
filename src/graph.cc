@@ -278,6 +278,87 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
   return ret;
 }
 
+c10::intrusive_ptr<Graph> Graph::BatchColSlicing(
+    torch::Tensor n_ids, torch::Tensor nid_ptr, int64_t axis, int64_t on_format,
+    int64_t output_format, bool relabel) {
+  CreateSparseFormat(on_format);
+  std::shared_ptr<COO> coo_ptr;
+  std::shared_ptr<CSC> csc_ptr;
+  std::shared_ptr<CSR> csr_ptr;
+  std::shared_ptr<_TMP> tmp_ptr;
+  torch::Tensor select_index;
+  torch::optional<torch::Tensor> e_ids, new_col_ids, new_row_ids, new_val_cols,
+      new_val_rows;
+  int64_t new_num_cols, new_num_rows, new_num_edges;
+  bool with_coo = output_format & _COO;
+  int64_t batch_num = nid_ptr.numel() - 1;
+
+  if (axis == 0) {
+    new_col_ids = col_ids_.has_value()
+                      ? col_ids_.value().index({n_ids})
+                      : impl::BatchEncodeCUDA(n_ids, nid_ptr, num_rows_);
+    new_row_ids = row_ids_;
+    new_num_cols = n_ids.numel();
+    new_num_rows = num_rows_ * batch_num;
+  } else {
+    LOG(FATAL) << "batch col slicing only suppurt column slicing now";
+  }
+
+  if (on_format == _CSC) {
+    torch::Tensor sub_indptr, coo_col, coo_row, select_index;
+    std::tie(sub_indptr, coo_col, coo_row, select_index) =
+        impl::BatchCSCColSlicingCUDA(csc_->indptr, csc_->indices, n_ids,
+                                     nid_ptr, num_rows_, with_coo);
+    tmp_ptr = std::make_shared<_TMP>(_TMP{sub_indptr, coo_col, coo_row});
+
+    if (relabel) {
+      torch::Tensor frontier;
+      std::vector<torch::Tensor> relabeled_result;
+      std::tie(frontier, relabeled_result) = BatchTensorRelabel(
+          {tmp_ptr->coo_in_indices}, {tmp_ptr->coo_in_indices});
+      tmp_ptr->coo_in_indices = relabeled_result[0];
+      new_row_ids = frontier;
+      new_num_rows = frontier.numel();
+    }
+
+    if (output_format & _CSC)
+      csc_ptr = std::make_shared<CSC>(
+          CSC{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt});
+    if (output_format & _COO)
+      coo_ptr = std::make_shared<COO>(COO{tmp_ptr->coo_in_indices,
+                                          tmp_ptr->coo_in_indptr,
+                                          torch::nullopt, false, true});
+    new_num_edges = tmp_ptr->coo_in_indices.numel();
+    e_ids = csc_->e_ids;
+  } else {
+    LOG(FATAL) << "Not Implementatin Error";
+  }
+
+  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
+      new Graph(true, new_col_ids, new_row_ids, new_num_cols, new_num_rows)));
+  ret->SetNumEdges(new_num_edges);
+  ret->SetCOO(coo_ptr);
+  ret->SetCSC(csc_ptr);
+  ret->SetCSR(csr_ptr);
+  if (new_val_cols.has_value()) ret->SetValidCols(new_val_cols.value());
+  if (new_val_rows.has_value()) ret->SetValidRows(new_val_rows.value());
+  if (data_.has_value()) {
+    torch::Tensor out_data, data_index;
+    if (e_ids.has_value())
+      data_index =
+          (e_ids.value().is_pinned())
+              ? impl::IndexSelectCPUFromGPU(e_ids.value(), select_index)
+              : e_ids.value().index({select_index});
+    else
+      data_index = select_index;
+    out_data = (data_.value().is_pinned())
+                   ? impl::IndexSelectCPUFromGPU(data_.value(), data_index)
+                   : data_.value().index({data_index});
+    ret->SetData(out_data);
+  }
+  return ret;
+}
+
 std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor, torch::Tensor,
            torch::Tensor>
 Graph::BatchSlicing(torch::Tensor selected_node_ids, int64_t axis,
@@ -902,6 +983,13 @@ std::tuple<torch::Tensor, torch::Tensor> Graph::GetBatchCOO() {
   torch::Tensor coo_row =
       (row_ids_.has_value()) ? row_ids_.value().index({coo_->row}) : coo_->row;
   return {coo_row, coo_col};
+}
+
+void Graph::Decode(int64_t encoding_size) {
+  if (col_ids_.has_value() || row_ids_.has_value())
+    LOG(FATAL) << "Error: Decoding should have both row and column id";
+  col_ids_ = impl::BatchDecodeCUDA(col_ids_.value(), encoding_size);
+  row_ids_ = impl::BatchDecodeCUDA(row_ids_.value(), encoding_size);
 }
 
 }  // namespace gs

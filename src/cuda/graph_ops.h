@@ -12,6 +12,11 @@ CSCColSlicingCUDA(torch::Tensor indptr, torch::Tensor indices,
                   torch::Tensor column_ids, bool with_coo);
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+BatchCSCColSlicingCUDA(torch::Tensor indptr, torch::Tensor indices,
+                       torch::Tensor column_ids, torch::Tensor nid_ptr,
+                       int64_t encoding_size, bool with_coo);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 DCSCColSlicingCUDA(torch::Tensor indptr, torch::Tensor indices,
                    torch::Tensor nid_map, torch::Tensor column_ids,
                    bool with_coo);

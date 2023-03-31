@@ -94,13 +94,13 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchCOOSlicingCUDA(
     torch::Tensor batch_ptr, torch::Tensor neigbhors,
     torch::Tensor neighbors_ptr);
 
-torch::Tensor BatchEncodeCUDA(torch::Tensor data_tensor,
-                              torch::Tensor data_ptr);
+torch::Tensor BatchEncodeCUDA(torch::Tensor data_tensor, torch::Tensor data_ptr,
+                              int64_t encoding_size);
 
-torch::Tensor BatchDecodeCUDA(torch::Tensor data_tensor,
-                              torch::Tensor data_ptr);
+torch::Tensor BatchDecodeCUDA(torch::Tensor in_data, int64_t encoding_size);
 
-torch::Tensor GetBatchOffsets(torch::Tensor data_tensor, int64_t num_batches);
+std::tuple<torch::Tensor, torch::Tensor> GetBatchOffsets(
+    torch::Tensor data_tensor, int64_t num_batches, int64_t encoding_size);
 
 std::tuple<torch::Tensor, torch::Tensor> COORowSlicingGlobalIdCUDA(
     torch::Tensor coo_row, torch::Tensor coo_col, torch::Tensor row_ids);

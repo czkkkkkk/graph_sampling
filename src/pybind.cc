@@ -41,8 +41,10 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_split", &Graph::Split)
       .def("GetBatchCSC", &Graph::GetBatchCSC)
       .def("GetBatchCOO", &Graph::GetBatchCOO)
-      .def("_CAPI_batch_slicing", &Graph::BatchSlicing)
-      .def("_CAPI_set_coo", &Graph::SetCOOByTensor);
+      // .def("_CAPI_batch_slicing", &Graph::BatchSlicing)
+      .def("_CAPI_set_coo", &Graph::SetCOOByTensor)
+      .def("_CAPI_batch_slicing", &Graph::BatchColSlicing)
+      .def("_CAPI_decode", &Graph::Decode);
 
   m.class_<HeteroGraph>("HeteroGraph")
       .def(torch::init<>())

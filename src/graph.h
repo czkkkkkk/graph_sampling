@@ -49,6 +49,11 @@ class Graph : public torch::CustomClassHolder {
   c10::intrusive_ptr<Graph> Slicing(torch::Tensor n_ids, int64_t axis,
                                     int64_t on_format, int64_t output_format,
                                     bool relabel = false);
+  c10::intrusive_ptr<Graph> BatchColSlicing(torch::Tensor n_ids,
+                                            torch::Tensor nid_ptr, int64_t axis,
+                                            int64_t on_format,
+                                            int64_t output_format,
+                                            bool relabel = false);
   std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor, torch::Tensor,
              torch::Tensor>
   BatchSlicing(torch::Tensor node_ids, int64_t axis, int64_t on_format,
@@ -92,6 +97,7 @@ class Graph : public torch::CustomClassHolder {
 
   std::vector<torch::Tensor> GetBatchCSC(torch::Tensor seeds_ptr);
   std::tuple<torch::Tensor, torch::Tensor> GetBatchCOO();
+  void Decode(int64_t encoding_size);
 
   // todo: return global_e_id
  private:
