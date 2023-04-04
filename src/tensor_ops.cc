@@ -15,11 +15,9 @@ std::tuple<torch::Tensor, torch::Tensor> ListSamplingProbs(torch::Tensor data,
   return impl::ListSamplingProbsCUDA(data, probs, num_picks, replace);
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchListSamplingProbs(
-    torch::Tensor data, torch::Tensor probs, int64_t num_picks, bool replace,
-    torch::Tensor range) {
-  return impl::BatchListSamplingProbsCUDA(data, probs, num_picks, replace,
-                                          range);
+std::tuple<torch::Tensor, torch::Tensor> BatchListSamplingProbs(
+    torch::Tensor probs, int64_t num_picks, bool replace, torch::Tensor range) {
+  return impl::BatchListSamplingProbsCUDA(probs, num_picks, replace, range);
 }
 
 torch::Tensor IndexSearch(torch::Tensor origin_data, torch::Tensor keys) {

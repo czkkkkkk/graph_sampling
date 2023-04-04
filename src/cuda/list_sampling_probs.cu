@@ -91,8 +91,7 @@ std::tuple<torch::Tensor, torch::Tensor> _ListSamplingProbs(torch::Tensor data,
 }
 
 template <typename IdType>
-__global__ void _BatchTensorSlicingKernel(IdType* in_data, IdType* out_data,
-                                          int64_t* in_idx, int64_t* out_idx,
+__global__ void _BatchTensorSlicingKernel(int64_t* in_idx, int64_t* out_idx,
                                           int64_t* in_offsets,
                                           int64_t* out_offsets,
                                           int64_t num_batch) {
@@ -105,20 +104,18 @@ __global__ void _BatchTensorSlicingKernel(IdType* in_data, IdType* out_data,
     int64_t size = out_endoff - out_startoff;
     for (int64_t idx = threadIdx.x; idx < size; idx += blockDim.x) {
       out_idx[out_startoff + idx] = in_idx[in_startoff + idx];
-      out_data[out_startoff + idx] = in_data[in_idx[in_startoff + idx]];
     }
     row += gridDim.x * blockDim.y;
   }
 }
 
 template <typename IdType, typename FloatType>
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _BatchListSamplingProbs(
-    torch::Tensor data, torch::Tensor probs, int64_t num_picks, bool replace,
-    torch::Tensor range) {
-  torch::Tensor out_data, out_idx, out_range = torch::empty_like(range);
+std::tuple<torch::Tensor, torch::Tensor> _BatchListSamplingProbs(
+    torch::Tensor probs, int64_t num_picks, bool replace, torch::Tensor range) {
+  torch::Tensor out_idx, out_range = torch::empty_like(range);
   auto idx_options = torch::dtype(torch::kInt64).device(torch::kCUDA);
   int64_t num_split = range.numel() - 1;
-  int64_t total_element = data.numel();
+  int64_t total_element = probs.numel();
 
   if (replace) {
     LOG(FATAL) << "Not implemented warning";
@@ -145,7 +142,6 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _BatchListSamplingProbs(
     cub_exclusiveSum<IdType>(out_range.data_ptr<int64_t>(), num_split + 1);
     thrust::device_ptr<int64_t> item_prefix(out_range.data_ptr<int64_t>());
     int64_t out_length = item_prefix[num_split];  // cpu
-    out_data = torch::empty(out_length, data.options());
     out_idx = torch::empty(out_length, idx_options);
 
     // using A-Res sampling
@@ -179,12 +175,11 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> _BatchListSamplingProbs(
     dim3 block(16, 32);
     dim3 grid((num_split + block.y - 1) / block.y);
     CUDA_KERNEL_CALL((_BatchTensorSlicingKernel<IdType>), grid, block,
-                     data.data_ptr<IdType>(), out_data.data_ptr<IdType>(),
                      sort_index.data_ptr<int64_t>(),
                      out_idx.data_ptr<int64_t>(), range.data_ptr<int64_t>(),
                      out_range.data_ptr<int64_t>(), num_split);
   }
-  return {out_data, out_idx, out_range};
+  return {out_idx, out_range};
 }
 
 std::tuple<torch::Tensor, torch::Tensor> ListSamplingProbsCUDA(
@@ -195,15 +190,11 @@ std::tuple<torch::Tensor, torch::Tensor> ListSamplingProbsCUDA(
   return _ListSamplingProbs<int64_t, float>(data, probs, num_picks, replace);
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
-BatchListSamplingProbsCUDA(torch::Tensor data, torch::Tensor probs,
-                           int64_t num_picks, bool replace,
-                           torch::Tensor range) {
-  CHECK(data.dtype() == torch::kInt64);
+std::tuple<torch::Tensor, torch::Tensor> BatchListSamplingProbsCUDA(
+    torch::Tensor probs, int64_t num_picks, bool replace, torch::Tensor range) {
   CHECK(probs.dtype() == torch::kFloat);
-  assert(data.numel() == probs.numel());
-  return _BatchListSamplingProbs<int64_t, float>(data, probs, num_picks,
-                                                 replace, range);
+  return _BatchListSamplingProbs<int64_t, float>(probs, num_picks, replace,
+                                                 range);
 }
 
 }  // namespace impl
