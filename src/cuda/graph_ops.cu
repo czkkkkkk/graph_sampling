@@ -124,6 +124,69 @@ void COOSumCUDA(torch::Tensor target, torch::optional<torch::Tensor> e_ids,
   COOSum<int64_t, float>(target, e_ids, data, out_data, powk);
 }
 
+//////////////////////// CSCNormalizeCUDA //////////////////////////
+/**
+ * @brief SpMV for CSCNormalize
+ */
+template <typename IdType, typename DType, bool UseEMap>
+__global__ void _SegmentNormalizeKernel(IdType* indptr, IdType* EMap,
+                                        DType* data, int num_rows, int out_len,
+                                        DType* out) {
+  // SPMM with CSR.
+  int ty = blockIdx.x * blockDim.y + threadIdx.y;
+  const IdType stride_y = blockDim.y * gridDim.x;
+  const int stride_x = blockDim.x * gridDim.y;
+  while (ty < num_rows) {
+    int tx = blockIdx.y * blockDim.x + threadIdx.x;
+    while (tx < out_len) {
+      DType local_accum = 0;
+      for (IdType i = indptr[ty]; i < indptr[ty + 1]; ++i) {
+        const IdType data_idx = UseEMap ? EMap[i] : i;
+        const DType* dataoff = data + data_idx * out_len;
+        local_accum += dataoff[tx];
+      }
+      for (IdType i = indptr[ty]; i < indptr[ty + 1]; ++i) {
+        const IdType data_idx = UseEMap ? EMap[i] : i;
+        const DType* indataoff = data + data_idx * out_len;
+        DType* outdataoff = out + data_idx * out_len;
+        outdataoff[tx] = indataoff[tx] / local_accum;
+      }
+      tx += stride_x;
+    }
+    ty += stride_y;
+  }
+}
+
+template <typename IdType, typename DType>
+void CSCNormalize(torch::Tensor indptr, torch::optional<torch::Tensor> e_ids,
+                  torch::Tensor data, torch::Tensor out_data) {
+  auto num_element = indptr.numel() - 1;
+  auto use_e_map = e_ids.has_value();
+  auto e_ids_map = use_e_map ? e_ids.value().data_ptr<IdType>() : nullptr;
+
+  // Aligning DGL
+  const int out_len = 1;
+
+  const int ntx = 1;
+  const int nty = 256;
+  const int nby = (out_len + ntx - 1) / ntx;
+  const int nbx = (num_element + nty - 1) / nty;
+  const dim3 nblks(nbx, nby);
+  const dim3 nthrs(ntx, nty);
+  SWITCH_IDX(use_e_map, false, {
+    CUDA_KERNEL_CALL((_SegmentNormalizeKernel<IdType, DType, UseEMap>), nblks,
+                     nthrs, indptr.data_ptr<IdType>(), e_ids_map,
+                     data.data_ptr<DType>(), num_element, out_len,
+                     out_data.data_ptr<DType>());
+  });
+}
+
+void CSCNormalizeCUDA(torch::Tensor indptr,
+                      torch::optional<torch::Tensor> e_ids, torch::Tensor data,
+                      torch::Tensor out_data) {
+  CSCNormalize<int64_t, float>(indptr, e_ids, data, out_data);
+}
+
 template <typename IdType>
 __global__ void _CSCSplitKernel(IdType* indptr, IdType* out, IdType* out_sizes,
                                 int64_t num_split, int64_t split_size,
