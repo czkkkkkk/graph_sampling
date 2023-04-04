@@ -99,9 +99,10 @@ void Graph::SetCSR(std::shared_ptr<CSR> csr) { csr_ = csr; }
 
 void Graph::SetCOO(std::shared_ptr<COO> coo) { coo_ = coo; }
 
-void Graph::SetCOOByTensor(torch::Tensor row, torch::Tensor col) {
-  coo_ = std::make_shared<COO>(
-      COO{row, col, coo_->e_ids, coo_->row_sorted, coo_->col_sorted});
+void Graph::SetCOOByTensor(torch::Tensor row, torch::Tensor col,
+                           torch::optional<torch::Tensor> e_ids,
+                           bool row_sorted, bool col_sorted) {
+  coo_ = std::make_shared<COO>(COO{row, col, e_ids, row_sorted, col_sorted});
 }
 
 void Graph::SetData(torch::Tensor data) { data_ = data; }
@@ -278,15 +279,15 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
   return ret;
 }
 
-c10::intrusive_ptr<Graph> Graph::BatchColSlicing(
+std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::BatchColSlicing(
     torch::Tensor n_ids, torch::Tensor nid_ptr, int64_t axis, int64_t on_format,
-    int64_t output_format, bool relabel) {
+    int64_t output_format, bool relabel, bool encoding) {
   CreateSparseFormat(on_format);
   std::shared_ptr<COO> coo_ptr;
   std::shared_ptr<CSC> csc_ptr;
   std::shared_ptr<CSR> csr_ptr;
   std::shared_ptr<_TMP> tmp_ptr;
-  torch::Tensor select_index;
+  torch::Tensor select_index, coo_offsets;
   torch::optional<torch::Tensor> e_ids, new_col_ids, new_row_ids, new_val_cols,
       new_val_rows;
   int64_t new_num_cols, new_num_rows, new_num_edges;
@@ -305,10 +306,10 @@ c10::intrusive_ptr<Graph> Graph::BatchColSlicing(
   }
 
   if (on_format == _CSC) {
-    torch::Tensor sub_indptr, coo_col, coo_row, select_index;
-    std::tie(sub_indptr, coo_col, coo_row, select_index) =
+    torch::Tensor sub_indptr, coo_col, coo_row;
+    std::tie(sub_indptr, coo_col, coo_row, select_index, coo_offsets) =
         impl::BatchCSCColSlicingCUDA(csc_->indptr, csc_->indices, n_ids,
-                                     nid_ptr, num_rows_, with_coo);
+                                     nid_ptr, num_rows_, with_coo, encoding);
     tmp_ptr = std::make_shared<_TMP>(_TMP{sub_indptr, coo_col, coo_row});
 
     if (relabel) {
@@ -356,7 +357,7 @@ c10::intrusive_ptr<Graph> Graph::BatchColSlicing(
                    : data_.value().index({data_index});
     ret->SetData(out_data);
   }
-  return ret;
+  return {ret, coo_offsets};
 }
 
 std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor, torch::Tensor,
@@ -698,6 +699,38 @@ torch::Tensor Graph::Sum(int64_t axis, int64_t powk, int64_t on_format) {
   return out_data;
 }
 
+c10::intrusive_ptr<Graph> Graph::Normalize(int64_t axis, int64_t on_format) {
+  CreateSparseFormat(on_format);
+  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
+      new Graph(is_subgraph_, col_ids_, row_ids_, num_cols_, num_rows_)));
+  auto in_data =
+      data_.has_value()
+          ? data_.value()
+          : torch::ones(num_edges_,
+                        torch::dtype(torch::kFloat32).device(torch::kCUDA));
+  auto out_size = (axis == 0) ? num_cols_ : num_rows_;
+  torch::Tensor out_data = torch::empty_like(in_data);
+
+  if (on_format == _COO) {
+    LOG(FATAL) << "Not Implementation Error";
+  } else if (axis == 0 && (on_format == _CSC || on_format == _DCSC)) {
+    impl::CSCNormalizeCUDA(csc_->indptr, csc_->e_ids, in_data, out_data);
+  } else if (axis == 1 && (on_format == _CSR || on_format == _DCSR)) {
+    impl::CSCNormalizeCUDA(csr_->indptr, csr_->e_ids, in_data, out_data);
+  } else {
+    LOG(FATAL) << "Not Implementation Error";
+  }
+
+  ret->SetCSC(csc_);
+  ret->SetCSR(csr_);
+  ret->SetCOO(coo_);
+  ret->SetNumEdges(num_edges_);
+  ret->SetData(out_data);
+  if (val_col_ids_.has_value()) ret->SetValidCols(val_col_ids_.value());
+  if (val_row_ids_.has_value()) ret->SetValidRows(val_row_ids_.value());
+  return ret;
+}
+
 c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis,
                                         int64_t on_format) {
   CreateSparseFormat(on_format);
@@ -906,6 +939,32 @@ std::vector<torch::Tensor> Graph::MetaData() {
   } else {
     LOG(INFO) << "Warning in MetaData: no CSC nor CSR.";
     return {coo_->row, coo_->col};
+  }
+}
+
+std::vector<torch::Tensor> Graph::COOMetaData() {
+  torch::Tensor col_ids, row_ids, data;
+  col_ids = (col_ids_.has_value()) ? col_ids_.value() : torch::Tensor();
+  row_ids = (row_ids_.has_value()) ? row_ids_.value() : torch::Tensor();
+  data = data_.has_value() ? data_.value() : torch::Tensor();
+  if (coo_ != nullptr) {
+    return {col_ids, row_ids, data, coo_->row, coo_->col};
+  } else {
+    LOG(INFO) << "Warning in MetaData: no COO.";
+    return {};
+  }
+}
+
+std::vector<torch::Tensor> Graph::CSCMetaData() {
+  torch::Tensor col_ids, row_ids, data;
+  col_ids = (col_ids_.has_value()) ? col_ids_.value() : torch::Tensor();
+  row_ids = (row_ids_.has_value()) ? row_ids_.value() : torch::Tensor();
+  data = data_.has_value() ? data_.value() : torch::Tensor();
+  if (csc_ != nullptr) {
+    return {col_ids, row_ids, data, csc_->indptr, csc_->indices};
+  } else {
+    LOG(INFO) << "Warning in MetaData: no CSC.";
+    return {};
   }
 }
 

@@ -182,22 +182,27 @@ CSCColSlicingCUDA(torch::Tensor indptr, torch::Tensor indices,
 }
 
 ///////////////////// indptr slicing with indices encoding /////////////////////
-template <typename IdType, bool WITH_COO>
+template <typename IdType, bool WITH_COO, bool Encoding>
 __global__ void _BatchGetSubIndicesKernel(IdType* out_indices,
                                           IdType* select_index, IdType* out_row,
                                           IdType* indptr, IdType* indices,
                                           IdType* sub_indptr,
                                           IdType* column_ids,
+                                          IdType* nid_ptr,
                                           int64_t encoding_size, int64_t size) {
-  int64_t row =
-      (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.y + threadIdx.y;
-  while (row < size) {
+  int64_t row_in_batch = blockIdx.x * blockDim.y + threadIdx.y;
+  int64_t row = nid_ptr[blockIdx.y] + row_in_batch;
+  while (row < nid_ptr[blockIdx.y + 1]) {
     IdType in_start = indptr[column_ids[row]];
     IdType out_start = sub_indptr[row];
     IdType n_edges = sub_indptr[row + 1] - out_start;
     for (int idx = threadIdx.x; idx < n_edges; idx += blockDim.x) {
-      out_indices[out_start + idx] =
-          indices[in_start + idx] + blockIdx.y * encoding_size;
+      if (Encoding) {
+        out_indices[out_start + idx] =
+            indices[in_start + idx] + blockIdx.y * encoding_size;
+      } else {
+        out_indices[out_start + idx] = indices[in_start + idx];
+      }
       select_index[out_start + idx] = in_start + idx;
       if (WITH_COO) {
         out_row[out_start + idx] = row;
@@ -207,8 +212,9 @@ __global__ void _BatchGetSubIndicesKernel(IdType* out_indices,
   }
 }
 
-template <typename IdType, bool WITH_COO>
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+template <typename IdType, bool WITH_COO, bool Encoding>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor,
+           torch::Tensor>
 _BatchOnIndptrSlicing(torch::Tensor indptr, torch::Tensor indices,
                       torch::Tensor column_ids, torch::Tensor nid_ptr,
                       int64_t encoding_size) {
@@ -237,6 +243,7 @@ _BatchOnIndptrSlicing(torch::Tensor indptr, torch::Tensor indices,
   int nnz = item_prefix[num_items];  // cpu
   torch::Tensor sub_indices = torch::empty(nnz, Id_option);
   torch::Tensor select_index = torch::empty(nnz, Id_option);
+  torch::Tensor coo_offsets = sub_indptr.index({nid_ptr});
 
   torch::Tensor coo_col;
   IdType* coo_col_ptr;
@@ -254,30 +261,37 @@ _BatchOnIndptrSlicing(torch::Tensor indptr, torch::Tensor indices,
   int64_t max_batch_size = batch_size.max().item<int64_t>();
   dim3 block(16, 32);
   dim3 grid((max_batch_size + block.y - 1) / block.y, batch_num);
-  CUDA_KERNEL_CALL((_BatchGetSubIndicesKernel<IdType, WITH_COO>), grid, block,
-                   sub_indices.data_ptr<IdType>(),
+  CUDA_KERNEL_CALL((_BatchGetSubIndicesKernel<IdType, WITH_COO, Encoding>),
+                   grid, block, sub_indices.data_ptr<IdType>(),
                    select_index.data_ptr<IdType>(), coo_col_ptr,
                    indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
                    sub_indptr.data_ptr<IdType>(), column_ids.data_ptr<IdType>(),
-                   encoding_size, num_items);
-  return {sub_indptr, coo_col, sub_indices, select_index};
+                   nid_ptr.data_ptr<IdType>(), encoding_size, num_items);
+  return {sub_indptr, coo_col, sub_indices, select_index, coo_offsets};
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor,
+           torch::Tensor>
 BatchCSCColSlicingCUDA(torch::Tensor indptr, torch::Tensor indices,
                        torch::Tensor column_ids, torch::Tensor nid_ptr,
-                       int64_t encoding_size, bool with_coo) {
-  torch::Tensor out_indptr, out_coo_col, out_indices, out_selected_index;
-  if (with_coo)
-    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
-        _BatchOnIndptrSlicing<int64_t, true>(indptr, indices, column_ids,
-                                             nid_ptr, encoding_size);
-  else
-    std::tie(out_indptr, out_coo_col, out_indices, out_selected_index) =
-        _BatchOnIndptrSlicing<int64_t, false>(indptr, indices, column_ids,
-                                              nid_ptr, encoding_size);
-
-  return {out_indptr, out_coo_col, out_indices, out_selected_index};
+                       int64_t encoding_size, bool with_coo, bool encoding) {
+  if (with_coo) {
+    if (encoding) {
+      return _BatchOnIndptrSlicing<int64_t, true, true>(
+          indptr, indices, column_ids, nid_ptr, encoding_size);
+    } else {
+      return _BatchOnIndptrSlicing<int64_t, true, false>(
+          indptr, indices, column_ids, nid_ptr, encoding_size);
+    }
+  } else {
+    if (encoding) {
+      return _BatchOnIndptrSlicing<int64_t, false, true>(
+          indptr, indices, column_ids, nid_ptr, encoding_size);
+    } else {
+      return _BatchOnIndptrSlicing<int64_t, false, false>(
+          indptr, indices, column_ids, nid_ptr, encoding_size);
+    }
+  }
 }
 
 ///////////////////// indptr slicing with id mapping /////////////////////

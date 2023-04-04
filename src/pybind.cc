@@ -34,8 +34,11 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_get_coo_cols", &Graph::GetCOOCols)
       .def("_CAPI_relabel", &Graph::Relabel)
       .def("_CAPI_sum", &Graph::Sum)
+      .def("_CAPI_normalize", &Graph::Normalize)
       .def("_CAPI_divide", &Graph::Divide)
       .def("_CAPI_metadata", &Graph::MetaData)
+      .def("_CAPI_coo_metadata", &Graph::COOMetaData)
+      .def("_CAPI_csc_metadata", &Graph::CSCMetaData)
       .def("_CAPI_random_walk", &Graph::RandomWalk)
       .def("_CAPI_sddmm", &Graph::SDDMM)
       .def("_CAPI_split", &Graph::Split)
@@ -44,7 +47,8 @@ TORCH_LIBRARY(gs_classes, m) {
       // .def("_CAPI_batch_slicing", &Graph::BatchSlicing)
       .def("_CAPI_set_coo", &Graph::SetCOOByTensor)
       .def("_CAPI_batch_slicing", &Graph::BatchColSlicing)
-      .def("_CAPI_decode", &Graph::Decode);
+      .def("_CAPI_decode", &Graph::Decode)
+      .def("_CAPI_set_metadata", &Graph::SetMetaData);
 
   m.class_<HeteroGraph>("HeteroGraph")
       .def(torch::init<>())
