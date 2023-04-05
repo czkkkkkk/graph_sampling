@@ -50,6 +50,8 @@ class Graph : public torch::CustomClassHolder {
   std::shared_ptr<CSC> GetCSC();
   std::shared_ptr<CSR> GetCSR();
   std::shared_ptr<COO> GetCOO();
+  std::vector<torch::Tensor> GetCSCTensor();
+  std::vector<torch::Tensor> GetCOOTensor();
   torch::optional<torch::Tensor> GetData(std::string order = "default");
   int64_t GetNumRows();
   int64_t GetNumCols();
@@ -105,9 +107,6 @@ class Graph : public torch::CustomClassHolder {
              torch::Tensor out, int64_t lhs_target, int64_t rhs_target,
              int64_t on_format);
   std::vector<c10::intrusive_ptr<Graph>> Split(int64_t split_size);
-
-  std::vector<torch::Tensor> GetBatchCSC(torch::Tensor seeds_ptr);
-  std::tuple<torch::Tensor, torch::Tensor> GetBatchCOO();
   void Decode(int64_t encoding_size);
 
   // todo: return global_e_id

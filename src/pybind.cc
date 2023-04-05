@@ -42,8 +42,8 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_random_walk", &Graph::RandomWalk)
       .def("_CAPI_sddmm", &Graph::SDDMM)
       .def("_CAPI_split", &Graph::Split)
-      .def("GetBatchCSC", &Graph::GetBatchCSC)
-      .def("GetBatchCOO", &Graph::GetBatchCOO)
+      .def("_CAPI_get_csc", &Graph::GetCSCTensor)
+      .def("_CAPI_get_coo", &Graph::GetCOOTensor)
       // .def("_CAPI_batch_slicing", &Graph::BatchSlicing)
       .def("_CAPI_set_coo", &Graph::SetCOOByTensor)
       .def("_CAPI_batch_slicing", &Graph::BatchColSlicing)
@@ -80,6 +80,7 @@ TORCH_LIBRARY(gs_ops, m) {
   m.def("BatchDecode", &gs::impl::BatchDecodeCUDA);
   m.def("GetBatchOffsets", &gs::impl::GetBatchOffsets);
   m.def("COORowSlicingGlobalId", &gs::impl::COORowSlicingGlobalIdCUDA);
+  m.def("_CAPI_unique", &gs::impl::TensorUniqueCUDA);
 }
 
 namespace gs {}

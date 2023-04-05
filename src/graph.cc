@@ -1021,27 +1021,20 @@ std::vector<c10::intrusive_ptr<Graph>> Graph::Split(int64_t split_size) {
   return ret;
 }
 
-std::vector<torch::Tensor> Graph::GetBatchCSC(torch::Tensor seeds_ptr) {
-  torch::Tensor indptr = csc_->indptr;
-  torch::Tensor indices = (row_ids_.has_value())
-                              ? row_ids_.value().index({csc_->indices})
-                              : csc_->indices;
-
-  torch::Tensor indices_ptr = indptr.index({seeds_ptr});
-
-  return {indptr, indices, indices_ptr};
+std::vector<torch::Tensor> Graph::GetCSCTensor() {
+  CreateSparseFormat(_CSC);
+  auto eid = csc_->e_ids.has_value() ? csc_->e_ids.value() : torch::Tensor();
+  return {csc_->indptr, csc_->indices, eid};
 }
 
-std::tuple<torch::Tensor, torch::Tensor> Graph::GetBatchCOO() {
+std::vector<torch::Tensor> Graph::GetCOOTensor() {
   CreateSparseFormat(_COO);
   CHECK_EQ(coo_->col_sorted, true);
   if (!col_ids_.has_value()) {
     LOG(ERROR) << "For sampling, col_ids_ is necessary!";
   }
-  torch::Tensor coo_col = col_ids_.value().index({coo_->col});
-  torch::Tensor coo_row =
-      (row_ids_.has_value()) ? row_ids_.value().index({coo_->row}) : coo_->row;
-  return {coo_row, coo_col};
+  auto eid = coo_->e_ids.has_value() ? coo_->e_ids.value() : torch::Tensor();
+  return {coo_->row, coo_->col, eid};
 }
 
 void Graph::Decode(int64_t encoding_size) {
