@@ -12,8 +12,8 @@ namespace fusion {
 /////////////////// FusedCSCColSlicingSamplingCUDA //////////////////////
 template <typename IdType>
 __global__ void _FusedSliceSampleSubIndicesReplaceKernel(
-    IdType* sub_indices, IdType* select_index, IdType* indptr, IdType* indices,
-    IdType* sub_indptr, IdType* column_ids, int64_t size,
+    IdType* sub_indices, IdType* select_index, int64_t* indptr, IdType* indices,
+    int64_t* sub_indptr, IdType* column_ids, int64_t size,
     const uint64_t random_seed) {
   int64_t row = blockIdx.x * blockDim.y + threadIdx.y;
   curandStatePhilox4_32_10_t rng;
@@ -21,10 +21,10 @@ __global__ void _FusedSliceSampleSubIndicesReplaceKernel(
 
   while (row < size) {
     IdType col = column_ids[row];
-    IdType in_start = indptr[col];
-    IdType out_start = sub_indptr[row];
-    IdType degree = indptr[col + 1] - indptr[col];
-    IdType fanout = sub_indptr[row + 1] - sub_indptr[row];
+    int64_t in_start = indptr[col];
+    int64_t out_start = sub_indptr[row];
+    int64_t degree = indptr[col + 1] - indptr[col];
+    int64_t fanout = sub_indptr[row + 1] - sub_indptr[row];
     IdType out_pos, in_pos;
     for (int idx = threadIdx.x; idx < fanout; idx += blockDim.x) {
       const IdType edge = curand(&rng) % degree;
@@ -39,8 +39,8 @@ __global__ void _FusedSliceSampleSubIndicesReplaceKernel(
 
 template <typename IdType>
 __global__ void _FusedSliceSampleSubIndicesKernel(
-    IdType* sub_indices, IdType* select_index, IdType* indptr, IdType* indices,
-    IdType* sub_indptr, IdType* column_ids, int64_t size,
+    IdType* sub_indices, IdType* select_index, int64_t* indptr, IdType* indices,
+    int64_t* sub_indptr, IdType* column_ids, int64_t size,
     const uint64_t random_seed) {
   int64_t row = blockIdx.x * blockDim.y + threadIdx.y;
   curandStatePhilox4_32_10_t rng;
@@ -48,10 +48,10 @@ __global__ void _FusedSliceSampleSubIndicesKernel(
 
   while (row < size) {
     IdType col = column_ids[row];
-    IdType in_start = indptr[col];
-    IdType out_start = sub_indptr[row];
-    IdType degree = indptr[col + 1] - indptr[col];
-    IdType fanout = sub_indptr[row + 1] - sub_indptr[row];
+    int64_t in_start = indptr[col];
+    int64_t out_start = sub_indptr[row];
+    int64_t degree = indptr[col + 1] - indptr[col];
+    int64_t fanout = sub_indptr[row + 1] - sub_indptr[row];
     IdType out_pos, in_pos;
     if (degree <= fanout) {
       for (int idx = threadIdx.x; idx < degree; idx += blockDim.x) {
@@ -95,32 +95,44 @@ _FusedCSCColSlicingSampling(torch::Tensor indptr, torch::Tensor indices,
   auto Id_option = (indptr.is_pinned())
                        ? torch::dtype(indptr.dtype()).device(torch::kCUDA)
                        : indptr.options();
-
+  auto indices_option = (indices.is_pinned())
+                       ? torch::dtype(indices.dtype()).device(torch::kCUDA)
+                       : indices.options();
+  int32_t numberofnodes=(int32_t)indptr.numel();
+std::cout<<__FILE__<<":"<<__LINE__<<std::endl;
   // compute indptr
   auto sub_indptr = torch::empty(num_items + 1, Id_option);
   using it = thrust::counting_iterator<IdType>;
+  std::cout<<__FILE__<<":"<<__LINE__<<std::endl;
   thrust::for_each(thrust::device, it(0), it(num_items),
                    [in = column_ids.data_ptr<IdType>(),
-                    in_indptr = indptr.data_ptr<IdType>(),
-                    out = sub_indptr.data_ptr<IdType>(), if_replace = replace,
-                    num_fanout = fanout] __device__(int i) mutable {
-                     IdType begin = in_indptr[in[i]];
-                     IdType end = in_indptr[in[i] + 1];
+                    in_indptr = indptr.data_ptr<int64_t>(),
+                    out = sub_indptr.data_ptr<int64_t>(), if_replace = replace,
+                    num_fanout = fanout, numberofnodes
+                    ] __device__(int i) mutable {
+                    // printf("in[%d]:%d\n",i,in[i]);
+                    // printf("in[%d]:%d\n",i+1,in[i+1]);
+                    if(in[i]<0 || in[i]>=numberofnodes || in[i]+1<0||in[i]+1>=numberofnodes){
+                      printf("error:in[i]:%d,in[i+1]:%d,numberofEdges:%d,i is:%d\n",in[i],in[i+1],numberofnodes,i);
+                    }
+                     int64_t begin = in_indptr[in[i]];
+                     int64_t end = in_indptr[in[i] + 1];
+
                      if (if_replace) {
                        out[i] = (end - begin) == 0 ? 0 : num_fanout;
                      } else {
                        out[i] = min(end - begin, num_fanout);
                      }
                    });
-
-  cub_exclusiveSum<IdType>(sub_indptr.data_ptr<IdType>(), num_items + 1);
+ std::cout<<__FILE__<<":"<<__LINE__<<std::endl;
+  cub_exclusiveSum<int64_t>(sub_indptr.data_ptr<int64_t>(), num_items + 1);
 
   // compute indices
-  thrust::device_ptr<IdType> item_prefix(
-      static_cast<IdType*>(sub_indptr.data_ptr<IdType>()));
+  thrust::device_ptr<int64_t> item_prefix(
+      static_cast<int64_t*>(sub_indptr.data_ptr<int64_t>()));
   int n_edges = item_prefix[num_items];  // cpu
-  auto sub_indices = torch::empty(n_edges, Id_option);
-  auto select_index = torch::empty(n_edges, Id_option);
+  auto sub_indices = torch::empty(n_edges, indices_option);
+  auto select_index = torch::empty(n_edges, indices_option);
 
   const uint64_t random_seed = 7777;
   dim3 block(16, 32);
@@ -128,17 +140,17 @@ _FusedCSCColSlicingSampling(torch::Tensor indptr, torch::Tensor indices,
   if (replace) {
     _FusedSliceSampleSubIndicesReplaceKernel<IdType><<<grid, block>>>(
         sub_indices.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
-        indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
-        sub_indptr.data_ptr<IdType>(), column_ids.data_ptr<IdType>(), num_items,
+        indptr.data_ptr<int64_t>(), indices.data_ptr<IdType>(),
+        sub_indptr.data_ptr<int64_t>(), column_ids.data_ptr<IdType>(), num_items,
         random_seed);
   } else {
     _FusedSliceSampleSubIndicesKernel<IdType><<<grid, block>>>(
         sub_indices.data_ptr<IdType>(), select_index.data_ptr<IdType>(),
-        indptr.data_ptr<IdType>(), indices.data_ptr<IdType>(),
-        sub_indptr.data_ptr<IdType>(), column_ids.data_ptr<IdType>(), num_items,
+        indptr.data_ptr<int64_t>(), indices.data_ptr<IdType>(),
+        sub_indptr.data_ptr<int64_t>(), column_ids.data_ptr<IdType>(), num_items,
         random_seed);
   }
-
+  // std::cout<<__FILE__<<":"<<__LINE__<<std::endl;
   return {sub_indptr, sub_indices, select_index};
 }
 
@@ -146,8 +158,15 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
 FusedCSCColSlicingSamplingCUDA(torch::Tensor indptr, torch::Tensor indices,
                                torch::Tensor column_ids, int64_t fanout,
                                bool replace) {
+  if(indices.scalar_type()==torch::kInt64){
   return _FusedCSCColSlicingSampling<int64_t>(indptr, indices, column_ids,
                                               fanout, replace);
+  }
+  else{
+    // std::cout<<__FILE__<<__LINE__<<std::endl;
+    return _FusedCSCColSlicingSampling<int32_t>(indptr, indices, column_ids,
+      fanout, replace);
+  }
 }
 
 /////////////////// FusedCSCColSlicingSamplingOneKeepDimCUDA ////////////

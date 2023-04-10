@@ -280,8 +280,8 @@ torch::Tensor TensorUnique(torch::Tensor node_ids) {
 // tensor in to_be_relabeled_tensors with the hashmap. It return {unique_tensor,
 // {tensor1_after_relabeled, tensor2_after_relabeled, ...}}.
 std::tuple<torch::Tensor, std::vector<torch::Tensor>> BatchTensorRelabel(
-    const std::vector<torch::Tensor>& mapping_tensors,
-    const std::vector<torch::Tensor>& to_be_relabeled_tensors) {
+    const std::vector<torch::Tensor> &mapping_tensors,
+    const std::vector<torch::Tensor> &to_be_relabeled_tensors) {
   torch::Tensor frontier;
   std::vector<torch::Tensor> relabel_result;
   std::tie(frontier, relabel_result) =
@@ -331,11 +331,18 @@ void COOGraphDiv(std::shared_ptr<COO> coo, torch::Tensor data,
   }
 }
 
+// torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
+//                               int64_t walk_length) {
+//   torch::Tensor paths = impl::fusion::FusedRandomWalkCUDA(
+//       seeds, walk_length, csc->indices.data_ptr<int64_t>(),
+//       csc->indptr.data_ptr<int64_t>());
+//   return paths;
+// }
 torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
                               int64_t walk_length) {
   torch::Tensor paths = impl::fusion::FusedRandomWalkCUDA(
-      seeds, walk_length, csc->indices.data_ptr<int64_t>(),
-      csc->indptr.data_ptr<int64_t>());
+      seeds, walk_length, csc->indices.data_ptr<int32_t>(),
+      csc->indptr.data_ptr<int32_t>());
   return paths;
 }
 

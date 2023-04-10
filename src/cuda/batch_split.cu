@@ -89,8 +89,8 @@ std::vector<torch::Tensor> SplitIndptrByOffset(torch::Tensor indptr,
   size_tensor = size_tensor.to(torch::kCPU);
   auto data_ptr = size_tensor.data_ptr<int64_t>();
   std::vector<int64_t> split(data_ptr, data_ptr + size_tensor.numel());
-
-  return torch::split_with_sizes(split_indptr, split);
+  at::IntArrayRef split_sizes(split.data(), split.size()); 
+  return torch::split_with_sizes(split_indptr, split_sizes);
 }
 
 std::vector<torch::Tensor> SplitIndptrBySizeCUDA(torch::Tensor indptr,
@@ -100,7 +100,15 @@ std::vector<torch::Tensor> SplitIndptrBySizeCUDA(torch::Tensor indptr,
 
 std::vector<torch::Tensor> SplitIndptrByOffsetCUDA(torch::Tensor indptr,
                                                    torch::Tensor offsets) {
+  if(indptr.scalar_type()==torch::kInt64){
+ //   std::cout<<__FILE__<<":"<<__LINE__<<std::endl;
   return SplitIndptrByOffset<int64_t>(indptr, offsets);
+}
+else{
+// std::cout<<__FILE__<<__LINE__<<std::endl;
+  return SplitIndptrByOffset<int32_t>(indptr, offsets);
+}
+
 }
 }  // namespace impl
 }  // namespace gs

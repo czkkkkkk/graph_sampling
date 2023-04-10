@@ -262,13 +262,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(args)
 
-    if args.dataset == 'reddit':
-        dataset = load_reddit()
-    elif args.dataset == 'products':
-        dataset = load_ogb(
-            'ogbn-products', '/home/ubuntu/gs-experiments/datasets')
-    elif args.dataset == 'papers100m':
-        dataset = load_ogb('ogbn-papers100M',
-                           '/home/ubuntu/gs-experiments/datasets')
+    # if args.dataset == 'reddit':
+    #     dataset = load_reddit()
+    # elif args.dataset == 'products':
+    #     dataset = load_ogb(
+    #         'ogbn-products', '/home/ubuntu/gs-experiments/datasets')
+    # elif args.dataset == 'papers100m':
+    #     dataset = load_ogb('ogbn-papers100M',
+    #                        '/home/ubuntu/gs-experiments/datasets')
+    dataset = load
     print(dataset[0])
     train(dataset, args)

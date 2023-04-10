@@ -9,7 +9,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 set(CMAKE_CXX_FLAGS "-Wall -Wextra")
-set(CMAKE_CXX_FLAGS_DEBUG "-g")
+#set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 file(TO_NATIVE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/scripts/find_torch.py FIND_TORCH_PY)
@@ -54,7 +54,7 @@ target_link_libraries(gs Thrust)
 set_target_properties(gs PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 set_target_properties(gs PROPERTIES CUDA_STANDARD 14)
 set_target_properties(gs PROPERTIES POSITION_INDEPENDENT_CODE ON)
-
+#set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -lineinfo -O3 -Xcompiler  -DNDEBUG ")
 enable_testing()
 add_subdirectory(third_party/googletest)
 include_directories(third_party/googletest/googletest/include)

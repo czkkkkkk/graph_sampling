@@ -18,7 +18,6 @@ class SeedGenerator(object):
             indexes = torch.randperm(
                 self.data.shape[0], device=self.data.device)
             self.data = self.data[indexes].to('cuda')
-
         self.step = 0
         if self.drop_last:
             self.last_step = int((self.data.shape[0]) / self.batch_size)
@@ -31,9 +30,11 @@ class SeedGenerator(object):
     def __next__(self):
         if self.step >= self.last_step:
             raise StopIteration
-
-        ret = self.data[self.step * self.batch_size:(self.step + 1) *
-                        self.batch_size].clone()
+        # if self.step == self.last_step -1:
+        #ret = self.data[self.step * self.batch_size:self.data.shape[0]].clone()
+        # else:
+        #     print(self.data.device)
+        ret = self.data[self.step * self.batch_size:(self.step + 1) *self.batch_size].clone()
         self.step += 1
 
         return ret
