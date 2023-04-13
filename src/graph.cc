@@ -2,6 +2,7 @@
 
 #include <sstream>
 #include "bcast.h"
+#include "cuda/fusion/column_row_slicing.h"
 #include "cuda/graph_ops.h"
 #include "cuda/sddmm.h"
 #include "cuda/tensor_ops.h"
@@ -124,6 +125,34 @@ c10::intrusive_ptr<Graph> Graph::FusedBidirSlicing(torch::Tensor column_seeds,
       true, col_ids, row_ids, column_seeds.numel(), row_seeds.numel())));
   std::tie(csc_ptr, select_index) =
       FusedCSCColRowSlicing(csc_, col_ids, row_ids);
+  ret->SetCSC(csc_ptr);
+  if (data_.has_value()) {
+    if (csc_->e_ids.has_value()) {
+      out_data =
+          data_.value().index({csc_->e_ids.value().index({select_index})});
+    } else {
+      out_data = data_.value().index({select_index});
+    }
+    ret->SetData(out_data);
+  }
+  return ret;
+}
+
+c10::intrusive_ptr<Graph> Graph::BatchFusedBidirSlicing(
+    torch::Tensor column_seeds, torch::Tensor col_ptr, torch::Tensor row_seeds,
+    torch::Tensor row_ptr) {
+  torch::Tensor select_index, out_data, indptr, indices;
+  std::shared_ptr<CSC> csc_ptr;
+  torch::Tensor col_ids = (col_ids_.has_value())
+                              ? col_ids_.value().index({column_seeds})
+                              : column_seeds;
+  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
+      new Graph(true, col_ids, row_ids_, column_seeds.numel(), num_rows_)));
+  std::tie(indptr, indices, select_index) =
+      impl::fusion::BatchCSCColRowSlicingCUDA(csc_->indptr, csc_->indices,
+                                              col_ids, col_ptr, row_seeds,
+                                              row_ptr, num_rows_);
+  csc_ptr = std::make_shared<CSC>(CSC{indptr, indices, torch::nullopt});
   ret->SetCSC(csc_ptr);
   if (data_.has_value()) {
     if (csc_->e_ids.has_value()) {

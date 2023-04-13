@@ -48,7 +48,8 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_set_coo", &Graph::SetCOOByTensor)
       .def("_CAPI_batch_slicing", &Graph::BatchColSlicing)
       .def("_CAPI_decode", &Graph::Decode)
-      .def("_CAPI_set_metadata", &Graph::SetMetaData);
+      .def("_CAPI_set_metadata", &Graph::SetMetaData)
+      .def("_CAPI_batch_fusion_slicing", &Graph::BatchFusedBidirSlicing);
 
   m.class_<HeteroGraph>("HeteroGraph")
       .def(torch::init<>())
