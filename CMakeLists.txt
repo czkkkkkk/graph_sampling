@@ -27,6 +27,15 @@ set(Torch_DIR "${TORCH_PREFIX}/Torch")
 find_package(Torch REQUIRED)
 list(APPEND GS_EXTERNAL_LIB ${TORCH_LIBRARIES})
 
+# CUDA and Thrust
+add_subdirectory(third_party/thrust)
+set(THRUST_INCLUDE_CUB_CMAKE ON)
+find_package(Thrust REQUIRED CONFIG)
+thrust_create_target(Thrust)
+cuda_include_directories(BEFORE "${CMAKE_SOURCE_DIR}/third_party/thrust")
+cuda_include_directories(BEFORE "${CMAKE_SOURCE_DIR}/third_party/thrust/dependencies/cub")
+message(STATUS "Thrust ${THRUST_VERSION}")
+
 # GLOG
 SET(WITH_GFLAGS OFF)
 SET(WITH_GTEST OFF)
@@ -41,6 +50,7 @@ file(GLOB GS_SRC
 
 add_library(gs SHARED ${GS_SRC})
 target_link_libraries(gs ${GS_EXTERNAL_LIB})
+target_link_libraries(gs Thrust)
 set_target_properties(gs PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 set_target_properties(gs PROPERTIES CUDA_STANDARD 14)
 set_target_properties(gs PROPERTIES POSITION_INDEPENDENT_CODE ON)

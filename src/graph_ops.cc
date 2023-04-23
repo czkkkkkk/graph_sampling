@@ -223,7 +223,7 @@ std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCColSamplingProbs(
 std::pair<std::shared_ptr<CSC>, torch::Tensor> FusedCSCColSlicingAndSampling(
     std::shared_ptr<CSC> csc, torch::Tensor node_ids, int64_t fanout,
     bool replace) {
-  if (csc->indptr.device().type() == torch::kCUDA) {
+  if (csc->indptr.device().type() == torch::kCUDA || csc->indptr.is_pinned()) {
     torch::Tensor sub_indptr, sub_indices, select_index;
     if (fanout == 1 && replace) {
       std::tie(sub_indptr, sub_indices, select_index) =
@@ -260,8 +260,8 @@ torch::Tensor TensorUnique(torch::Tensor node_ids) {
 // tensor in to_be_relabeled_tensors with the hashmap. It return {unique_tensor,
 // {tensor1_after_relabeled, tensor2_after_relabeled, ...}}.
 std::tuple<torch::Tensor, std::vector<torch::Tensor>> BatchTensorRelabel(
-    std::vector<torch::Tensor> mapping_tensors,
-    std::vector<torch::Tensor> to_be_relabeled_tensors) {
+    const std::vector<torch::Tensor>& mapping_tensors,
+    const std::vector<torch::Tensor>& to_be_relabeled_tensors) {
   torch::Tensor frontier;
   std::vector<torch::Tensor> relabel_result;
   std::tie(frontier, relabel_result) =

@@ -24,9 +24,20 @@ class Graph : public torch::CustomClassHolder {
   void LoadCSR(torch::Tensor indptr, torch::Tensor indices);
   void LoadCSCWithColIds(torch::Tensor column_ids, torch::Tensor indptr,
                          torch::Tensor indices);
+  void SetMetaData(torch::optional<torch::Tensor> col_ids,
+                   torch::optional<torch::Tensor> row_ids, int64_t num_cols,
+                   int64_t num_rows) {
+    num_cols_ = num_cols;
+    num_rows_ = num_rows;
+    col_ids_ = col_ids;
+    row_ids_ = row_ids;
+  }
   void SetCSC(std::shared_ptr<CSC> csc);
   void SetCSR(std::shared_ptr<CSR> csr);
   void SetCOO(std::shared_ptr<COO> coo);
+  void SetCOOByTensor(torch::Tensor row, torch::Tensor col,
+                      torch::optional<torch::Tensor> e_ids, bool row_sorted,
+                      bool col_sorted);
   void SetData(torch::Tensor data);
   void SetValidCols(torch::Tensor val_cols);
   void SetValidRows(torch::Tensor val_rows);
@@ -39,15 +50,25 @@ class Graph : public torch::CustomClassHolder {
   std::shared_ptr<CSC> GetCSC();
   std::shared_ptr<CSR> GetCSR();
   std::shared_ptr<COO> GetCOO();
+  std::vector<torch::Tensor> GetCSCTensor();
+  std::vector<torch::Tensor> GetCOOTensor();
   torch::optional<torch::Tensor> GetData(std::string order = "default");
   int64_t GetNumRows();
   int64_t GetNumCols();
   int64_t GetNumEdges();
   c10::intrusive_ptr<Graph> FusedBidirSlicing(torch::Tensor column_seeds,
                                               torch::Tensor row_seeds);
+  c10::intrusive_ptr<Graph> BatchFusedBidirSlicing(torch::Tensor column_seeds,
+                                                   torch::Tensor col_ptr,
+                                                   torch::Tensor row_seeds,
+                                                   torch::Tensor row_ptr);
   c10::intrusive_ptr<Graph> Slicing(torch::Tensor n_ids, int64_t axis,
                                     int64_t on_format, int64_t output_format,
                                     bool relabel = false);
+  std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> BatchSlicing(
+      torch::Tensor n_ids, torch::Tensor nid_ptr, int64_t axis,
+      int64_t on_format, int64_t output_format, bool relabel, bool encoding);
+
   c10::intrusive_ptr<Graph> Sampling(int64_t axis, int64_t fanout, bool replace,
                                      int64_t on_format, int64_t output_format);
   c10::intrusive_ptr<Graph> SamplingProbs(int64_t axis,
@@ -58,8 +79,11 @@ class Graph : public torch::CustomClassHolder {
   c10::intrusive_ptr<Graph> ColumnwiseFusedSlicingAndSampling(
       torch::Tensor column_index, int64_t fanout, bool replace);
   torch::Tensor Sum(int64_t axis, int64_t powk, int64_t on_format);
+  c10::intrusive_ptr<Graph> Normalize(int64_t axis, int64_t on_format);
   c10::intrusive_ptr<Graph> Divide(torch::Tensor divisor, int64_t axis,
                                    int64_t on_format);
+  std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> EDivUSum(
+      torch::Tensor divisor);
   // A "valid" node means that the node is required by the user or that it is
   // not an isolated node.
   torch::Tensor AllValidNode();
@@ -77,10 +101,14 @@ class Graph : public torch::CustomClassHolder {
              torch::optional<torch::Tensor>, std::string>
   Relabel();
   std::vector<torch::Tensor> MetaData();
+  std::vector<torch::Tensor> COOMetaData();
+  std::vector<torch::Tensor> CSCMetaData();
   torch::Tensor RandomWalk(torch::Tensor seeds, int64_t walk_length);
   void SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
              torch::Tensor out, int64_t lhs_target, int64_t rhs_target,
              int64_t on_format);
+  std::vector<c10::intrusive_ptr<Graph>> Split(int64_t split_size);
+  void Decode(int64_t encoding_size);
 
   // todo: return global_e_id
  private:

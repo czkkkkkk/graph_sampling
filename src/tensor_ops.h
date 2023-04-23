@@ -23,7 +23,12 @@ std::tuple<torch::Tensor, torch::Tensor> ListSamplingProbs(torch::Tensor data,
                                                            int64_t num_picks,
                                                            bool replace);
 
+std::tuple<torch::Tensor, torch::Tensor> BatchListSamplingProbs(
+    torch::Tensor probs, int64_t num_picks, bool replace, torch::Tensor range);
+
 torch::Tensor IndexSearch(torch::Tensor origin_data, torch::Tensor keys);
 
+std::vector<torch::Tensor> SplitByOffset(torch::Tensor data,
+                                         torch::Tensor offset);
 }  // namespace gs
 #endif
