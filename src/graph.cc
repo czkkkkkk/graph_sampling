@@ -3,6 +3,7 @@
 #include <sstream>
 #include "bcast.h"
 #include "cuda/fusion/column_row_slicing.h"
+#include "cuda/fusion/edge_map_reduce.h"
 #include "cuda/graph_ops.h"
 #include "cuda/sddmm.h"
 #include "cuda/tensor_ops.h"
@@ -786,6 +787,31 @@ c10::intrusive_ptr<Graph> Graph::Divide(torch::Tensor divisor, int64_t axis,
   if (val_col_ids_.has_value()) ret->SetValidCols(val_col_ids_.value());
   if (val_row_ids_.has_value()) ret->SetValidRows(val_row_ids_.value());
   return ret;
+}
+
+std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::EDivUSum(
+    torch::Tensor divisor) {
+  CreateSparseFormat(_COO);
+  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
+      new Graph(is_subgraph_, col_ids_, row_ids_, num_cols_, num_rows_)));
+  auto in_data =
+      data_.has_value()
+          ? data_.value()
+          : torch::ones(num_edges_,
+                        torch::dtype(torch::kFloat32).device(torch::kCUDA));
+  torch::Tensor out_data = torch::zeros(num_edges_, in_data.options());
+  torch::Tensor out_sum = torch::zeros(num_cols_, in_data.options());
+  impl::fusion::COOEDivUSum(coo_->row, coo_->col, in_data, divisor, out_data,
+                            out_sum);
+
+  ret->SetCSC(csc_);
+  ret->SetCSR(csr_);
+  ret->SetCOO(coo_);
+  ret->SetNumEdges(num_edges_);
+  ret->SetData(out_data);
+  if (val_col_ids_.has_value()) ret->SetValidCols(val_col_ids_.value());
+  if (val_row_ids_.has_value()) ret->SetValidRows(val_row_ids_.value());
+  return {ret, out_sum};
 }
 
 torch::Tensor Graph::AllValidNode() {
