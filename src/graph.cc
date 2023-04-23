@@ -309,7 +309,7 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor n_ids, int64_t axis,
   return ret;
 }
 
-std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::BatchColSlicing(
+std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::BatchSlicing(
     torch::Tensor n_ids, torch::Tensor nid_ptr, int64_t axis, int64_t on_format,
     int64_t output_format, bool relabel, bool encoding) {
   CreateSparseFormat(on_format);
@@ -332,7 +332,7 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::BatchColSlicing(
     new_num_cols = n_ids.numel();
     new_num_rows = num_rows_ * batch_num;
   } else {
-    LOG(FATAL) << "batch col slicing only suppurt column slicing now";
+    LOG(FATAL) << "batch slicing only suppurt column slicing now";
   }
 
   if (on_format == _CSC) {
@@ -388,66 +388,6 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::BatchColSlicing(
     ret->SetData(out_data);
   }
   return {ret, coo_offsets};
-}
-
-std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor, torch::Tensor,
-           torch::Tensor>
-Graph::BatchSlicing(torch::Tensor selected_node_ids, int64_t axis,
-                    int64_t on_format, int64_t output_format,
-                    torch::Tensor indices_ptr, torch::Tensor node_ids_ptr) {
-  CreateSparseFormat(on_format);
-  std::shared_ptr<COO> coo_ptr;
-  std::shared_ptr<CSC> csc_ptr;
-  std::shared_ptr<CSR> csr_ptr;
-  std::shared_ptr<_TMP> tmp_ptr;
-  torch::Tensor row, col, coo_indices_ptr, select_index;
-  torch::optional<torch::Tensor> e_ids, new_col_ids, new_row_ids, new_val_cols,
-      new_val_rows;
-  int64_t new_num_cols, new_num_rows, new_num_edges;
-
-  if (axis == 0) {
-    LOG(FATAL) << "batch slicing just suppurt row slicing now";
-  } else {
-    new_col_ids = col_ids_;
-    new_row_ids = row_ids_.has_value()
-                      ? row_ids_.value().index({selected_node_ids})
-                      : selected_node_ids;
-    new_num_cols = num_cols_;
-    new_num_rows = selected_node_ids.numel();
-  }
-
-  if (on_format == _COO) {
-    std::tie(coo_ptr, row, col, coo_indices_ptr, select_index) =
-        BatchCOORowSlicing(coo_, selected_node_ids, indices_ptr, node_ids_ptr);
-    new_num_edges = coo_ptr->row.numel();
-    e_ids = coo_->e_ids;
-
-  } else {
-    LOG(FATAL) << "Batch Slicing only support COO format";
-  }
-  auto ret = c10::intrusive_ptr<Graph>(std::unique_ptr<Graph>(
-      new Graph(true, new_col_ids, new_row_ids, new_num_cols, new_num_rows)));
-  ret->SetNumEdges(new_num_edges);
-  ret->SetCOO(coo_ptr);
-  ret->SetCSC(csc_ptr);
-  ret->SetCSR(csr_ptr);
-  if (new_val_cols.has_value()) ret->SetValidCols(new_val_cols.value());
-  if (new_val_rows.has_value()) ret->SetValidRows(new_val_rows.value());
-  if (data_.has_value()) {
-    torch::Tensor out_data, data_index;
-    if (e_ids.has_value())
-      data_index =
-          (e_ids.value().is_pinned())
-              ? impl::IndexSelectCPUFromGPU(e_ids.value(), select_index)
-              : e_ids.value().index({select_index});
-    else
-      data_index = select_index;
-    out_data = (data_.value().is_pinned())
-                   ? impl::IndexSelectCPUFromGPU(data_.value(), data_index)
-                   : data_.value().index({data_index});
-    ret->SetData(out_data);
-  }
-  return std::make_tuple(ret, row, col, coo_indices_ptr);
 }
 
 c10::intrusive_ptr<Graph> Graph::Sampling(int64_t axis, int64_t fanout,

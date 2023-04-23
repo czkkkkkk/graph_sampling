@@ -169,26 +169,6 @@ std::pair<std::shared_ptr<_TMP>, torch::Tensor> DCSCColSlicing(
   }
 }
 
-std::tuple<std::shared_ptr<COO>, torch::Tensor, torch::Tensor, torch::Tensor,
-           torch::Tensor>
-BatchCOORowSlicing(std::shared_ptr<COO> coo, torch::Tensor node_ids,
-                   torch::Tensor indices_ptr, torch::Tensor node_ids_ptr) {
-  if (coo->col.device().type() == torch::kCUDA) {
-    torch::Tensor sub_coo_row, sub_coo_col, coo_ptr, select_index;
-    std::tie(sub_coo_row, sub_coo_col, coo_ptr, select_index) =
-        impl::BatchCOORowSlicingCUDA(coo->row, coo->col, node_ids, indices_ptr,
-                                     node_ids_ptr);
-    return std::make_tuple(
-        std::make_shared<COO>(COO{sub_coo_row, sub_coo_col, torch::nullopt,
-                                  coo->row_sorted, coo->col_sorted}),
-        sub_coo_row, sub_coo_col, coo_ptr, select_index);
-  } else {
-    LOG(FATAL) << "Not implemented warning";
-    return std::make_tuple(std::make_shared<COO>(COO{}), torch::Tensor(),
-                           torch::Tensor(), torch::Tensor(), torch::Tensor());
-  }
-}
-
 // axis = 0 for column; reverse = 1 for row;
 std::pair<std::shared_ptr<COO>, torch::Tensor> COOColSlicing(
     std::shared_ptr<COO> coo, torch::Tensor node_ids, int64_t axis) {
