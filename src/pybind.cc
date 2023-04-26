@@ -26,6 +26,8 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_GetCSRIndices", &Graph::GetCSRIndices)
       .def("_CAPI_GetCSREids", &Graph::GetCSREids)
       .def("_CAPI_Slicing", &Graph::Slicing)
+      .def("_CAPI_Sampling", &Graph::Sampling)
+      .def("_CAPI_SamplingProbs", &Graph::SamplingProbs)
       .def("_CAPI_RandomWalk", &Graph::RandomWalk)
       .def("_CAPI_Node2Vec", &Graph::Node2Vec);
 }

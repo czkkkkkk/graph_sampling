@@ -111,6 +111,47 @@ std::pair<std::shared_ptr<COO>, torch::Tensor> COOSlicing(
   }
 }
 
+// sampling operators
+std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCColSampling(
+    std::shared_ptr<CSC> csc, int64_t fanout, bool replace, bool with_coo) {
+  if (csc->indptr.device().type() == torch::kCUDA) {
+    torch::Tensor sub_indptr, sub_coo_col, sub_indices, select_index;
+    std::tie(sub_indptr, sub_coo_col, sub_indices, select_index) =
+        impl::CSCColSamplingCUDA(csc->indptr, csc->indices, fanout, replace,
+                                 with_coo);
+    return {std::make_shared<_TMP>(_TMP{sub_indptr, sub_coo_col, sub_indices}),
+            select_index};
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return {std::make_shared<_TMP>(_TMP{}), torch::Tensor()};
+  }
+}
+
+std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCColSamplingProbs(
+    std::shared_ptr<CSC> csc, torch::Tensor edge_probs, int64_t fanout,
+    bool replace, bool with_coo) {
+  if (csc->indptr.device().type() == torch::kCUDA) {
+    torch::Tensor sub_indptr, sub_coo_col, sub_indices, select_index;
+    torch::Tensor input_edge_probs;
+
+    if (csc->e_ids.has_value()) {
+      input_edge_probs = edge_probs.index_select(0, csc->e_ids.value());
+    } else {
+      input_edge_probs = edge_probs;
+    }
+
+    std::tie(sub_indptr, sub_coo_col, sub_indices, select_index) =
+        impl::CSCColSamplingProbsCUDA(csc->indptr, csc->indices,
+                                      input_edge_probs, fanout, replace,
+                                      with_coo);
+    return {std::make_shared<_TMP>(_TMP{sub_indptr, sub_coo_col, sub_indices}),
+            select_index};
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return {std::make_shared<_TMP>(_TMP{}), torch::Tensor()};
+  }
+}
+
 torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
                               int64_t walk_length) {
   torch::Tensor paths = impl::fusion::FusedRandomWalkCUDA(

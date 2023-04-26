@@ -8,7 +8,6 @@ namespace gs {
 namespace impl {
 
 // slicing
-
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 OnIndptrSlicingCUDA(torch::Tensor indptr, torch::Tensor indices,
                     torch::Tensor seeds, bool with_coo);
@@ -19,6 +18,16 @@ OnIndicesSlicingCUDA(torch::Tensor indptr, torch::Tensor indices,
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> COORowSlicingCUDA(
     torch::Tensor coo_row, torch::Tensor coo_col, torch::Tensor row_ids);
+
+// sampling
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+CSCColSamplingCUDA(torch::Tensor indptr, torch::Tensor indices, int64_t fanout,
+                   bool replace, bool with_out);
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+CSCColSamplingProbsCUDA(torch::Tensor indptr, torch::Tensor indices,
+                        torch::Tensor probs, int64_t fanout, bool replace,
+                        bool with_out);
 
 std::pair<torch::Tensor, torch::Tensor> CSC2COOCUDA(torch::Tensor indptr,
                                                     torch::Tensor indices);

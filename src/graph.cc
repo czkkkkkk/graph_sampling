@@ -157,6 +157,117 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::Slicing(
   return {ret, select_index};
 }
 
+// axis == 0 for sample column and axis == 1 for sample row
+std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::Sampling(
+    int64_t axis, int64_t fanout, bool replace, int64_t on_format,
+    int64_t output_format) {
+  CreateSparseFormat(on_format);
+  torch::Tensor select_index;
+  std::shared_ptr<_TMP> tmp_ptr = nullptr;
+  bool with_coo = output_format & _COO;
+
+  // sampling does not change the shape of graph/matrix
+  auto ret = c10::intrusive_ptr<Graph>(
+      std::unique_ptr<Graph>(new Graph(num_rows_, num_cols_)));
+
+  if (axis == 0 && on_format == _CSC) {
+    CHECK(output_format != _CSR)
+        << "Error in Sampling, Not implementation [on_format = CSC, "
+           "output_forat = CSR] !";
+
+    std::tie(tmp_ptr, select_index) =
+        CSCColSampling(csc_, fanout, replace, with_coo);
+
+    if (output_format & _CSC)
+      ret->SetCSC(std::make_shared<CSC>(
+          CSC{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+    if (output_format & _COO)
+      ret->SetCOO(std::make_shared<COO>(COO{tmp_ptr->coo_in_indices,
+                                            tmp_ptr->coo_in_indptr,
+                                            torch::nullopt, false, true}));
+
+    ret->SetNumEdges(select_index.numel());
+  } else if (axis == 1 && on_format == _CSR) {
+    CHECK(output_format != _CSC)
+        << "Error in Sampling, Not implementation [on_format = CSR, "
+           "output_forat = CSC] !";
+
+    std::tie(tmp_ptr, select_index) =
+        CSCColSampling(csr_, fanout, replace, with_coo);
+
+    if (output_format & _CSR)
+      ret->SetCSR(std::make_shared<CSR>(
+          CSR{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+    if (output_format & _COO)
+      ret->SetCOO(std::make_shared<COO>(COO{tmp_ptr->coo_in_indptr,
+                                            tmp_ptr->coo_in_indices,
+                                            torch::nullopt, true, false}));
+
+    ret->SetNumEdges(select_index.numel());
+  } else {
+    CHECK(false) << "Error in Sampling, Not implementation [axis = " << axis
+                 << ", on_format = " << on_format
+                 << ", output_forat = " << output_format << "] !";
+  }
+
+  return {ret, select_index};
+}
+
+std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::SamplingProbs(
+    int64_t axis, torch::Tensor edge_probs, int64_t fanout, bool replace,
+    int64_t on_format, int64_t output_format) {
+  CreateSparseFormat(on_format);
+  torch::Tensor select_index;
+  std::shared_ptr<_TMP> tmp_ptr = nullptr;
+  bool with_coo = output_format & _COO;
+
+  // sampling does not change the shape of graph/matrix
+  auto ret = c10::intrusive_ptr<Graph>(
+      std::unique_ptr<Graph>(new Graph(num_rows_, num_cols_)));
+
+  if (axis == 0 && on_format == _CSC) {
+    CHECK(output_format != _CSR)
+        << "Error in SamplingProbs, Not implementation [on_format = CSC, "
+           "output_forat = CSR] !";
+
+    std::tie(tmp_ptr, select_index) =
+        CSCColSamplingProbs(csc_, edge_probs, fanout, replace, with_coo);
+
+    if (output_format & _CSC)
+      ret->SetCSC(std::make_shared<CSC>(
+          CSC{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+    if (output_format & _COO)
+      ret->SetCOO(std::make_shared<COO>(COO{tmp_ptr->coo_in_indices,
+                                            tmp_ptr->coo_in_indptr,
+                                            torch::nullopt, false, true}));
+
+    ret->SetNumEdges(select_index.numel());
+  } else if (axis == 1 && on_format == _CSR) {
+    CHECK(output_format != _CSC)
+        << "Error in SamplingProbs, Not implementation [on_format = CSR, "
+           "output_forat = CSC] !";
+
+    std::tie(tmp_ptr, select_index) =
+        CSCColSamplingProbs(csr_, edge_probs, fanout, replace, with_coo);
+
+    if (output_format & _CSR)
+      ret->SetCSR(std::make_shared<CSR>(
+          CSR{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+    if (output_format & _COO)
+      ret->SetCOO(std::make_shared<COO>(COO{tmp_ptr->coo_in_indptr,
+                                            tmp_ptr->coo_in_indices,
+                                            torch::nullopt, true, false}));
+
+    ret->SetNumEdges(select_index.numel());
+  } else {
+    CHECK(false) << "Error in SamplingProbs, Not implementation [axis = "
+                 << axis << ", on_format = " << on_format
+                 << ", output_forat = " << output_format << "] !";
+  }
+
+  return {ret, select_index};
+}
+
 torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length) {
   return FusedRandomWalk(this->csc_, seeds, walk_length);
 }

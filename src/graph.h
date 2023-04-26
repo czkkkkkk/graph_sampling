@@ -78,15 +78,15 @@ class Graph : public torch::CustomClassHolder {
   std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Slicing(
       torch::Tensor seeds, int64_t axis, int64_t on_format,
       int64_t output_format, bool compact = false);
-  /*
-  c10::intrusive_ptr<Graph> Sampling(int64_t axis, int64_t fanout, bool replace,
-                                     int64_t on_format, int64_t output_format);
-  c10::intrusive_ptr<Graph> SamplingProbs(int64_t axis,
-                                          torch::Tensor edge_probs,
-                                          int64_t fanout, bool replace,
-                                          int64_t on_format,
-                                          int64_t output_format);
 
+  std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Sampling(
+      int64_t axis, int64_t fanout, bool replace, int64_t on_format,
+      int64_t output_format);
+  std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> SamplingProbs(
+      int64_t axis, torch::Tensor edge_probs, int64_t fanout, bool replace,
+      int64_t on_format, int64_t output_format);
+
+  /*
   void SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
              torch::Tensor out, int64_t lhs_target, int64_t rhs_target,
              int64_t on_format);
