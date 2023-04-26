@@ -101,6 +101,8 @@ class Graph : public torch::CustomClassHolder {
   */
 
   torch::Tensor RandomWalk(torch::Tensor seeds, int64_t walk_length);
+  torch::Tensor Node2Vec(torch::Tensor seeds, int64_t walk_length, double p,
+                         double q);
 
  private:
   int64_t num_cols_ = 0;   // total number of cols in matrix

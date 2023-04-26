@@ -13,6 +13,8 @@ std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
 
 torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
                               int64_t walk_length);
+torch::Tensor FusedNode2Vec(std::shared_ptr<CSC> csc, torch::Tensor seeds,
+                            int64_t walk_length, double p, double q);
 
 }  // namespace gs
 

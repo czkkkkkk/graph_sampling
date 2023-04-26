@@ -1,7 +1,7 @@
-#include "./graph_ops.h"
-
+#include "graph_ops.h"
 #include "bcast.h"
 #include "cuda/fusion/column_row_slicing.h"
+#include "cuda/fusion/node2vec.h"
 #include "cuda/fusion/random_walk.h"
 #include "cuda/fusion/slice_sampling.h"
 #include "cuda/graph_ops.h"
@@ -64,6 +64,14 @@ torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
   torch::Tensor paths = impl::fusion::FusedRandomWalkCUDA(
       seeds, walk_length, csc->indices.data_ptr<int64_t>(),
       csc->indptr.data_ptr<int64_t>());
+  return paths;
+}
+
+torch::Tensor FusedNode2Vec(std::shared_ptr<CSC> csc, torch::Tensor seeds,
+                            int64_t walk_length, double p, double q) {
+  torch::Tensor paths = impl::fusion::FusedNode2VecCUDA(
+      seeds, walk_length, csc->indices.data_ptr<int64_t>(),
+      csc->indptr.data_ptr<int64_t>(), p, q);
   return paths;
 }
 

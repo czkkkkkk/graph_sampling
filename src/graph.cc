@@ -88,5 +88,8 @@ c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor seeds, int64_t axis,
 torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length) {
   return FusedRandomWalk(this->csc_, seeds, walk_length);
 }
-
+torch::Tensor Graph::Node2Vec(torch::Tensor seeds, int64_t walk_length,
+                              double p, double q) {
+  return FusedNode2Vec(this->csc_, seeds, walk_length, p, q);
+}
 }  // namespace gs
