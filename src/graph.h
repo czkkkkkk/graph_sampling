@@ -75,9 +75,9 @@ class Graph : public torch::CustomClassHolder {
   torch::Tensor GetCSREids();
 
   // graph operation
-  c10::intrusive_ptr<Graph> Slicing(torch::Tensor seeds, int64_t axis,
-                                    int64_t on_format, int64_t output_format,
-                                    bool compact = false);
+  std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Slicing(
+      torch::Tensor seeds, int64_t axis, int64_t on_format,
+      int64_t output_format, bool compact = false);
   /*
   c10::intrusive_ptr<Graph> Sampling(int64_t axis, int64_t fanout, bool replace,
                                      int64_t on_format, int64_t output_format);

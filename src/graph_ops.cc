@@ -59,6 +59,58 @@ std::shared_ptr<CSC> GraphCOO2CSC(std::shared_ptr<COO> coo, int64_t num_items,
   }
 }
 
+// Slicing Operators
+std::pair<std::shared_ptr<_TMP>, torch::Tensor> OnIndptrSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor node_ids, bool with_coo) {
+  auto csc_type = csc->indptr.device().type();
+  if (csc_type == torch::kCUDA || csc->indptr.is_pinned()) {
+    torch::Tensor sub_indptr, coo_col, coo_row, select_index;
+    std::tie(sub_indptr, coo_col, coo_row, select_index) =
+        impl::OnIndptrSlicingCUDA(csc->indptr, csc->indices, node_ids,
+                                  with_coo);
+    return {std::make_shared<_TMP>(_TMP{sub_indptr, coo_col, coo_row}),
+            select_index};
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return {std::make_shared<_TMP>(_TMP{}), torch::Tensor()};
+  }
+}
+
+std::pair<std::shared_ptr<_TMP>, torch::Tensor> OnIndicesSlicing(
+    std::shared_ptr<CSC> csc, torch::Tensor node_ids, bool with_coo) {
+  if (csc->indptr.device().type() == torch::kCUDA) {
+    torch::Tensor sub_indptr, coo_col, coo_row, select_index;
+    std::tie(sub_indptr, coo_col, coo_row, select_index) =
+        impl::OnIndicesSlicingCUDA(csc->indptr, csc->indices, node_ids,
+                                   with_coo);
+    return {std::make_shared<_TMP>(_TMP{sub_indptr, coo_col, coo_row}),
+            select_index};
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return {std::make_shared<_TMP>(_TMP{}), torch::Tensor()};
+  }
+}
+
+// axis == 0 for row, axis == 1 for column
+std::pair<std::shared_ptr<COO>, torch::Tensor> COOSlicing(
+    std::shared_ptr<COO> coo, torch::Tensor node_ids, int64_t axis) {
+  if (coo->col.device().type() == torch::kCUDA) {
+    torch::Tensor sub_coo_row, sub_coo_col, select_index;
+    if (axis == 0)
+      std::tie(sub_coo_row, sub_coo_col, select_index) =
+          impl::COORowSlicingCUDA(coo->row, coo->col, node_ids);
+    else
+      std::tie(sub_coo_col, sub_coo_row, select_index) =
+          impl::COORowSlicingCUDA(coo->col, coo->row, node_ids);
+    return {std::make_shared<COO>(COO{sub_coo_row, sub_coo_col, torch::nullopt,
+                                      coo->row_sorted, coo->col_sorted}),
+            select_index};
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return {std::make_shared<COO>(COO{}), torch::Tensor()};
+  }
+}
+
 torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
                               int64_t walk_length) {
   torch::Tensor paths = impl::fusion::FusedRandomWalkCUDA(

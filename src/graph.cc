@@ -77,12 +77,84 @@ torch::Tensor Graph::GetCSREids() {
   return csr_->e_ids.has_value() ? csr_->e_ids.value() : torch::Tensor();
 }
 
-c10::intrusive_ptr<Graph> Graph::Slicing(torch::Tensor seeds, int64_t axis,
-                                         int64_t on_format,
-                                         int64_t output_format, bool compact) {
+// todo : not support compact
+// axis == 0 for row, axis == 1 for column
+std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::Slicing(
+    torch::Tensor seeds, int64_t axis, int64_t on_format, int64_t output_format,
+    bool compact) {
+  CreateSparseFormat(on_format);
+  torch::Tensor select_index;
+  std::shared_ptr<COO> coo_ptr = nullptr;
+  std::shared_ptr<CSC> csc_ptr = nullptr;
+  std::shared_ptr<CSR> csr_ptr = nullptr;
+  std::shared_ptr<_TMP> tmp_ptr = nullptr;
+  bool with_coo = output_format & _COO;
+  int64_t new_num_cols, new_num_rows;
+
+  if (axis == 0) {
+    new_num_cols = num_cols_;
+    new_num_rows = seeds.numel();
+  } else {
+    new_num_cols = seeds.numel();
+    new_num_rows = num_rows_;
+  }
   auto ret = c10::intrusive_ptr<Graph>(
-      std::unique_ptr<Graph>(new Graph(this->num_rows_, this->num_cols_)));
-  return ret;
+      std::unique_ptr<Graph>(new Graph(new_num_rows, new_num_cols)));
+
+  if (on_format == _COO) {
+    std::tie(coo_ptr, select_index) = COOSlicing(coo_, seeds, axis);
+
+  } else if (on_format == _CSC) {
+    CHECK(output_format != _CSR)
+        << "Error in Slicing, Not implementation [on_format = CSC, "
+           "output_forat = CSR] !";
+
+    if (axis == 0) {
+      std::tie(tmp_ptr, select_index) = OnIndicesSlicing(csc_, seeds, with_coo);
+    } else {
+      std::tie(tmp_ptr, select_index) = OnIndptrSlicing(csc_, seeds, with_coo);
+    }
+
+    if (output_format & _CSC) {
+      csc_ptr = std::make_shared<CSC>(
+          CSC{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt});
+    }
+
+    if (output_format & _COO) {
+      coo_ptr = std::make_shared<COO>(COO{tmp_ptr->coo_in_indices,
+                                          tmp_ptr->coo_in_indptr,
+                                          torch::nullopt, false, true});
+    }
+
+  } else if (on_format == _CSR) {
+    CHECK(output_format != _CSC)
+        << "Error in Slicing, Not implementation [on_format = CSR, "
+           "output_forat = CSC] !";
+
+    if (axis == 0) {
+      std::tie(tmp_ptr, select_index) = OnIndptrSlicing(csr_, seeds, with_coo);
+    } else {
+      std::tie(tmp_ptr, select_index) = OnIndicesSlicing(csr_, seeds, with_coo);
+    }
+
+    if (output_format & _CSR) {
+      csr_ptr = std::make_shared<CSR>(
+          CSR{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt});
+    }
+
+    if (output_format & _COO) {
+      coo_ptr = std::make_shared<COO>(COO{tmp_ptr->coo_in_indptr,
+                                          tmp_ptr->coo_in_indices,
+                                          torch::nullopt, true, false});
+    }
+  }
+
+  ret->SetNumEdges(select_index.numel());
+  ret->SetCOO(coo_ptr);
+  ret->SetCSC(csc_ptr);
+  ret->SetCSR(csr_ptr);
+
+  return {ret, select_index};
 }
 
 torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length) {
