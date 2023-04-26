@@ -551,7 +551,7 @@ c10::intrusive_ptr<Graph> Graph::SamplingProbs(int64_t axis,
       }
       ret->SetData(out_data);
     }
-
+   
   } else {
     LOG(FATAL) << "No implementation!";
   }
@@ -676,6 +676,10 @@ void Graph::CreateSparseFormat(int64_t format) {
 torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length) {
   return FusedRandomWalk(this->csc_, seeds, walk_length);
 }
+torch::Tensor Graph::Node2Vec(torch::Tensor seeds, int64_t walk_length,double p,double q) {
+  return FusedNode2Vec(this->csc_, seeds, walk_length,p,q);
+}
+
 
 torch::Tensor Graph::Sum(int64_t axis, int64_t powk, int64_t on_format) {
   CreateSparseFormat(on_format);
@@ -847,7 +851,7 @@ torch::Tensor Graph::GetRows() {
   if (row_ids_.has_value()) {
     return row_ids_.value();
   } else {
-    if (csr_ != nullptr) {
+        if (csr_ != nullptr) {
       return torch::arange(num_rows_, csr_->indices.options());
     } else {
       return torch::arange(num_rows_, csc_->indices.options());

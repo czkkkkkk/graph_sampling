@@ -103,6 +103,7 @@ class Graph : public torch::CustomClassHolder {
   std::vector<torch::Tensor> COOMetaData();
   std::vector<torch::Tensor> CSCMetaData();
   torch::Tensor RandomWalk(torch::Tensor seeds, int64_t walk_length);
+  torch::Tensor Node2Vec(torch::Tensor seeds, int64_t walk_length,double p,double q);
   void SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
              torch::Tensor out, int64_t lhs_target, int64_t rhs_target,
              int64_t on_format);

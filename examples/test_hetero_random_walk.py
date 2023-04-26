@@ -36,4 +36,6 @@ print("random walk fused:")
 other_nodes = heteroM.metapath_random_walk_fused(
     seeds, ['view', 'follow', 'follow'])
 
-print(other_nodes.reshape((-1, seeds.numel())))
+print("without reshape:",other_nodes)
+
+print("with reshape:",other_nodes.reshape((-1, seeds.numel())))

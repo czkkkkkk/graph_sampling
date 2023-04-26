@@ -40,6 +40,7 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_coo_metadata", &Graph::COOMetaData)
       .def("_CAPI_csc_metadata", &Graph::CSCMetaData)
       .def("_CAPI_random_walk", &Graph::RandomWalk)
+      .def("_CAPI_node2vec_random_walk", &Graph::Node2Vec)
       .def("_CAPI_sddmm", &Graph::SDDMM)
       .def("_CAPI_split", &Graph::Split)
       .def("_CAPI_get_csc", &Graph::GetCSCTensor)
