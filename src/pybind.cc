@@ -29,7 +29,9 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_Sampling", &Graph::Sampling)
       .def("_CAPI_SamplingProbs", &Graph::SamplingProbs)
       .def("_CAPI_RandomWalk", &Graph::RandomWalk)
-      .def("_CAPI_Node2Vec", &Graph::Node2Vec);
+      .def("_CAPI_Node2Vec", &Graph::Node2Vec)
+      .def("_CAPI_SDDMM", &Graph::SDDMM)
+      .def("_CAPI_SpMM", &Graph::SpMM);
 }
 
 TORCH_LIBRARY(gs_ops, m) {

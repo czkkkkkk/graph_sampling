@@ -85,13 +85,14 @@ class Graph : public torch::CustomClassHolder {
   std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> SamplingProbs(
       int64_t axis, torch::Tensor edge_probs, int64_t fanout, bool replace,
       int64_t on_format, int64_t output_format);
-
-  /*
   void SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
              torch::Tensor out, int64_t lhs_target, int64_t rhs_target,
              int64_t on_format);
+  void SpMM(const std::string& op, const std::string& reduce,
+            torch::Tensor ufeat, torch::Tensor efeat, torch::Tensor out,
+            torch::Tensor argu, torch::Tensor arge, int64_t u_target, int64_t on_format);
 
-
+  /*
   std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,
              torch::optional<torch::Tensor>, std::string>
   Relabel(torch::Tensor col_seeds, torch::Tensor row_ids,

@@ -1,4 +1,3 @@
-add_compile_definitions(_GLIBCXX_USE_CXX11_ABI=0)
 cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
 
 project(GS LANGUAGES CXX CUDA)
@@ -13,7 +12,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 file(TO_NATIVE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/scripts/find_torch.py FIND_TORCH_PY)
-set(PYTHON_INTERP /home/gpzlx1/workspace/graph_sampling/venv/bin/python)
+set(PYTHON_INTERP python)
 message(STATUS "Using Python interpreter: ${PYTHON_INTERP}")
 execute_process(
   COMMAND ${PYTHON_INTERP} ${FIND_TORCH_PY}
@@ -60,6 +59,6 @@ add_subdirectory(third_party/googletest)
 include_directories(third_party/googletest/googletest/include)
 include_directories("src")
 file(GLOB_RECURSE TEST_SRC_FILES ${PROJECT_SOURCE_DIR}/tests/*.cc)
-#add_executable(runUnitTests ${TEST_SRC_FILES})
-#target_link_libraries(runUnitTests gs gtest gtest_main)
-#add_test(UnitTests runUnitTests)
+add_executable(runUnitTests ${TEST_SRC_FILES})
+target_link_libraries(runUnitTests gs gtest gtest_main)
+add_test(UnitTests runUnitTests)
