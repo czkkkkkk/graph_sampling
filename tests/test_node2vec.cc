@@ -34,12 +34,12 @@ TEST(Node2Vec, testGraphWithMultiPath)
     auto indptr = torch::from_blob(indptr1, {5}, options).to(torch::kCUDA);
     auto indices = torch::from_blob(indices1, {5}, options).to(torch::kCUDA);
     int64_t walk_length = 3;
-    Graph A(indptr.numel()-1, indptr.numel()-1);
-    A.LoadCSC(indptr,indices);
+    Graph A(indptr.numel() - 1, indptr.numel() - 1);
+    A.LoadCSC(indptr, indices);
 
     std::vector<int64_t> seeds_vector = {4, 2, 3, 1};
     torch::Tensor seeds = torch::from_blob(seeds_vector.data(), {4}, options).to(torch::kCUDA);
-    torch::Tensor actual_path_tensor = A.Node2Vec(seeds, walk_length,2,0.5).reshape({-1, seeds.numel()}).to(torch::kCPU);
+    torch::Tensor actual_path_tensor = A.Node2Vec(seeds, walk_length, 2, 0.5).reshape({-1, seeds.numel()}).to(torch::kCPU);
     /*
     if seed node is 4, there are two possible path: 4->2->1->0, 4->3->1->0,
     if seed node is 1 and 2 there are two possible path: 3->1->-0->-1, 2->1->0->-1

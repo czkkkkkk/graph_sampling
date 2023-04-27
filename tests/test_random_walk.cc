@@ -34,8 +34,8 @@ TEST(RandomWalk, testGraphWithMultiPath)
     auto indptr = torch::from_blob(indptr1, {5}, options).to(torch::kCUDA);
     auto indices = torch::from_blob(indices1, {5}, options).to(torch::kCUDA);
     int64_t walk_length = 3;
-    Graph A(indptr.numel()-1, indptr.numel()-1);
-    A.LoadCSC(indptr,indices);
+    Graph A(indptr.numel() - 1, indptr.numel() - 1);
+    A.LoadCSC(indptr, indices);
 
     std::vector<int64_t> seeds_vector = {4, 2, 3, 1};
     torch::Tensor seeds = torch::from_blob(seeds_vector.data(), {4}, options).to(torch::kCUDA);
