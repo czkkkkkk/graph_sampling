@@ -6,6 +6,7 @@
 #include "cuda/fusion/edge_map_reduce.h"
 #include "cuda/graph_ops.h"
 #include "cuda/sddmm.h"
+#include "cuda/spmm.h"
 #include "cuda/tensor_ops.h"
 #include "graph_ops.h"
 
@@ -271,8 +272,50 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::SamplingProbs(
 torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length) {
   return FusedRandomWalk(this->csc_, seeds, walk_length);
 }
+
 torch::Tensor Graph::Node2Vec(torch::Tensor seeds, int64_t walk_length,
                               double p, double q) {
   return FusedNode2Vec(this->csc_, seeds, walk_length, p, q);
+}
+
+/*! \brief Generalized Sampled Dense-Dense Matrix Multiplication. */
+void Graph::SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
+                  torch::Tensor out, int64_t lhs_target, int64_t rhs_target,
+                  int64_t on_format) {
+  CreateSparseFormat(on_format);
+  const auto& bcast = CalcBcastOff(op, lhs, rhs);
+  if (on_format == _COO) {
+    impl::SDDMMCOO(op, bcast, coo_, lhs, rhs, out, lhs_target, rhs_target);
+  } else if (on_format == _CSR) {
+    lhs_target = lhs_target == 1 ? lhs_target : (2 - lhs_target);
+    rhs_target = rhs_target == 1 ? rhs_target : (2 - rhs_target);
+    impl::SDDMMCSC(op, bcast, csr_, lhs, rhs, out, lhs_target, rhs_target);
+  } else if (on_format == _CSC) {
+    impl::SDDMMCSC(op, bcast, csc_, lhs, rhs, out, lhs_target, rhs_target);
+  } else {
+    LOG(FATAL) << "SDDMM only supports CSC, CSR and COO formats";
+  }
+}
+
+/*! \brief Generalized Sparse-Dense Matrix Multiplication. */
+void Graph::SpMM(const std::string& op, const std::string& reduce,
+                 torch::Tensor ufeat, torch::Tensor efeat, torch::Tensor out,
+                 torch::Tensor argu, torch::Tensor arge, int64_t u_target,
+                 int64_t on_format) {
+  CreateSparseFormat(on_format);
+  const auto& bcast = CalcBcastOff(op, ufeat, efeat);
+  if (u_target != 0 && u_target != 2) LOG(FATAL) << "Invalid u_target";
+
+  if (on_format == _COO) {
+    LOG(INFO) << op << " " << reduce;
+    impl::SpMMCOO(op, reduce, bcast, coo_, ufeat, efeat, out, u_target,
+                  {argu, arge});
+  } else if (on_format == _CSR && u_target == 2) {
+    impl::SpMMCSC(op, reduce, bcast, csr_, ufeat, efeat, out, {argu, arge});
+  } else if (on_format == _CSC && u_target == 0) {
+    impl::SpMMCSC(op, reduce, bcast, csc_, ufeat, efeat, out, {argu, arge});
+  } else {
+    LOG(FATAL) << "SpMM Error:CSC, CSR and u_target mismatch";
+  }
 }
 }  // namespace gs
