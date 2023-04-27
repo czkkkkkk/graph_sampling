@@ -80,8 +80,8 @@ torch::Tensor Graph::GetCSREids() {
 // todo : not support compact
 // axis == 0 for row, axis == 1 for column
 std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::Slicing(
-    torch::Tensor seeds, int64_t axis, int64_t on_format, int64_t output_format,
-    bool compact) {
+    torch::Tensor seeds, int64_t axis, int64_t on_format,
+    int64_t output_format) {
   CreateSparseFormat(on_format);
   torch::Tensor select_index;
   std::shared_ptr<COO> coo_ptr = nullptr;
@@ -90,6 +90,7 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::Slicing(
   std::shared_ptr<_TMP> tmp_ptr = nullptr;
   bool with_coo = output_format & _COO;
   int64_t new_num_cols, new_num_rows;
+  torch::optional<torch::Tensor> e_ids = torch::nullopt;
 
   if (axis == 0) {
     new_num_cols = num_cols_;
@@ -103,11 +104,13 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::Slicing(
 
   if (on_format == _COO) {
     std::tie(coo_ptr, select_index) = COOSlicing(coo_, seeds, axis);
+    e_ids = coo_ptr->e_ids;
 
   } else if (on_format == _CSC) {
     CHECK(output_format != _CSR)
         << "Error in Slicing, Not implementation [on_format = CSC, "
            "output_forat = CSR] !";
+    e_ids = csc_->e_ids;
 
     if (axis == 0) {
       std::tie(tmp_ptr, select_index) = OnIndicesSlicing(csc_, seeds, with_coo);
@@ -130,6 +133,7 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::Slicing(
     CHECK(output_format != _CSC)
         << "Error in Slicing, Not implementation [on_format = CSR, "
            "output_forat = CSC] !";
+    e_ids = csr_->e_ids;
 
     if (axis == 0) {
       std::tie(tmp_ptr, select_index) = OnIndptrSlicing(csr_, seeds, with_coo);
@@ -154,7 +158,14 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::Slicing(
   ret->SetCSC(csc_ptr);
   ret->SetCSR(csr_ptr);
 
-  return {ret, select_index};
+  torch::Tensor split_index;
+  if (e_ids.has_value()) {
+    split_index = e_ids.value().index_select(0, select_index);
+  } else {
+    split_index = select_index;
+  }
+
+  return {ret, split_index};
 }
 
 // axis == 0 for sample column and axis == 1 for sample row
@@ -165,6 +176,7 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::Sampling(
   torch::Tensor select_index;
   std::shared_ptr<_TMP> tmp_ptr = nullptr;
   bool with_coo = output_format & _COO;
+  torch::optional<torch::Tensor> e_ids = torch::nullopt;
 
   // sampling does not change the shape of graph/matrix
   auto ret = c10::intrusive_ptr<Graph>(
@@ -186,6 +198,7 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::Sampling(
                                             tmp_ptr->coo_in_indptr,
                                             torch::nullopt, false, true}));
 
+    e_ids = csc_->e_ids;
     ret->SetNumEdges(select_index.numel());
   } else if (axis == 1 && on_format == _CSR) {
     CHECK(output_format != _CSC)
@@ -203,6 +216,7 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::Sampling(
                                             tmp_ptr->coo_in_indices,
                                             torch::nullopt, true, false}));
 
+    e_ids = csr_->e_ids;
     ret->SetNumEdges(select_index.numel());
   } else {
     CHECK(false) << "Error in Sampling, Not implementation [axis = " << axis
@@ -210,7 +224,13 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::Sampling(
                  << ", output_forat = " << output_format << "] !";
   }
 
-  return {ret, select_index};
+  torch::Tensor split_index;
+  if (e_ids.has_value()) {
+    split_index = e_ids.value().index_select(0, select_index);
+  } else {
+    split_index = select_index;
+  }
+  return {ret, split_index};
 }
 
 std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::SamplingProbs(

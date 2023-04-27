@@ -77,7 +77,7 @@ class Graph : public torch::CustomClassHolder {
   // graph operation
   std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Slicing(
       torch::Tensor seeds, int64_t axis, int64_t on_format,
-      int64_t output_format, bool compact = false);
+      int64_t output_format);
 
   std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Sampling(
       int64_t axis, int64_t fanout, bool replace, int64_t on_format,
