@@ -1,45 +1,132 @@
 import torch
 from torch.fx import Proxy
 from dgl import DGLHeteroGraph
-from typing import Optional
+from typing import Optional, List
 from gs.utils import create_block_from_coo, create_block_from_csc
-from gs.format import _COO, _CSC, _CSR, _DCSC, _DCSR
+from gs.format import _COO, _CSC, _CSR
 
-torch.fx.wrap('create_block')
 torch.fx.wrap('create_block_from_coo')
 torch.fx.wrap('create_block_from_csc')
 
 
 class Matrix(object):
 
-    def __init__(self, graph: torch.classes.gs_classes.Graph):
-        # Graph bind to a C++ object
+    def __init__(self):
+        self._graph = None
+        self.null_tensor = torch.Tensor().cuda().long()
+        self.rows = self.null_tensor
+        self.cols = self.null_tensor
+        self.row_ndata = {}
+        self.col_ndata = {}
+        self.edata = {}
+
+    def load_graph(self, format: str, format_tensors: List[torch.Tensor]):
+        assert format in ['CSC', 'COO', 'CSR']
+        assert len(format_tensors) == 2
+
+        if format == 'COO':
+            coo_row, coo_col = format_tensors
+            self.num_rows = coo_row.max() + 1
+            self.num_cols = coo_col.max() + 1
+            self._graph = torch.classes.gs_classes.Graph(
+                self.num_rows, self.num_cols)
+            self._graph._CAPI_LoadCOO(coo_row, coo_col, False, False)
+
+        elif format == 'CSC':
+            indptr, indices = format_tensors
+            self.num_rows = indices.max() + 1
+            self.num_cols = indptr.numel()
+            self._graph = torch.classes.gs_classes.Graph(
+                self.num_rows, self.num_cols)
+            self._graph._CAPI_LoadCSC(indptr, indices)
+
+        elif format == 'CSR':
+            indptr, indices = format_tensors
+            self.num_rows = indptr.numel()
+            self.num_cols = indices.max() + 1
+            self._graph = torch.classes.gs_classes.Graph(
+                self.num_rows, self.num_cols)
+            self._graph._CAPI_LoadCSR(indptr, indices)
+   
+
+    def set_row_data(self, key, value):
+        self.row_ndata[key] = value
+
+    def set_col_data(self, key, value):
+        self.col_ndata[key] = value
+
+    def set_edge_data(self, key, value):
+        self.edata[key] = value
+
+    def _set_graph(self, graph: torch.classes.gs_classes.Graph):
         self._graph = graph
 
-    def set_data(self, data):
-        self._graph._CAPI_set_data(data)
+    def __getitem__(self, data):
+        assert len(data) == 2
+        ret = self._graph
+        r_slice = data[0]
+        c_slice = data[1]
 
-    def get_data(self, order: str = 'default') -> Optional[torch.Tensor]:
-        return self._graph._CAPI_get_data(order)
+        ret_matrix = Matrix()
 
-    def get_num_rows(self):
-        return self._graph._CAPI_get_num_rows()
+        edge_index = None
+        graph = self._graph
 
-    def get_num_cols(self):
-        return self._graph._CAPI_get_num_cols()
+        if isinstance(c_slice, Proxy) or isinstance(c_slice, torch.Tensor):
+            if self.cols.shape != torch.Size([0]):
+                ret_matrix.cols = self.cols[c_slice]
+            else:
+                ret_matrix.cols = c_slice
 
-    def load_dgl_graph(self, g, weight=None):
-        # import csc
-        if not isinstance(g, DGLHeteroGraph):
-            raise ValueError
-        csc_indptr, csc_indices, edge_ids = g.adj_sparse('csc')
-        self._graph._CAPI_load_csc(csc_indptr, csc_indices)
-        if weight is not None:
-            self._graph._CAPI_set_data(g.edata[weight][edge_ids])
+            graph, _edge_index = graph._CAPI_Slicing(c_slice, 1, _CSC, _COO)
+            edge_index = _edge_index
+
+            for key, value in self.col_ndata.items():
+                ret_matrix.set_col_data(key, value[c_slice])
+
+        if isinstance(r_slice, Proxy) or isinstance(r_slice, torch.Tensor):
+            if self.rows.shape != torch.Size([0]):
+                ret_matrix.rows = self.rows[r_slice]
+            else:
+                ret_matrix.rows = r_slice
+
+            graph, _edge_index = graph._CAPI_Slicing(r_slice, 0, _CSR, _COO)
+            if edge_index is not None:
+                edge_index = edge_index[_edge_index]
+
+            for key, value in self.col_ndata.items():
+                ret_matrix.set_col_data(key, value[r_slice])
+
+        ret_matrix._set_graph(graph)
+        for key, value in self.edata.items():
+            ret_matrix.set_edge_data(key, value[_edge_index])
+
+        return ret_matrix
+
+    def individual_sampling(self, K: int, probs: torch.Tensor, replace: bool):
+        ret_matrix = Matrix()
+
+        if probs is None:
+            subgraph, edge_index = self._graph._CAPI_Sampling(
+                0, K, replace, _CSC, _COO)
+        else:
+            subgraph, edge_index = self._graph._CAPI_SamplingProbs(
+                0, probs, K, replace, _CSC, _COO)
+
+        ret_matrix._set_graph(subgraph)
+        ret_matrix.cols = self.cols
+        ret_matrix.rows = self.rows
+        ret_matrix.row_ndata = self.row_ndata
+        ret_matrix.col_ndata = self.col_ndata
+        for key, value in self.edata.items():
+            ret_matrix.set_edge_data(key, value[edge_index])
+
+        return ret_matrix
 
     def to_dgl_block(self):
-        unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = self._graph._CAPI_relabel()
-        block = None
+        unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = self._graph._CAPI_GraphRelabel(
+            self.cols, self.rows)
+
         if format == 'coo':
             block = create_block_from_coo(format_tensor1,
                                           format_tensor2,
@@ -55,65 +142,10 @@ class Matrix(object):
         if e_ids is not None:
             block.edata['_ID'] = e_ids
 
-        data = self._graph._CAPI_get_data('default')
-        if data is not None:
-            if e_ids is not None:
-                data = data[e_ids]
-            block.edata['w'] = data
+        for key, value in self.edata.items():
+            block.edata[key] = value
         block.srcdata['_ID'] = unique_tensor
         return block
 
-    def columnwise_slicing(self, t):
-        return Matrix(self._graph._CAPI_slicing(t, 0, _CSC, _COO, False))
-
-    def columnwise_sampling(self, fanout, replace=True, bias=None):
-        if bias is None:
-            return Matrix(self._graph._CAPI_sampling(0, fanout, replace, _CSC, _COO))
-        else:
-            return Matrix(self._graph._CAPI_sampling_with_probs(0, bias, fanout, replace, _CSC, _COO))
-
-    def sum(self, axis, powk=1) -> torch.Tensor:
-        if axis == 0:
-            return self._graph._CAPI_sum(axis, powk, _CSC)
-        else:
-            return self._graph._CAPI_sum(axis, powk, _CSR)
-
-    def divide(self, divisor, axis):
-        return Matrix(self._graph._CAPI_divide(divisor, axis, _COO))
-
-    def row_ids(self, remove_isolated=True) -> torch.Tensor:
-        if remove_isolated:
-            return self._graph._CAPI_get_valid_rows()
-        else:
-            return self._graph._CAPI_get_rows()
-
-    def all_indices(self) -> torch.Tensor:
-        return self._graph._CAPI_all_valid_node()
-
-    def row_indices(self) -> torch.Tensor:
-        return self._graph._CAPI_get_coo_rows(True)
-
-    def __getitem__(self, data):
-        ret = self._graph
-        r_slice = data[0]
-        c_slice = data[1]
-
-        if isinstance(c_slice, Proxy) or isinstance(c_slice, torch.Tensor):
-            ret = ret._CAPI_slicing(c_slice, 0, _CSC, _COO, False)
-
-        if isinstance(r_slice, Proxy) or isinstance(r_slice, torch.Tensor):
-            ret = ret._CAPI_slicing(r_slice, 1, _CSR, _COO, False)
-
-        return Matrix(ret)
-
-    def fused_columnwise_slicing_sampling(self, seeds, fanouts, raplace):
-        return Matrix(
-            self._graph._CAPI_fused_columnwise_slicing_sampling(
-                seeds, fanouts, raplace))
-
-    def random_walk(self, seeds, walk_length):
-        return self._graph._CAPI_random_walk(seeds, walk_length)
-
-    def relabel(self):
-        self._graph._CAPI_relabel()
-        return self
+    def all_nodes(self):
+        return self._graph._CAPI_GetValidNodes(self.cols, self.rows)

@@ -1,6 +1,6 @@
 from itertools import product
 from .sparse import *
-from gs.format import _COO, _CSC, _CSR, _DCSC, _DCSR
+from gs.format import _COO, _CSC, _CSR
 import sys
 
 __all__ = ['gsddmm']

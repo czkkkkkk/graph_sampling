@@ -1,5 +1,5 @@
 import torch
-from gs.format import _COO, _CSC, _CSR, _DCSC, _DCSR
+from gs.format import _COO, _CSC, _CSR
 
 target_mapping = {
     'u': 0,
