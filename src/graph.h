@@ -90,16 +90,13 @@ class Graph : public torch::CustomClassHolder {
              int64_t on_format);
   void SpMM(const std::string& op, const std::string& reduce,
             torch::Tensor ufeat, torch::Tensor efeat, torch::Tensor out,
-            torch::Tensor argu, torch::Tensor arge, int64_t u_target, int64_t on_format);
+            torch::Tensor argu, torch::Tensor arge, int64_t u_target,
+            int64_t on_format);
 
-  /*
   std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,
              torch::optional<torch::Tensor>, std::string>
-  Relabel(torch::Tensor col_seeds, torch::Tensor row_ids,
-          torch::Tensor col_ids);
-  torch::Tensor GetValidNodes(torch::Tensor col_seeds, torch::Tensor row_ids,
-                              torch::Tensor col_ids);
-  */
+  GraphRelabel(torch::Tensor col_seeds, torch::Tensor row_ids);
+  torch::Tensor GetValidNodes(torch::Tensor col_seeds, torch::Tensor row_ids);
 
   torch::Tensor RandomWalk(torch::Tensor seeds, int64_t walk_length);
   torch::Tensor Node2Vec(torch::Tensor seeds, int64_t walk_length, double p,
