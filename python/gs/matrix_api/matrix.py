@@ -14,8 +14,6 @@ class Matrix(object):
     def __init__(self):
         self._graph = None
         self.null_tensor = torch.Tensor().cuda().long()
-        self.rows = self.null_tensor
-        self.cols = self.null_tensor
         self.row_ndata = {}
         self.col_ndata = {}
         self.edata = {}
@@ -47,7 +45,6 @@ class Matrix(object):
             self._graph = torch.classes.gs_classes.Graph(
                 self.num_rows, self.num_cols)
             self._graph._CAPI_LoadCSR(indptr, indices)
-   
 
     def set_row_data(self, key, value):
         self.row_ndata[key] = value
@@ -70,36 +67,44 @@ class Matrix(object):
         ret_matrix = Matrix()
 
         edge_index = None
+        row_index = None
+        col_index = None
         graph = self._graph
 
         if isinstance(c_slice, Proxy) or isinstance(c_slice, torch.Tensor):
-            if self.cols.shape != torch.Size([0]):
-                ret_matrix.cols = self.cols[c_slice]
-            else:
-                ret_matrix.cols = c_slice
+            if '_ID' not in self.col_ndata:
+                ret_matrix.set_col_data("_ID", c_slice)
 
             graph, _edge_index = graph._CAPI_Slicing(c_slice, 1, _CSC, _COO)
             edge_index = _edge_index
 
-            for key, value in self.col_ndata.items():
-                ret_matrix.set_col_data(key, value[c_slice])
+            col_index = c_slice
 
         if isinstance(r_slice, Proxy) or isinstance(r_slice, torch.Tensor):
-            if self.rows.shape != torch.Size([0]):
-                ret_matrix.rows = self.rows[r_slice]
-            else:
-                ret_matrix.rows = r_slice
+            if '_ID' not in self.row_ndata:
+                ret_matrix.set_row_data("_ID", r_slice)
 
             graph, _edge_index = graph._CAPI_Slicing(r_slice, 0, _CSR, _COO)
             if edge_index is not None:
                 edge_index = edge_index[_edge_index]
 
-            for key, value in self.col_ndata.items():
-                ret_matrix.set_col_data(key, value[r_slice])
+            row_index = r_slice
 
         ret_matrix._set_graph(graph)
         for key, value in self.edata.items():
             ret_matrix.set_edge_data(key, value[_edge_index])
+
+        for key, value in self.col_ndata.items():
+            if col_index != None:
+                ret_matrix.set_col_data(key, value[col_index])
+            else:
+                ret_matrix.set_col_data(key, value)
+
+        for key, value in self.row_ndata.items():
+            if row_index != None:
+                ret_matrix.set_row_data(key, value[row_index])
+            else:
+                ret_matrix.set_row_data(key, value)
 
         return ret_matrix
 
@@ -114,8 +119,6 @@ class Matrix(object):
                 0, probs, K, replace, _CSC, _COO)
 
         ret_matrix._set_graph(subgraph)
-        ret_matrix.cols = self.cols
-        ret_matrix.rows = self.rows
         ret_matrix.row_ndata = self.row_ndata
         ret_matrix.col_ndata = self.col_ndata
         for key, value in self.edata.items():
@@ -123,9 +126,21 @@ class Matrix(object):
 
         return ret_matrix
 
+    def collective_sampling(self, K: int, probs: torch.Tensor, replace: bool):
+
+        if probs is None:
+            selected_index = torch.ops.gs_ops._CAPI_ListSampling(
+                probs.numel(), K, replace)
+        else:
+
+            selected_index = torch.ops.gs_ops._CAPI_ListSamplingWithProbs(
+                probs, K, replace)
+
+        return self[selected_index, :]
+
     def to_dgl_block(self):
         unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = self._graph._CAPI_GraphRelabel(
-            self.cols, self.rows)
+            self.col_ndata.get('_ID', self.null_tensor), self.row_ndata.get('_ID', self.null_tensor))
 
         if format == 'coo':
             block = create_block_from_coo(format_tensor1,
@@ -148,4 +163,4 @@ class Matrix(object):
         return block
 
     def all_nodes(self):
-        return self._graph._CAPI_GetValidNodes(self.cols, self.rows)
+        return self._graph._CAPI_GetValidNodes(self.col_ndata.get('_ID', self.null_tensor), self.row_ndata.get('_ID', self.null_tensor))

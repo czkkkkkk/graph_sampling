@@ -14,13 +14,9 @@ namespace gs {
  * @param replace
  * @return std::tuple<torch::Tensor, torch::Tensor>
  */
-std::tuple<torch::Tensor, torch::Tensor> ListSampling(torch::Tensor data,
-                                                      int64_t num_picks,
-                                                      bool replace);
+torch::Tensor ListSampling(int64_t num_items, int64_t num_picks, bool replace);
 
-std::tuple<torch::Tensor, torch::Tensor> ListSamplingProbs(torch::Tensor data,
-                                                           torch::Tensor probs,
-                                                           int64_t num_picks,
-                                                           bool replace);
+torch::Tensor ListSamplingProbs(torch::Tensor probs, int64_t num_picks,
+                                bool replace);
 }  // namespace gs
 #endif
