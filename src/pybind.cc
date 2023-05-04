@@ -20,7 +20,7 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_GetCSCIndices", &Graph::GetCSCIndices)
       .def("_CAPI_GetCSCEdges", &Graph::GetCSCEids)
       .def("_CAPI_GetCOORows", &Graph::GetCOORows)
-      .def("_CAPI_GetCooCols", &Graph::GetCOOCols)
+      .def("_CAPI_GetCOOCols", &Graph::GetCOOCols)
       .def("_CAPI_GetCOOEids", &Graph::GetCOOEids)
       .def("_CAPI_GetCSRIndptr", &Graph::GetCSRIndptr)
       .def("_CAPI_GetCSRIndices", &Graph::GetCSRIndices)
