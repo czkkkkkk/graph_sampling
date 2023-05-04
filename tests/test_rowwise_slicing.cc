@@ -14,7 +14,9 @@ TEST(RowwiseSlicing, test1)
     A.LoadCSC(indptr, indices);
 
     torch::Tensor row_ids = torch::arange(5, 6, options);
-    auto [subA, select_index] = A.Slicing(row_ids, 0, _CSR, _CSR);
+    c10::intrusive_ptr<Graph> subA;
+    torch::Tensor select_index;
+    std::tie(subA, select_index) = A.Slicing(row_ids, 0, _CSR, _CSR);
     auto csr_ptr = subA->GetCSR();
 
     EXPECT_EQ(csr_ptr->indptr.numel(), 2);

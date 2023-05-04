@@ -12,7 +12,9 @@ TEST(ColwiseSlicing, test1)
     Graph A(indptr.numel() - 1, indptr.numel() - 1);
     A.LoadCSC(indptr, indices);
     torch::Tensor col_ids = torch::arange(0, 3, options);
-    auto [subA, selected_index] = A.Slicing(col_ids, 1, _CSC, _CSC);
+    c10::intrusive_ptr<Graph> subA;
+    torch::Tensor select_index;
+    std::tie(subA, select_index) = A.Slicing(col_ids, 1, _CSC, _CSC);
     auto csc_ptr = subA->GetCSC();
     EXPECT_TRUE(csc_ptr->indptr.equal(torch::arange(0, 4, options) * 5));
     EXPECT_TRUE(csc_ptr->indices.equal(torch::arange(0, 15, options)));
