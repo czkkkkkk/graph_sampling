@@ -190,12 +190,36 @@ class Matrix(object):
             self.col_ndata.get("_ID", self.null_tensor),
             self.row_ndata.get("_ID", self.null_tensor),
         )
-    
+
     def num_rows(self) -> int:
         return self._graph._CAPI_GetNumRows()
-    
+
     def num_cols(self) -> int:
         return self._graph._CAPI_GetNumCols()
 
     def num_edges(self) -> int:
         return self._graph._CAPI_GetNumEdges()
+
+    @property
+    def csc(self) -> List[torch.Tensor]:
+        return [
+            self._graph._CAPI_GetCSCIndptr(),
+            self._graph._CAPI_GetCSCIndices(),
+            self._graph._CAPI_GetCSCEids(),
+        ]
+    
+    @property
+    def csr(self) -> List[torch.Tensor]:
+        return [
+            self._graph._CAPI_GetCSRIndptr(),
+            self._graph._CAPI_GetCSRIndices(),
+            self._graph._CAPI_GetCSREids(),
+        ]
+    
+    @property
+    def coo(self) -> List[torch.Tensor]:
+        return [
+            self._graph._CAPI_GetCOOIndptr(),
+            self._graph._CAPI_GetCOOIndices(),
+            self._graph._CAPI_GetCOOEids(),
+        ]
