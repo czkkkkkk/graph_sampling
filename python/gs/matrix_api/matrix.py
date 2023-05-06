@@ -1,64 +1,52 @@
+from __future__ import annotations
 import torch
 from torch.fx import Proxy
-from dgl import DGLHeteroGraph
+from dgl.heterograph import DGLBlock
 from typing import Optional, List
-from gs.utils import create_block_from_coo, create_block_from_csc
-from gs.format import _COO, _CSC, _CSR
 
-torch.fx.wrap('create_block_from_coo')
-torch.fx.wrap('create_block_from_csc')
+from ..utils import create_block_from_coo, create_block_from_csc
+from ..format import _COO, _CSC, _CSR
+from ..ops import gspmm, gsddmm
+
+torch.fx.wrap("create_block_from_coo")
+torch.fx.wrap("create_block_from_csc")
 
 
 class Matrix(object):
-
-    def __init__(self):
-        self._graph = None
+    def __init__(self, graph=None, row_ndata=None, col_ndata=None, edata=None):
+        self._graph = graph
         self.null_tensor = torch.Tensor().cuda().long()
-        self.row_ndata = {}
-        self.col_ndata = {}
-        self.edata = {}
+        self.row_ndata = {} if row_ndata is None else row_ndata
+        self.col_ndata = {} if col_ndata is None else col_ndata
+        self.edata = {} if edata is None else edata
 
-    def load_graph(self, format: str, format_tensors: List[torch.Tensor]):
-        assert format in ['CSC', 'COO', 'CSR']
+    def load_graph(self, format: str, format_tensors: List[torch.Tensor]) -> Matrix:
+        assert format in ["CSC", "COO", "CSR"]
         assert len(format_tensors) == 2
 
-        if format == 'COO':
+        if format == "COO":
             coo_row, coo_col = format_tensors
             self.num_rows = coo_row.max() + 1
             self.num_cols = coo_col.max() + 1
-            self._graph = torch.classes.gs_classes.Graph(
-                self.num_rows, self.num_cols)
+            self._graph = torch.classes.gs_classes.Graph(self.num_rows, self.num_cols)
             self._graph._CAPI_LoadCOO(coo_row, coo_col, False, False)
 
-        elif format == 'CSC':
+        elif format == "CSC":
             indptr, indices = format_tensors
             self.num_rows = indices.max() + 1
             self.num_cols = indptr.numel()
-            self._graph = torch.classes.gs_classes.Graph(
-                self.num_rows, self.num_cols)
+            self._graph = torch.classes.gs_classes.Graph(self.num_rows, self.num_cols)
             self._graph._CAPI_LoadCSC(indptr, indices)
 
-        elif format == 'CSR':
+        elif format == "CSR":
             indptr, indices = format_tensors
             self.num_rows = indptr.numel()
             self.num_cols = indices.max() + 1
-            self._graph = torch.classes.gs_classes.Graph(
-                self.num_rows, self.num_cols)
+            self._graph = torch.classes.gs_classes.Graph(self.num_rows, self.num_cols)
             self._graph._CAPI_LoadCSR(indptr, indices)
 
-    def set_row_data(self, key, value):
-        self.row_ndata[key] = value
-
-    def set_col_data(self, key, value):
-        self.col_ndata[key] = value
-
-    def set_edge_data(self, key, value):
-        self.edata[key] = value
-
-    def _set_graph(self, graph: torch.classes.gs_classes.Graph):
-        self._graph = graph
-
-    def __getitem__(self, data):
+    # Extract-step operators
+    def __getitem__(self, data) -> Matrix:
         assert len(data) == 2
         ret = self._graph
         r_slice = data[0]
@@ -72,8 +60,8 @@ class Matrix(object):
         graph = self._graph
 
         if isinstance(c_slice, Proxy) or isinstance(c_slice, torch.Tensor):
-            if '_ID' not in self.col_ndata:
-                ret_matrix.set_col_data("_ID", c_slice)
+            if "_ID" not in self.col_ndata:
+                ret_matrix.col_ndata["_ID"] = c_slice
 
             graph, _edge_index = graph._CAPI_Slicing(c_slice, 1, _CSC, _COO)
             edge_index = _edge_index
@@ -81,8 +69,8 @@ class Matrix(object):
             col_index = c_slice
 
         if isinstance(r_slice, Proxy) or isinstance(r_slice, torch.Tensor):
-            if '_ID' not in self.row_ndata:
-                ret_matrix.set_row_data("_ID", r_slice)
+            if "_ID" not in self.row_ndata:
+                ret_matrix.row_ndata["_ID"] = r_slice
 
             graph, _edge_index = graph._CAPI_Slicing(r_slice, 0, _CSR, _COO)
             if edge_index is not None:
@@ -90,77 +78,124 @@ class Matrix(object):
 
             row_index = r_slice
 
-        ret_matrix._set_graph(graph)
+        ret_matrix._graph = graph
         for key, value in self.edata.items():
-            ret_matrix.set_edge_data(key, value[_edge_index])
+            ret_matrix.edata[key] = value[_edge_index]
 
         for key, value in self.col_ndata.items():
             if col_index != None:
-                ret_matrix.set_col_data(key, value[col_index])
+                ret_matrix.col_ndata[key] = value[col_index]
             else:
-                ret_matrix.set_col_data(key, value)
+                ret_matrix.col_ndata[key] = value
 
         for key, value in self.row_ndata.items():
             if row_index != None:
-                ret_matrix.set_row_data(key, value[row_index])
+                ret_matrix.row_ndata[key] = value[row_index]
             else:
-                ret_matrix.set_row_data(key, value)
+                ret_matrix.row_ndata[key] = value
 
         return ret_matrix
 
-    def individual_sampling(self, K: int, probs: torch.Tensor, replace: bool):
+    # Select-step operators
+    def individual_sampling(self, K: int, probs: torch.Tensor, replace: bool) -> Matrix:
         ret_matrix = Matrix()
 
         if probs is None:
-            subgraph, edge_index = self._graph._CAPI_Sampling(
-                0, K, replace, _CSC, _COO)
+            subgraph, edge_index = self._graph._CAPI_Sampling(0, K, replace, _CSC, _COO)
         else:
             subgraph, edge_index = self._graph._CAPI_SamplingProbs(
-                0, probs, K, replace, _CSC, _COO)
+                0, probs, K, replace, _CSC, _COO
+            )
 
-        ret_matrix._set_graph(subgraph)
+        ret_matrix._graph = subgraph
         ret_matrix.row_ndata = self.row_ndata
         ret_matrix.col_ndata = self.col_ndata
         for key, value in self.edata.items():
-            ret_matrix.set_edge_data(key, value[edge_index])
+            ret_matrix.edata[key] = value[edge_index]
 
         return ret_matrix
 
-    def collective_sampling(self, K: int, probs: torch.Tensor, replace: bool):
-
+    def collective_sampling(self, K: int, probs: torch.Tensor, replace: bool) -> Matrix:
         if probs is None:
             selected_index = torch.ops.gs_ops._CAPI_ListSampling(
-                probs.numel(), K, replace)
+                probs.numel(), K, replace
+            )
         else:
-
             selected_index = torch.ops.gs_ops._CAPI_ListSamplingWithProbs(
-                probs, K, replace)
+                probs, K, replace
+            )
 
         return self[selected_index, :]
 
-    def to_dgl_block(self):
-        unique_tensor, num_row, num_col, format_tensor1, format_tensor2, e_ids, format = self._graph._CAPI_GraphRelabel(
-            self.col_ndata.get('_ID', self.null_tensor), self.row_ndata.get('_ID', self.null_tensor))
-
-        if format == 'coo':
-            block = create_block_from_coo(format_tensor1,
-                                          format_tensor2,
-                                          num_src=num_row,
-                                          num_dst=num_col)
+    # Compute-step operators
+    def sum(self, key, axis) -> torch.Tensor:
+        rhs = self.edata[key]
+        if axis == 0:
+            return gspmm(self, "copy_rhs", "sum", None, rhs, 0, _CSC)
+        elif axis == 1:
+            return gspmm(self, "copy_rhs", "sum", None, rhs, 2, _CSR)
         else:
-            block = create_block_from_csc(format_tensor1,
-                                          format_tensor2,
-                                          torch.tensor([]),
-                                          num_src=num_row,
-                                          num_dst=num_col)
+            raise "axis should be 0 or 1"
+
+    def div(self, key, divisor, axis) -> Matrix:
+        ret_m = Matrix(self._graph, self.row_ndata, self.col_ndata)
+        lhs = self.edata[key]
+        if axis == 0:
+            ret_data = gsddmm(ret_m, "div", lhs, divisor, "e", "v", _COO)
+        elif axis == 1:
+            ret_data = gsddmm(ret_m, "div", lhs, divisor, "e", "u", _COO)
+        else:
+            raise "axis should be 0 or 1"
+        ret_m.edata = self.edata.copy()
+        ret_m.edata[key] = ret_data
+        return ret_m
+
+    def to_dgl_block(self) -> DGLBlock:
+        (
+            unique_tensor,
+            num_row,
+            num_col,
+            format_tensor1,
+            format_tensor2,
+            e_ids,
+            format,
+        ) = self._graph._CAPI_GraphRelabel(
+            self.col_ndata.get("_ID", self.null_tensor),
+            self.row_ndata.get("_ID", self.null_tensor),
+        )
+
+        if format == "coo":
+            block = create_block_from_coo(
+                format_tensor1, format_tensor2, num_src=num_row, num_dst=num_col
+            )
+        else:
+            block = create_block_from_csc(
+                format_tensor1,
+                format_tensor2,
+                torch.tensor([]),
+                num_src=num_row,
+                num_dst=num_col,
+            )
 
         if e_ids is not None:
-            block.edata['_ID'] = e_ids
+            block.edata["_ID"] = e_ids
 
         for key, value in self.edata.items():
             block.edata[key] = value
-        block.srcdata['_ID'] = unique_tensor
+        block.srcdata["_ID"] = unique_tensor
         return block
 
-    def all_nodes(self):
-        return self._graph._CAPI_GetValidNodes(self.col_ndata.get('_ID', self.null_tensor), self.row_ndata.get('_ID', self.null_tensor))
+    def all_nodes(self) -> torch.Tensor:
+        return self._graph._CAPI_GetValidNodes(
+            self.col_ndata.get("_ID", self.null_tensor),
+            self.row_ndata.get("_ID", self.null_tensor),
+        )
+    
+    def num_rows(self) -> int:
+        return self._graph._CAPI_GetNumRows()
+    
+    def num_cols(self) -> int:
+        return self._graph._CAPI_GetNumCols()
+
+    def num_edges(self) -> int:
+        return self._graph._CAPI_GetNumEdges()
