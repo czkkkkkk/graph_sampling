@@ -223,3 +223,9 @@ class Matrix(object):
             self._graph._CAPI_GetCOOIndices(),
             self._graph._CAPI_GetCOOEids(),
         ]
+
+    def random_walk(self,seeds,walk_length) -> torch.Tensor:
+        return self._graph._CAPI_RandomWalk(seeds, walk_length)
+    
+    def node2vec(self,seeds,walk_length,p,q) -> torch.Tensor:
+        return self._graph._CAPI_Node2Vec(seeds, walk_length,p,q)
