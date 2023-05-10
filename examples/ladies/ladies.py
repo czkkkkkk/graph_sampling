@@ -9,7 +9,8 @@ def ladies_sampler(A: gs.Matrix, seeds: torch.Tensor, fanouts: List):
     ret = []
     for K in fanouts:
         subA = A[:, seeds]
-        prob = subA.sum('w', axis=1) ** 2
+        subA.edata['w'] = subA.edata['w']**2
+        prob = subA.sum('w', axis=1)
         sampleA = subA.collective_sampling(K, prob, False)
         sampleA = sampleA.div('w', prob[sampleA.row_ndata['_ID']], axis=1)
         sampleA = sampleA.div('w', sampleA.sum('w', axis=0), axis=0)
