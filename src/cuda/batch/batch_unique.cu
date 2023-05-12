@@ -1,12 +1,14 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
-#include "atomic.h"
-#include "cuda_common.h"
-#include "tensor_ops.h"
-#include "utils.h"
+#include "../atomic.h"
+#include "../cuda_common.h"
+#include "../utils.h"
+
+#include "batch_ops.h"
 
 namespace gs {
 namespace impl {
+namespace batch {
 
 template <typename IdType>
 struct RelabelHashmap {
@@ -276,6 +278,6 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchUnique2CUDA(
                                           data_ptr.numel(), data.numel());
   return _BatchUniqueByKey2<int64_t>(data, data_ptr, data_key);
 }
-
+}  // namespace batch
 }  // namespace impl
 }  // namespace gs

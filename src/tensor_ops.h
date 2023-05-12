@@ -18,5 +18,8 @@ torch::Tensor ListSampling(int64_t num_items, int64_t num_picks, bool replace);
 
 torch::Tensor ListSamplingProbs(torch::Tensor probs, int64_t num_picks,
                                 bool replace);
+
+std::tuple<torch::Tensor, torch::Tensor> BatchListSamplingProbs(
+    torch::Tensor probs, int64_t num_picks, bool replace, torch::Tensor range);
 }  // namespace gs
 #endif

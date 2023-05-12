@@ -32,6 +32,12 @@ torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
 torch::Tensor FusedNode2Vec(std::shared_ptr<CSC> csc, torch::Tensor seeds,
                             int64_t walk_length, double p, double q);
 
+///////////////////// Batch Graph Ops /////////////////////
+std::tuple<std::shared_ptr<_TMP>, torch::Tensor, torch::Tensor>
+BatchOnIndptrSlicing(std::shared_ptr<CSC> csc, torch::Tensor node_ids,
+                     torch::Tensor batch_ptr, bool with_coo, bool encoding,
+                     int64_t encoding_size = 0);
+
 }  // namespace gs
 
 #endif

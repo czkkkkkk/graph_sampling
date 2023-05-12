@@ -1,13 +1,14 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
-#include "atomic.h"
-#include "cuda_common.h"
-#include "tensor_ops.h"
-#include "utils.h"
+#include "../atomic.h"
+#include "../cuda_common.h"
+#include "../utils.h"
+
+#include "batch_ops.h"
 
 namespace gs {
 namespace impl {
-
+namespace batch {
 template <typename IdType, int64_t BLOCK_WARPS>
 __global__ void _SplitIndptrBySize(IdType* indptr, IdType* output, int64_t size,
                                    int64_t num_batchs) {
@@ -102,5 +103,20 @@ std::vector<torch::Tensor> SplitIndptrByOffsetCUDA(torch::Tensor indptr,
                                                    torch::Tensor offsets) {
   return SplitIndptrByOffset<int64_t>(indptr, offsets);
 }
+
+std::vector<torch::Tensor> SplitByOffset(torch::Tensor data,
+                                         torch::Tensor offset) {
+  int64_t numel = offset.numel();
+  torch::Tensor size_tensor =
+      offset.slice(0, 1, numel) - offset.slice(0, 0, numel - 1);
+
+  size_tensor = size_tensor.to(torch::kCPU);
+
+  auto data_ptr = size_tensor.data_ptr<int64_t>();
+  std::vector<int64_t> split(data_ptr, data_ptr + size_tensor.numel());
+
+  return torch::split_with_sizes(data, split);
+}
+}  // namespace batch
 }  // namespace impl
 }  // namespace gs

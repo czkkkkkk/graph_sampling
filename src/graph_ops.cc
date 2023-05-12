@@ -1,5 +1,6 @@
 #include "graph_ops.h"
 #include "bcast.h"
+#include "cuda/batch/batch_ops.h"
 #include "cuda/fusion/column_row_slicing.h"
 #include "cuda/fusion/node2vec.h"
 #include "cuda/fusion/random_walk.h"
@@ -168,4 +169,23 @@ torch::Tensor FusedNode2Vec(std::shared_ptr<CSC> csc, torch::Tensor seeds,
   return paths;
 }
 
+// Slicing Operators
+std::tuple<std::shared_ptr<_TMP>, torch::Tensor, torch::Tensor>
+BatchOnIndptrSlicing(std::shared_ptr<CSC> csc, torch::Tensor node_ids,
+                     torch::Tensor batch_ptr, bool with_coo, bool encoding,
+                     int64_t encoding_size) {
+  auto csc_type = csc->indptr.device().type();
+  if (csc_type == torch::kCUDA || csc->indptr.is_pinned()) {
+    torch::Tensor sub_indptr, coo_col, coo_row, select_index, indices_ptr;
+    std::tie(sub_indptr, coo_col, coo_row, select_index, indices_ptr) =
+        impl::batch::BatchOnIndptrSlicingCUDA(csc->indptr, csc->indices,
+                                              node_ids, batch_ptr, with_coo,
+                                              encoding, encoding_size);
+    return {std::make_shared<_TMP>(_TMP{sub_indptr, coo_col, coo_row}),
+            select_index, indices_ptr};
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return {std::make_shared<_TMP>(_TMP{}), torch::Tensor(), torch::Tensor()};
+  }
+}
 }  // namespace gs

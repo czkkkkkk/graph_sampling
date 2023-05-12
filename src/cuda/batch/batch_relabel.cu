@@ -1,13 +1,14 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
-#include "atomic.h"
-#include "cuda_common.h"
-#include "tensor_ops.h"
-#include "utils.h"
+#include "../atomic.h"
+#include "../cuda_common.h"
+#include "../utils.h"
+
+#include "batch_ops.h"
 
 namespace gs {
 namespace impl {
-
+namespace batch {
 template <typename IdType>
 struct RelabelHashmap {
   __device__ inline RelabelHashmap(IdType* Kptr, IdType* Vptr, size_t numel)
@@ -85,7 +86,7 @@ __global__ void _RepeatKernel(const IdType* pos, IdType* out, int64_t n_col,
   }
 }
 
-///////////////////////////// BatchCSRRelabel ////////////////////////////////
+///////////////////////////// BatchCSCRelabel ////////////////////////////////
 
 template <typename IdType>
 __global__ void _2TensorInsertHashmaps(
@@ -234,7 +235,7 @@ __global__ void _IndicesSearchHashmapsForRelabel(
 
 template <typename IdType>
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
-_BatchCSRRelabelByKey(torch::Tensor seeds, torch::Tensor seeds_ptr,
+_BatchCSCRelabelByKey(torch::Tensor seeds, torch::Tensor seeds_ptr,
                       torch::Tensor seeds_key, torch::Tensor indices,
                       torch::Tensor indices_ptr, torch::Tensor indices_key) {
   int64_t num_items = seeds.numel() + indices.numel();
@@ -320,15 +321,15 @@ _BatchCSRRelabelByKey(torch::Tensor seeds, torch::Tensor seeds_ptr,
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
-BatchCSRRelabelByKeyCUDA(torch::Tensor seeds, torch::Tensor seeds_ptr,
+BatchCSCRelabelByKeyCUDA(torch::Tensor seeds, torch::Tensor seeds_ptr,
                          torch::Tensor seeds_key, torch::Tensor indices,
                          torch::Tensor indices_ptr, torch::Tensor indices_key) {
-  return _BatchCSRRelabelByKey<int64_t>(seeds, seeds_ptr, seeds_key, indices,
+  return _BatchCSCRelabelByKey<int64_t>(seeds, seeds_ptr, seeds_key, indices,
                                         indices_ptr, indices_key);
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
-BatchCSRRelabelCUDA(torch::Tensor seeds, torch::Tensor seeds_ptr,
+BatchCSCRelabelCUDA(torch::Tensor seeds, torch::Tensor seeds_ptr,
                     torch::Tensor indices, torch::Tensor indices_ptr) {
   torch::Tensor seeds_key = torch::empty_like(seeds);
   dim3 block(128);
@@ -344,7 +345,7 @@ BatchCSRRelabelCUDA(torch::Tensor seeds, torch::Tensor seeds_ptr,
       indices_ptr.data_ptr<int64_t>(), indices_key.data_ptr<int64_t>(),
       indices_ptr.numel(), indices_key.numel());
 
-  return _BatchCSRRelabelByKey<int64_t>(seeds, seeds_ptr, seeds_key, indices,
+  return _BatchCSCRelabelByKey<int64_t>(seeds, seeds_ptr, seeds_key, indices,
                                         indices_ptr, indices_key);
 }
 
@@ -496,5 +497,6 @@ BatchCOORelabelCUDA(torch::Tensor seeds, torch::Tensor seeds_ptr,
   return _BatchCOORelabelByKey<int64_t>(seeds, seeds_ptr, seeds_key, coo_col,
                                         coo_row, coo_ptr, coo_key);
 }
+}  // namespace batch
 }  // namespace impl
 }  // namespace gs

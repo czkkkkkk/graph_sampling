@@ -1,10 +1,10 @@
 #include <torch/custom_class.h>
 #include <torch/script.h>
 
-#include "./graph.h"
-#include "./graph_ops.h"
-#include "./tensor_ops.h"
-#include "cuda/tensor_ops.h"
+#include "batch_graph.h"
+#include "graph.h"
+#include "graph_ops.h"
+#include "tensor_ops.h"
 using namespace gs;
 
 TORCH_LIBRARY(gs_classes, m) {
@@ -34,11 +34,42 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_SpMM", &Graph::SpMM)
       .def("_CAPI_GraphRelabel", &Graph::GraphRelabel)
       .def("_CAPI_GetValidNodes", &Graph::GetValidNodes);
+  // .def("_CAPI_ToBatchGraph", &Graph::ToBatchGraph);
+
+  m.class_<BatchGraph>("BatchGraph")
+      .def(torch::init<int64_t, int64_t>())
+      .def("_CAPI_LoadCSC", &BatchGraph::LoadCSC)
+      .def("_CAPI_LoadCOO", &BatchGraph::LoadCOO)
+      .def("_CAPI_LoadCSR", &BatchGraph::LoadCSR)
+      .def("_CAPI_GetNumRows", &BatchGraph::GetNumRows)
+      .def("_CAPI_GetNumCols", &BatchGraph::GetNumCols)
+      .def("_CAPI_GetNumEdges", &BatchGraph::GetNumEdges)
+      .def("_CAPI_GetCSCIndptr", &BatchGraph::GetCSCIndptr)
+      .def("_CAPI_GetCSCIndices", &BatchGraph::GetCSCIndices)
+      .def("_CAPI_GetCSCEids", &BatchGraph::GetCSCEids)
+      .def("_CAPI_GetCOORows", &BatchGraph::GetCOORows)
+      .def("_CAPI_GetCOOCols", &BatchGraph::GetCOOCols)
+      .def("_CAPI_GetCOOEids", &BatchGraph::GetCOOEids)
+      .def("_CAPI_GetCSRIndptr", &BatchGraph::GetCSRIndptr)
+      .def("_CAPI_GetCSRIndices", &BatchGraph::GetCSRIndices)
+      .def("_CAPI_GetCSREids", &BatchGraph::GetCSREids)
+      .def("_CAPI_Slicing", &BatchGraph::Slicing)
+      .def("_CAPI_Sampling", &BatchGraph::Sampling)
+      .def("_CAPI_SamplingProbs", &BatchGraph::SamplingProbs)
+      .def("_CAPI_RandomWalk", &BatchGraph::RandomWalk)
+      .def("_CAPI_Node2Vec", &BatchGraph::Node2Vec)
+      .def("_CAPI_SDDMM", &BatchGraph::SDDMM)
+      .def("_CAPI_SpMM", &BatchGraph::SpMM)
+      .def("_CAPI_GetValidNodes", &BatchGraph::GetValidNodes)
+      .def("_CAPI_SlicingBatch", &BatchGraph::BatchColSlicing)
+      .def("_CAPI_GraphRelabel", &BatchGraph::GraphRelabel)
+      .def("_CAPI_SetEdgeBptr", &BatchGraph::SetEdgeBptr);
 }
 
 TORCH_LIBRARY(gs_ops, m) {
   m.def("_CAPI_ListSampling", &ListSampling);
   m.def("_CAPI_ListSamplingWithProbs", &ListSamplingProbs);
+  m.def("_CAPI_ListSamplingWithProbsBatch", &BatchListSamplingProbs);
 }
 
 namespace gs {}

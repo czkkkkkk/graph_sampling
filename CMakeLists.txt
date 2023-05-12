@@ -46,6 +46,7 @@ file(GLOB GS_SRC
   src/*.cc
   src/cuda/*.cu
   src/cuda/fusion/*.cu
+  src/cuda/batch/*.cu
 )
 
 add_library(gs SHARED ${GS_SRC})

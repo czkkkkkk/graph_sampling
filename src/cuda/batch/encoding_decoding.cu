@@ -1,12 +1,14 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
-#include "atomic.h"
-#include "cuda_common.h"
-#include "tensor_ops.h"
-#include "utils.h"
+#include "../atomic.h"
+#include "../cuda_common.h"
+#include "../utils.h"
+
+#include "batch_ops.h"
 
 namespace gs {
 namespace impl {
+namespace batch {
 template <typename IdType>
 __global__ void _BatchTensorEncodingKernel(IdType* out_data, IdType* in_data,
                                            int64_t* in_offsets,
@@ -118,5 +120,6 @@ std::tuple<torch::Tensor, torch::Tensor> GetBatchOffsets(
                    num_batches, dataptr.data_ptr<int64_t>() + 1);
   return {dataptr, decoded_data};
 }
+}  // namespace batch
 }  // namespace impl
 }  // namespace gs

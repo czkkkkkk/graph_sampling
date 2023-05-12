@@ -1,12 +1,14 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
-#include "atomic.h"
-#include "cuda_common.h"
-#include "tensor_ops.h"
-#include "utils.h"
+#include "../atomic.h"
+#include "../cuda_common.h"
+#include "../utils.h"
+
+#include "batch_ops.h"
 
 namespace gs {
 namespace impl {
+namespace batch {
 
 template <typename IdType>
 __global__ void _BatchConcatKernel(IdType** __restrict__ data_tensors,
@@ -118,6 +120,6 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> BatchConcatCUDA(
     const std::vector<torch::Tensor>& offset_tensors) {
   return _BatchConcat<int64_t>(data_tensors, offset_tensors);
 }
-
+}  // namespace batch
 }  // namespace impl
 }  // namespace gs

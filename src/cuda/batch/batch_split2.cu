@@ -1,13 +1,14 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
-#include "atomic.h"
-#include "cuda_common.h"
-#include "tensor_ops.h"
-#include "utils.h"
+#include "../atomic.h"
+#include "../cuda_common.h"
+#include "../utils.h"
+
+#include "batch_ops.h"
 
 namespace gs {
 namespace impl {
-
+namespace batch {
 template <typename IdType>
 __global__ void _BatchSplitKernel(
     IdType* __restrict__ data_tensor, IdType* __restrict__ data_ptr,
@@ -105,5 +106,6 @@ BatchSplit2CUDA(torch::Tensor data_tensor, torch::Tensor data_ptr_tensor,
   return _BatchSplit<int64_t>(data_tensor, data_ptr_tensor, data_key_tensor,
                               out_tensors, out_ptr_tensors);
 }
+}  // namespace batch
 }  // namespace impl
 }  // namespace gs
