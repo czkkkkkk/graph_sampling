@@ -22,8 +22,8 @@ def pass_sampler(
         subA = A[:, seeds]
         u_feats = features
         v_feats = features[seeds]
-        att1 = gs.ops.u_mul_v(subA, u_feats @ W1, v_feats @ W1,_COO)
-        att2 = gs.ops.u_mul_v(subA, u_feats @ W2, v_feats @ W2,_COO)
+        att1 = gs.ops.u_mul_v(subA, u_feats @ W1, v_feats @ W1,_CSC)
+        att2 = gs.ops.u_mul_v(subA, u_feats @ W2, v_feats @ W2,_CSC)
         print("att1:",att1.shape,att1)
         print("att2:",att2.shape,att2)
         att1 = torch.sum(att1, dim=1)

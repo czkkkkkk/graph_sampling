@@ -4,6 +4,11 @@
 #include "bcast.h"
 #include "cuda/fusion/column_row_slicing.h"
 #include "cuda/fusion/edge_map_reduce.h"
+#include "cuda/fusion/fused_coo_u_op_v.h"
+#include "cuda/fusion/fused_csc_u_op_v.h"
+#include "cuda/fusion/fused_csc_e_div_u_sum.h"
+#include "cuda/fusion/fused_coo_e_div_u_sum.h"
+#include "cuda/fusion/fused_coo_e_square_sum.h"
 #include "cuda/graph_ops.h"
 #include "cuda/sddmm.h"
 #include "cuda/spmm.h"
@@ -317,6 +322,24 @@ void Graph::SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
   }
 }
 
+/*! \brief Generalized Sampled Dense-Dense Matrix Multiplication. */
+void Graph::FUSEDUOPV(const std::string& op, torch::Tensor lhs1, torch::Tensor rhs1,
+                  torch::Tensor out1,  torch::Tensor lhs2, torch::Tensor rhs2,
+                  torch::Tensor out2,
+                  int64_t on_format) {
+  CreateSparseFormat(on_format);
+  const auto& bcast = CalcBcastOff(op, lhs1, rhs1);
+  if (on_format == _COO) {
+    impl::fusion::FUSED_COO_U_OP_V(op, bcast, coo_, lhs1, rhs1, out1,lhs2, rhs2, out2);
+  } 
+  else if (on_format == _CSC) {
+    impl::fusion::FUSED_CSC_U_OP_V(op, bcast, csc_, lhs1, rhs1, out1, lhs2, rhs2, out2);
+  } 
+  else {
+    LOG(FATAL) << "fused SDDMM only supports CSC and COO formats";
+  }
+}
+
 /*! \brief Generalized Sparse-Dense Matrix Multiplication. */
 void Graph::SpMM(const std::string& op, const std::string& reduce,
                  torch::Tensor ufeat, torch::Tensor efeat, torch::Tensor out,
@@ -334,6 +357,49 @@ void Graph::SpMM(const std::string& op, const std::string& reduce,
     impl::SpMMCSC(op, reduce, bcast, csr_, ufeat, efeat, out, {argu, arge});
   } else if (on_format == _CSC && u_target == 0) {
     impl::SpMMCSC(op, reduce, bcast, csc_, ufeat, efeat, out, {argu, arge});
+  } else {
+    LOG(FATAL) << "SpMM Error:CSC, CSR and u_target mismatch";
+  }
+}
+
+/*! \brief Generalized Sparse-Dense Matrix Multiplication. */
+void Graph::FusedESquareSum(const std::string& op, const std::string& reduce,
+                 torch::Tensor ufeat, torch::Tensor efeat, torch::Tensor out,
+                 torch::Tensor argu, torch::Tensor arge, int64_t u_target,
+                 int64_t on_format) {
+  CreateSparseFormat(on_format);
+  const auto& bcast = CalcBcastOff(op, ufeat, efeat);
+  if (u_target != 0 && u_target != 2) LOG(FATAL) << "Invalid u_target";
+  if (on_format==_COO){
+        impl::fusion::ESquareSumCOO(op, reduce, bcast, coo_, ufeat, efeat, out, {argu, arge});
+  }
+  else if (on_format == _CSR && u_target == 2) {
+  
+    impl::fusion::ESquareSumCSC(op, reduce, bcast, csr_, ufeat, efeat, out, {argu, arge});
+  } else if (on_format == _CSC && u_target == 0) {
+    impl::fusion::ESquareSumCSC(op, reduce, bcast, csc_, ufeat, efeat, out, {argu, arge});
+  } else {
+    LOG(FATAL) << "SpMM Error:CSC, CSR and u_target mismatch";
+  }
+}
+
+/*! \brief Generalized Sparse-Dense Matrix Multiplication. */
+void Graph::FusedEDivUSum(const std::string& op, const std::string& reduce,
+                 torch::Tensor ufeat, torch::Tensor efeat, torch::Tensor out,
+                 torch::Tensor argu, torch::Tensor arge, int64_t u_target,
+                 int64_t on_format) {
+  CreateSparseFormat(on_format);
+  const auto& bcast = CalcBcastOff(op, ufeat, efeat);
+  if (u_target != 0 && u_target != 2) LOG(FATAL) << "Invalid u_target";
+
+  if (on_format == _COO) {
+    LOG(INFO) << op << " " << reduce;
+      impl::fusion::EDivUSumCOO(op, reduce, bcast, coo_, ufeat, efeat, out, {argu, arge});
+                  
+  } else if (on_format == _CSR && u_target == 2) {
+    impl::fusion::EDivUSumCSC(op, reduce, bcast, csr_, ufeat, efeat, out, {argu, arge});
+  } else if (on_format == _CSC && u_target == 0) {
+    impl::fusion::EDivUSumCSC(op, reduce, bcast, csc_, ufeat, efeat, out, {argu, arge});
   } else {
     LOG(FATAL) << "SpMM Error:CSC, CSR and u_target mismatch";
   }

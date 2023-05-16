@@ -128,15 +128,17 @@ class Matrix(object):
         return self[selected_index, :]
 
     # Compute-step operators
-    def sum(self, key, axis) -> torch.Tensor:
+    def sum(self, key, axis,on_format=_CSC) -> torch.Tensor:
         rhs = self.edata[key]
         if axis == 0:
-            return gspmm(self, "copy_rhs", "sum", None, rhs, 0, _CSC)
+            return gspmm(self, "copy_rhs", "sum", None, rhs, 0, _COO)
         elif axis == 1:
-            return gspmm(self, "copy_rhs", "sum", None, rhs, 2, _CSR)
+            return gspmm(self, "copy_rhs", "sum", None, rhs, 2, _COO)
         else:
             raise "axis should be 0 or 1"
-
+        
+        # Compute-step operators
+ 
     def div(self, key, divisor, axis) -> Matrix:
         ret_m = Matrix(self._graph, self.row_ndata, self.col_ndata)
         lhs = self.edata[key]

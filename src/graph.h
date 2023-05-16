@@ -102,6 +102,18 @@ class Graph : public torch::CustomClassHolder {
   torch::Tensor Node2Vec(torch::Tensor seeds, int64_t walk_length, double p,
                          double q);
 
+  void FUSEDUOPV(const std::string& op, torch::Tensor lhs1, torch::Tensor rhs1,
+                  torch::Tensor out1,  torch::Tensor lhs2, torch::Tensor rhs2,
+                  torch::Tensor out2,
+                  int64_t on_format);
+void FusedESquareSum(const std::string& op, const std::string& reduce,
+                 torch::Tensor ufeat, torch::Tensor efeat, torch::Tensor out,
+                 torch::Tensor argu, torch::Tensor arge, int64_t u_target,
+                 int64_t on_format);
+void FusedEDivUSum(const std::string& op, const std::string& reduce,
+                 torch::Tensor ufeat, torch::Tensor efeat, torch::Tensor out,
+                 torch::Tensor argu, torch::Tensor arge, int64_t u_target,
+                 int64_t on_format);
  private:
   int64_t num_cols_ = 0;   // total number of cols in matrix
   int64_t num_rows_ = 0;   // total number of rows in matrix

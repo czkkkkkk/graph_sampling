@@ -9,16 +9,13 @@ def ladies_sampler(A: gs.Matrix, seeds: torch.Tensor, fanouts: List):
     ret = []
     for K in fanouts:
         subA = A[:, seeds]
-        subA.edata['w'] = subA.edata['w']**2
-        prob = subA.sum('w', axis=1)
+        prob = gs.ops.e_square_sum(subA,'w', axis=1,on_format=1)
         print("prob:",prob.shape,prob)
         print("nonzero:",torch.count_nonzero(prob))
         print("nonzero element:",prob[torch.nonzero(prob)])
         sampleA = subA.collective_sampling(K, prob, False)
         sampleA = sampleA.div('w', prob[sampleA.row_ndata['_ID']], axis=1)
-        out=sampleA.sum('w', axis=0)
-        print("out:",out.shape,out)
-        sampleA = sampleA.div('w', out, axis=0)
+        sampleA = sampleA.div('w', sampleA.sum('w', axis=0), axis=0)
         seeds = sampleA.all_nodes()
         ret.append(sampleA.to_dgl_block())
     output_node = seeds
