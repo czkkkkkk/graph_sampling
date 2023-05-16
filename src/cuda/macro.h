@@ -104,13 +104,16 @@
     }                                                                  \
   } while (0)
 
-#define SWITCH_IDX(EDGE_MAP, ...)     \
-  do {                                \
-    if ((EDGE_MAP)) {                 \
-      constexpr bool UseEMap = true;  \
-    } else {                          \
-      constexpr bool UseEMap = false; \
-    }                                 \
+
+  #define SWITCH_IDX(EDGE_MAP, ...) \
+  do {                                      \
+    if ((EDGE_MAP)) {                       \
+      constexpr bool UseEMap = true;        \
+              { __VA_ARGS__ }                     \
+    } else {                                \
+      constexpr bool UseEMap = false;       \
+              { __VA_ARGS__ }                     \
+    }                                       \
   } while (0)
 
 #endif
