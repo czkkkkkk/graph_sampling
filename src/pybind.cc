@@ -33,7 +33,10 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_SDDMM", &Graph::SDDMM)
       .def("_CAPI_SpMM", &Graph::SpMM)
       .def("_CAPI_GraphRelabel", &Graph::GraphRelabel)
-      .def("_CAPI_GetValidNodes", &Graph::GetValidNodes);
+      .def("_CAPI_GetValidNodes", &Graph::GetValidNodes)
+      .def("_CAPI_FusedUOPV",&Graph::FUSEDUOPV)
+      .def("_CAPI_FusedESquareSum",&Graph::FusedESquareSum)
+      .def("_CAPI_FusedEDivUSum",&Graph::FusedEDivUSum);
   // .def("_CAPI_ToBatchGraph", &Graph::ToBatchGraph);
 
   m.class_<BatchGraph>("BatchGraph")
