@@ -27,7 +27,6 @@ class GSTracer(Tracer):
 
 def gs_symbolic_trace(root, concrete_args=None) -> GraphModule:
     gs_tracer = GSTracer()
-    print(concrete_args)
     graph = gs_tracer.trace(root, concrete_args)
     name = (
         root.__class__.__name__ if isinstance(root, torch.nn.Module) else root.__name__

@@ -138,7 +138,6 @@ class compile:
 
         # compiled to torch.fx IR
         graph_args, graph_data_args = generate_graph_args(args, self.graph_actions)
-        print(graph_data_args)
         gm = gs_symbolic_trace(
             inner_wrapper, concrete_args={"inner_graph_data_args": graph_data_args}
         )

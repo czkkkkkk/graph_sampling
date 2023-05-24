@@ -73,8 +73,6 @@ def merge_relabel_and_all_indices(gm: fx.GraphModule) -> fx.GraphModule:
             else:
                 merge_dir[node.args[0]].append(node)
 
-    print(merge_dir)
-
     # begin merge
     for key, value in merge_dir.items():
         if len(value) < 2:
