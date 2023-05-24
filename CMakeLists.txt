@@ -12,6 +12,8 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
+find_package(PythonInterp REQUIRED)
+
 file(TO_NATIVE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/scripts/find_torch.py FIND_TORCH_PY)
 set(PYTHON_INTERP /home/gpzlx1/graph_sampling/venv/bin/python)
 message(STATUS "Using Python interpreter: ${PYTHON_INTERP}")
