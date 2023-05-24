@@ -10,6 +10,17 @@ from ..ops import gspmm, gsddmm
 
 torch.fx.wrap("create_block_from_coo")
 torch.fx.wrap("create_block_from_csc")
+torch.fx.wrap("assign_block")
+
+
+def assign_block(block, e_ids, edata, unique_tensor):
+    if e_ids is not None:
+        block.edata["_ID"] = e_ids
+
+    for key, value in edata.items():
+        block.edata[key] = value
+        block.srcdata["_ID"] = unique_tensor
+    return block
 
 
 class Matrix(object):
@@ -101,10 +112,10 @@ class Matrix(object):
         ret_matrix = Matrix()
 
         if probs is None:
-            subgraph, edge_index = self._graph._CAPI_Sampling(0, K, replace, _CSC, _COO)
+            subgraph, edge_index = self._graph._CAPI_Sampling(1, K, replace, _CSC, _COO)
         else:
             subgraph, edge_index = self._graph._CAPI_SamplingProbs(
-                0, probs, K, replace, _CSC, _COO
+                1, probs, K, replace, _CSC, _COO
             )
 
         ret_matrix._graph = subgraph
@@ -128,7 +139,7 @@ class Matrix(object):
         return self[selected_index, :]
 
     # Compute-step operators
-    def sum(self, key, axis,on_format=_CSC) -> torch.Tensor:
+    def sum(self, key, axis, on_format=_CSC) -> torch.Tensor:
         rhs = self.edata[key]
         if axis == 0:
             return gspmm(self, "copy_rhs", "sum", None, rhs, 0, _COO)
@@ -136,9 +147,9 @@ class Matrix(object):
             return gspmm(self, "copy_rhs", "sum", None, rhs, 2, _COO)
         else:
             raise "axis should be 0 or 1"
-        
+
         # Compute-step operators
- 
+
     def div(self, key, divisor, axis) -> Matrix:
         ret_m = Matrix(self._graph, self.row_ndata, self.col_ndata)
         lhs = self.edata[key]
@@ -153,39 +164,26 @@ class Matrix(object):
         return ret_m
 
     def to_dgl_block(self) -> DGLBlock:
+        col_seeds = self.col_ndata.get("_ID", self.null_tensor)
+
         (
             unique_tensor,
-            num_row,
-            num_col,
             format_tensor1,
             format_tensor2,
             e_ids,
-            format,
         ) = self._graph._CAPI_GraphRelabel(
-            self.col_ndata.get("_ID", self.null_tensor),
+            col_seeds,
             self.row_ndata.get("_ID", self.null_tensor),
         )
 
-        if format == "coo":
-            block = create_block_from_coo(
-                format_tensor1, format_tensor2, num_src=num_row, num_dst=num_col
-            )
-        else:
-            block = create_block_from_csc(
-                format_tensor1,
-                format_tensor2,
-                torch.tensor([]),
-                num_src=num_row,
-                num_dst=num_col,
-            )
+        block = create_block_from_coo(
+            format_tensor1,
+            format_tensor2,
+            num_src=unique_tensor.numel(),
+            num_dst=col_seeds.numel(),
+        )
 
-        if e_ids is not None:
-            block.edata["_ID"] = e_ids
-
-        for key, value in self.edata.items():
-            block.edata[key] = value
-        block.srcdata["_ID"] = unique_tensor
-        return block
+        return assign_block(block, e_ids, self.edata, unique_tensor)
 
     def all_nodes(self) -> torch.Tensor:
         return self._graph._CAPI_GetValidNodes(
@@ -209,7 +207,7 @@ class Matrix(object):
             self._graph._CAPI_GetCSCIndices(),
             self._graph._CAPI_GetCSCEids(),
         ]
-    
+
     @property
     def csr(self) -> List[torch.Tensor]:
         return [
@@ -217,7 +215,7 @@ class Matrix(object):
             self._graph._CAPI_GetCSRIndices(),
             self._graph._CAPI_GetCSREids(),
         ]
-    
+
     @property
     def coo(self) -> List[torch.Tensor]:
         return [
@@ -226,8 +224,8 @@ class Matrix(object):
             self._graph._CAPI_GetCOOEids(),
         ]
 
-    def random_walk(self,seeds,walk_length) -> torch.Tensor:
+    def random_walk(self, seeds, walk_length) -> torch.Tensor:
         return self._graph._CAPI_RandomWalk(seeds, walk_length)
-    
-    def node2vec(self,seeds,walk_length,p,q) -> torch.Tensor:
-        return self._graph._CAPI_Node2Vec(seeds, walk_length,p,q)
+
+    def node2vec(self, seeds, walk_length, p, q) -> torch.Tensor:
+        return self._graph._CAPI_Node2Vec(seeds, walk_length, p, q)

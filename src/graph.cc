@@ -496,49 +496,20 @@ void Graph::FusedEDivUSum(const std::string& op, const std::string& reduce,
   }
 }
 
-std::tuple<torch::Tensor, int64_t, int64_t, torch::Tensor, torch::Tensor,
-           torch::optional<torch::Tensor>, std::string>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor,
+           torch::optional<torch::Tensor>>
 Graph::GraphRelabel(torch::Tensor col_seeds, torch::Tensor row_ids) {
-  if (csc_ != nullptr) {
-    torch::Tensor row_indices =
-        row_ids.numel() > 0 ? row_ids.index({csc_->indices}) : csc_->indices;
+  CreateSparseFormat(_COO);
+  torch::Tensor coo_col = col_seeds.index({coo_->col});
+  torch::Tensor coo_row =
+      row_ids.numel() > 0 ? row_ids.index({coo_->row}) : coo_->row;
 
-    torch::Tensor frontier;
-    std::vector<torch::Tensor> relabeled_result;
+  torch::Tensor frontier;
+  std::vector<torch::Tensor> relabeled_result;
+  std::tie(frontier, relabeled_result) =
+      impl::TensorRelabelCUDA({col_seeds, coo_row}, {coo_col, coo_row});
 
-    std::tie(frontier, relabeled_result) =
-        impl::TensorRelabelCUDA({col_seeds, row_indices}, {row_indices});
-
-    torch::Tensor relabeled_indptr = csc_->indptr.clone();
-    torch::Tensor relabeled_indices = relabeled_result[0];
-
-    return {frontier,
-            frontier.numel(),
-            col_seeds.numel(),
-            relabeled_indptr,
-            relabeled_indices,
-            csc_->e_ids,
-            "csc"};
-
-  } else {
-    CreateSparseFormat(_COO);
-    torch::Tensor coo_col = col_seeds.index({coo_->col});
-    torch::Tensor coo_row =
-        row_ids.numel() > 0 ? row_ids.index({coo_->row}) : coo_->row;
-
-    torch::Tensor frontier;
-    std::vector<torch::Tensor> relabeled_result;
-    std::tie(frontier, relabeled_result) =
-        impl::TensorRelabelCUDA({col_seeds, coo_row}, {coo_col, coo_row});
-
-    return {frontier,
-            frontier.numel(),
-            col_seeds.numel(),
-            relabeled_result[1],
-            relabeled_result[0],
-            coo_->e_ids,
-            "coo"};
-  }
+  return {frontier, relabeled_result[1], relabeled_result[0], coo_->e_ids};
 }
 
 torch::Tensor Graph::GetValidNodes(torch::Tensor col_seeds,
