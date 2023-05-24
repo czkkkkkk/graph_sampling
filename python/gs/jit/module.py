@@ -16,12 +16,10 @@ def get_actions(args):
     static_args_count = 0
     for arg_offset, arg in enumerate(args):
         if isinstance(arg, Matrix):
-            actions.append(
-                (GRAPH_ARG, graph_args_count, arg_offset, CONVERT_2_MATRIX))
+            actions.append((GRAPH_ARG, graph_args_count, arg_offset, CONVERT_2_MATRIX))
             graph_args_count += 1
         elif isinstance(arg, List):
-            actions.append(
-                (STATIC_ARG, static_args_count, arg_offset, STATIS_LIST))
+            actions.append((STATIC_ARG, static_args_count, arg_offset, STATIS_LIST))
             static_args_count += 1
         else:
             actions.append(None)
@@ -82,9 +80,8 @@ def generate_new_args(args, graph_args, static_args, actions):
 
 
 class compile:
-
     def __init__(self, func, args):
-        '''
+        """
         This is auto wrapper for user's func.
         We will create an func inner_wrapper according user's func and its args.
         Each arg in args will have an action, which is used to tell what we should do for the arg.
@@ -101,7 +98,7 @@ class compile:
 
         For 'STATIC_ARG' action, where arg will not change during training (e.g. fanout, metapath or others). We will store them
         in static_args and they will appear as constants in torch.fx.
-        '''
+        """
 
         # generate actions
         actions = get_actions(args)
@@ -116,8 +113,9 @@ class compile:
             # generate new_args for user's arg.
             # arg in static_args will be compiled as contants.
             # arg in graph_args will be leveraged to generate Matrix.
-            new_args = generate_new_args(inner_args, inner_graph_args,
-                                         static_args, actions)
+            new_args = generate_new_args(
+                inner_args, inner_graph_args, static_args, actions
+            )
             return func(*new_args)
 
         # compiled to torch.fx IR
