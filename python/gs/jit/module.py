@@ -42,13 +42,21 @@ def split_actions(actions):
 
 def generate_graph_args(args, graph_actions):
     graph_args = []
+    graph_data_args = []
     for action in graph_actions:
         _, _, arg_offset, a = action
         if a == CONVERT_2_MATRIX:
             graph_args.append(args[arg_offset]._graph)
+            graph_data_args.append(
+                [
+                    args[arg_offset].row_ndata,
+                    args[arg_offset].col_ndata,
+                    args[arg_offset].edata,
+                ]
+            )
         else:
             raise ValueError
-    return graph_args
+    return graph_args, graph_data_args
 
 
 def generate_static_args(args, static_actions):
@@ -62,7 +70,7 @@ def generate_static_args(args, static_actions):
     return static_args
 
 
-def generate_new_args(args, graph_args, static_args, actions):
+def generate_new_args(args, graph_args, inner_graph_data_args, static_args, actions):
     new_args = []
     for index, action in enumerate(actions):
         if action is None:
@@ -70,7 +78,14 @@ def generate_new_args(args, graph_args, static_args, actions):
         else:
             _, offset, _, a = action
             if a == CONVERT_2_MATRIX:
-                new_args.append(Matrix(graph_args[offset]))
+                new_args.append(
+                    Matrix(
+                        graph_args[offset],
+                        inner_graph_data_args[offset][0],
+                        inner_graph_data_args[offset][1],
+                        inner_graph_data_args[offset][2],
+                    )
+                )
             elif a == STATIS_LIST:
                 new_args.append(static_args[offset])
             else:
@@ -108,17 +123,25 @@ class compile:
         # generate static_args via static_actions
         static_args = generate_static_args(args, self.static_actions)
 
-        def inner_wrapper(inner_args, inner_graph_args):
+        def inner_wrapper(inner_args, inner_graph_args, inner_graph_data_args):
             # generate new_args for user's arg.
             # arg in static_args will be compiled as contants.
             # arg in graph_args will be leveraged to generate Matrix.
             new_args = generate_new_args(
-                inner_args, inner_graph_args, static_args, actions
+                inner_args,
+                inner_graph_args,
+                inner_graph_data_args,
+                static_args,
+                actions,
             )
             return func(*new_args)
 
         # compiled to torch.fx IR
-        gm = gs_symbolic_trace(inner_wrapper)
+        graph_args, graph_data_args = generate_graph_args(args, self.graph_actions)
+        print(graph_data_args)
+        gm = gs_symbolic_trace(
+            inner_wrapper, concrete_args={"inner_graph_data_args": graph_data_args}
+        )
 
         # optimization
         gm = merge_relabel_and_all_indices(gm)
@@ -131,5 +154,5 @@ class compile:
     def __call__(self, *args):
         # generate graph_actions via graph_actions
         # In fact, it stores *._graph in graph_args
-        graph_args = generate_graph_args(args, self.graph_actions)
-        return self.gm(args, graph_args)
+        graph_args, graph_data_args = generate_graph_args(args, self.graph_actions)
+        return self.gm(args, graph_args, graph_data_args)
