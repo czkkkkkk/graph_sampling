@@ -1,8 +1,7 @@
 from typing import List
 from .trace import gs_symbolic_trace
 from ..matrix_api import Matrix
-from .passes import dce, cse
-from .optimize import merge_relabel_and_all_indices
+from .optimize import merge_relabel_and_all_indices, dce
 
 CONVERT_2_MATRIX = "Convert2Matrix"
 STATIS_LIST = "StatisList"
