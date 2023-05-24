@@ -9,15 +9,17 @@ def ladies_sampler(A: gs.Matrix, seeds: torch.Tensor, fanouts: List):
     ret = []
     for K in fanouts:
         subA = A[:, seeds]
-        subA.edata['w'] = subA.edata['w']**2
-        prob = subA.sum('w', axis=1)
-        print("prob:",prob.shape,prob)
-        print("nonzero:",torch.count_nonzero(prob))
-        print("nonzero element:",prob[torch.nonzero(prob)])
+        subA.edata["w"] = subA.edata["w"] ** 2
+        prob = subA.sum("w", axis=1)
+        print("prob:", prob.shape, prob)
+        print("nonzero:", torch.count_nonzero(prob))
+        print("nonzero element:", prob[torch.nonzero(prob)])
         sampleA = subA.collective_sampling(K, prob, False)
-        out = gs.ops.e_div_u_sum(sampleA,'w',prob[sampleA.row_ndata['_ID']],axis=0,on_format=2)
-        print("out:",out.shape,out)
-        sampleA = sampleA.div('w', out, axis=0)
+        out = gs.ops.e_div_u_sum(
+            sampleA, "w", prob[sampleA.row_ndata["_ID"]], axis=0, on_format=2
+        )
+        print("out:", out.shape, out)
+        sampleA = sampleA.div("w", out, axis=0)
         seeds = sampleA.all_nodes()
         ret.append(sampleA.to_dgl_block())
     output_node = seeds
@@ -28,15 +30,15 @@ if __name__ == "__main__":
     torch.manual_seed(1)
     dataset = load_graph.load_reddit()
     dgl_graph = dataset[0]
-    csc_indptr, csc_indices, _ = dgl_graph.adj_sparse('csc')
+    csc_indptr, csc_indices, _ = dgl_graph.adj_tensors("csc")
 
     m = gs.Matrix()
-    m.load_graph('CSC', [csc_indptr.cuda(), csc_indices.cuda()])
-    m.edata['w'] = torch.ones(m.num_edges(), dtype=torch.float32).cuda()
-    
-    D_in = m.sum('w', axis=0)
-    D_out = m.sum('w', axis=1)
-    P = m.div('w', D_out.sqrt(), axis=1).div('w', D_in.sqrt(), axis=0)
+    m.load_graph("CSC", [csc_indptr.cuda(), csc_indices.cuda()])
+    m.edata["w"] = torch.ones(m.num_edges(), dtype=torch.float32).cuda()
+
+    D_in = m.sum("w", axis=0)
+    D_out = m.sum("w", axis=1)
+    P = m.div("w", D_out.sqrt(), axis=1).div("w", D_in.sqrt(), axis=0)
 
     seeds = torch.randint(0, 10000, (500,)).cuda()
 

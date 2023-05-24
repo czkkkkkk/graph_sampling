@@ -11,7 +11,7 @@ def shadowgnn_sampler(A: gs.matrix_api.Matrix, seeds: torch.Tensor, fanouts: Lis
         sampleA = subA.individual_sampling(K, None, False)
         seeds = sampleA.all_nodes()
     input_nodes = seeds
-    subA = A[seeds,seeds]
+    subA = A[seeds, seeds]
     return input_nodes, output_nodes, subA.to_dgl_block()
 
 
@@ -19,10 +19,10 @@ if __name__ == "__main__":
     torch.manual_seed(1)
     dataset = load_graph.load_reddit()
     dgl_graph = dataset[0]
-    csc_indptr, csc_indices, _ = dgl_graph.adj_sparse('csc')
+    csc_indptr, csc_indices, _ = dgl_graph.adj_tensors("csc")
 
     m = gs.matrix_api.Matrix()
-    m.load_graph('CSC', [csc_indptr.cuda(), csc_indices.cuda()])
+    m.load_graph("CSC", [csc_indptr.cuda(), csc_indices.cuda()])
 
     seeds = torch.randint(0, 10000, (1024,)).cuda()
 

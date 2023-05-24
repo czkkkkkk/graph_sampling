@@ -44,7 +44,7 @@ if __name__ == "__main__":
     torch.manual_seed(1)
     dataset = load_graph.load_reddit()
     dgl_graph, features = dataset[0], dataset[1].cuda()
-    csc_indptr, csc_indices, _ = dgl_graph.adj_sparse("csc")
+    csc_indptr, csc_indices, _ = dgl_graph.adj_tensors("csc")
     W = nn.init.xavier_normal_(torch.Tensor(features.shape[1], 2)).cuda()
 
     m = gs.Matrix()
