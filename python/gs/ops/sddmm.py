@@ -4,48 +4,16 @@ import torch
 
 from ..format import _COO, _CSC, _CSR
 
+torch.fx.wrap("_before_sddmm")
+torch.fx.wrap("_after_sddmm")
+
 __all__ = ["gsddmm"]
 
 
 target_mapping = {"u": 0, "e": 1, "v": 2, "src": 0, "edge": 1, "dst": 2}
 
 
-def infer_broadcast_shape(op, shp1, shp2):
-    pad_shp1, pad_shp2 = shp1, shp2
-    if op == "dot":
-        if shp1[-1] != shp2[-1]:
-            raise "Dot operator is only available for arrays with the same size on last dimension, but got {} and {}.".format(
-                shp1, shp2
-            )
-    # operands are padded to have the same dimensionality with leading 1's.
-    if len(shp1) > len(shp2):
-        pad_shp2 = (1,) * (len(shp1) - len(shp2)) + shp2
-    elif len(shp1) < len(shp2):
-        pad_shp1 = (1,) * (len(shp2) - len(shp1)) + shp1
-    for d1, d2 in zip(pad_shp1, pad_shp2):
-        if d1 != d2 and d1 != 1 and d2 != 1:
-            raise "Feature shapes {} and {} are not valid for broadcasting.".format(
-                shp1, shp2
-            )
-    rst = tuple(max(d1, d2) for d1, d2 in zip(pad_shp1, pad_shp2))
-    return rst[:-1] + (1,) if op == "dot" else rst
-
-
-def reshape_lhs_rhs(lhs_data, rhs_data):
-    lhs_shape = lhs_data.shape
-    rhs_shape = rhs_data.shape
-    if len(lhs_shape) != len(rhs_shape):
-        max_ndims = max(len(lhs_shape), len(rhs_shape))
-        lhs_pad_ndims = max_ndims - len(lhs_shape)
-        rhs_pad_ndims = max_ndims - len(rhs_shape)
-        new_lhs_shape = (lhs_shape[0],) + (1,) * lhs_pad_ndims + lhs_shape[1:]
-        new_rhs_shape = (rhs_shape[0],) + (1,) * rhs_pad_ndims + rhs_shape[1:]
-        lhs_data = lhs_data.view(new_lhs_shape)
-        rhs_data = rhs_data.view(new_rhs_shape)
-    return lhs_data, rhs_data
-
-
-def gsddmm(g, op, lhs_data, rhs_data, lhs_target="u", rhs_target="v", on_format=_COO):
+def _before_sddmm(num_edges, op, lhs_data, rhs_data, lhs_target, rhs_target):
     if op not in ["copy_lhs", "copy_rhs"]:
         lhs_data, rhs_data = reshape_lhs_rhs(lhs_data, rhs_data)
 
@@ -86,16 +54,61 @@ def gsddmm(g, op, lhs_data, rhs_data, lhs_target="u", rhs_target="v", on_format=
     dtype = lhs.dtype if use_lhs else rhs.dtype
     lhs_shp = lhs.shape if use_lhs else (0,)
     rhs_shp = rhs.shape if use_rhs else (0,)
-    out_shp = (g._graph._CAPI_GetNumEdges(),) + infer_broadcast_shape(
-        op, lhs_shp[1:], rhs_shp[1:]
-    )
+    out_shp = (num_edges,) + infer_broadcast_shape(op, lhs_shp[1:], rhs_shp[1:])
     out = torch.zeros(out_shp, dtype=dtype, device=device)
+    condition = (expand_lhs or not use_lhs) and (expand_rhs or not use_rhs)
 
-    g._graph._CAPI_SDDMM(op, lhs, rhs, out, lhs_target, rhs_target, on_format)
+    return (lhs, rhs, out, lhs_target, rhs_target, condition)
 
-    if (expand_lhs or not use_lhs) and (expand_rhs or not use_rhs):
+
+def _after_sddmm(out, condition):
+    if condition:
         out = torch.squeeze(out, -1)
+    return out
 
+
+def infer_broadcast_shape(op, shp1, shp2):
+    pad_shp1, pad_shp2 = shp1, shp2
+    if op == "dot":
+        if shp1[-1] != shp2[-1]:
+            raise "Dot operator is only available for arrays with the same size on last dimension, but got {} and {}.".format(
+                shp1, shp2
+            )
+    # operands are padded to have the same dimensionality with leading 1's.
+    if len(shp1) > len(shp2):
+        pad_shp2 = (1,) * (len(shp1) - len(shp2)) + shp2
+    elif len(shp1) < len(shp2):
+        pad_shp1 = (1,) * (len(shp2) - len(shp1)) + shp1
+    for d1, d2 in zip(pad_shp1, pad_shp2):
+        if d1 != d2 and d1 != 1 and d2 != 1:
+            raise "Feature shapes {} and {} are not valid for broadcasting.".format(
+                shp1, shp2
+            )
+    rst = tuple(max(d1, d2) for d1, d2 in zip(pad_shp1, pad_shp2))
+    return rst[:-1] + (1,) if op == "dot" else rst
+
+
+def reshape_lhs_rhs(lhs_data, rhs_data):
+    lhs_shape = lhs_data.shape
+    rhs_shape = rhs_data.shape
+    if len(lhs_shape) != len(rhs_shape):
+        max_ndims = max(len(lhs_shape), len(rhs_shape))
+        lhs_pad_ndims = max_ndims - len(lhs_shape)
+        rhs_pad_ndims = max_ndims - len(rhs_shape)
+        new_lhs_shape = (lhs_shape[0],) + (1,) * lhs_pad_ndims + lhs_shape[1:]
+        new_rhs_shape = (rhs_shape[0],) + (1,) * rhs_pad_ndims + rhs_shape[1:]
+        lhs_data = lhs_data.view(new_lhs_shape)
+        rhs_data = rhs_data.view(new_rhs_shape)
+    return lhs_data, rhs_data
+
+
+def gsddmm(g, op, lhs_data, rhs_data, lhs_target="u", rhs_target="v", on_format=_COO):
+    num_edges = g._graph._CAPI_GetNumEdges()
+    (lhs, rhs, out, lhs_target, rhs_target, condition) = _before_sddmm(
+        num_edges, op, lhs_data, rhs_data, lhs_target, rhs_target
+    )
+    g._graph._CAPI_SDDMM(op, lhs, rhs, out, lhs_target, rhs_target, on_format)
+    out = _after_sddmm(out, condition)
     return out
 
 
