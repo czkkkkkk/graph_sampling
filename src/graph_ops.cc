@@ -153,6 +153,22 @@ std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCColSamplingProbs(
   }
 }
 
+std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCSlicingSampling(
+    std::shared_ptr<CSC> csc, torch::Tensor node_ids, int64_t fanout,
+    bool replace, bool with_coo) {
+  if (csc->indptr.device().type() == torch::kCUDA || csc->indptr.is_pinned()) {
+    torch::Tensor sub_indptr, sub_coo_col, sub_indices, select_index;
+    std::tie(sub_indptr, sub_coo_col, sub_indices, select_index) =
+        impl::fusion::FusedCSCColSlicingSamplingCUDA(
+            csc->indptr, csc->indices, fanout, node_ids, replace, with_coo);
+    return {std::make_shared<_TMP>(_TMP{sub_indptr, sub_coo_col, sub_indices}),
+            select_index};
+  } else {
+    LOG(FATAL) << "Not implemented warning";
+    return {std::make_shared<_TMP>(_TMP{}), torch::Tensor()};
+  }
+}
+
 torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
                               int64_t walk_length) {
   torch::Tensor paths = impl::fusion::FusedRandomWalkCUDA(

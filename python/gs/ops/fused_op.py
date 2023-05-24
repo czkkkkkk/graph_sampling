@@ -82,7 +82,7 @@ def fused_u_mul_v(gidx, lhs1, rhs1, lhs2,rhs2, on_format=_COO):
     out1 = torch.zeros(out_shp, dtype=dtype, device=device)
     out2 = torch.zeros(out_shp, dtype=dtype, device=device)
     if gidx._CAPI_GetNumEdges() > 0:
-        gidx._CAPI_FUSEDUOPV(op, lhs1, rhs1, out1, lhs2, rhs2, out2,  on_format)
+        gidx._CAPI_FusedUOPV(op, lhs1, rhs1, out1, lhs2, rhs2, out2,  on_format)
     if (expand_lhs or not use_lhs) and (expand_rhs or not use_rhs):
         out1 = torch.squeeze(out1, -1)
         out2 = torch.squeeze(out2, -1)

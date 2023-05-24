@@ -189,7 +189,7 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::Sampling(
   auto ret = c10::intrusive_ptr<Graph>(
       std::unique_ptr<Graph>(new Graph(num_rows_, num_cols_)));
 
-  if (axis == 0 && on_format == _CSC) {
+  if (axis == 1 && on_format == _CSC) {
     CHECK(output_format != _CSR)
         << "Error in Sampling, Not implementation [on_format = CSC, "
            "output_forat = CSR] !";
@@ -207,7 +207,7 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::Sampling(
 
     e_ids = csc_->e_ids;
     ret->SetNumEdges(select_index.numel());
-  } else if (axis == 1 && on_format == _CSR) {
+  } else if (axis == 0 && on_format == _CSR) {
     CHECK(output_format != _CSC)
         << "Error in Sampling, Not implementation [on_format = CSR, "
            "output_forat = CSC] !";
@@ -247,15 +247,17 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::SamplingProbs(
   torch::Tensor select_index;
   std::shared_ptr<_TMP> tmp_ptr = nullptr;
   bool with_coo = output_format & _COO;
+  torch::optional<torch::Tensor> e_ids = torch::nullopt;
 
   // sampling does not change the shape of graph/matrix
   auto ret = c10::intrusive_ptr<Graph>(
       std::unique_ptr<Graph>(new Graph(num_rows_, num_cols_)));
 
-  if (axis == 0 && on_format == _CSC) {
+  if (axis == 1 && on_format == _CSC) {
     CHECK(output_format != _CSR)
         << "Error in SamplingProbs, Not implementation [on_format = CSC, "
            "output_forat = CSR] !";
+    e_ids = csc_->e_ids;
 
     std::tie(tmp_ptr, select_index) =
         CSCColSamplingProbs(csc_, edge_probs, fanout, replace, with_coo);
@@ -269,10 +271,11 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::SamplingProbs(
                                             torch::nullopt, false, true}));
 
     ret->SetNumEdges(select_index.numel());
-  } else if (axis == 1 && on_format == _CSR) {
+  } else if (axis == 0 && on_format == _CSR) {
     CHECK(output_format != _CSC)
         << "Error in SamplingProbs, Not implementation [on_format = CSR, "
            "output_forat = CSC] !";
+    e_ids = csr_->e_ids;
 
     std::tie(tmp_ptr, select_index) =
         CSCColSamplingProbs(csr_, edge_probs, fanout, replace, with_coo);
@@ -292,7 +295,13 @@ std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::SamplingProbs(
                  << ", output_forat = " << output_format << "] !";
   }
 
-  return {ret, select_index};
+  torch::Tensor split_index;
+  if (e_ids.has_value()) {
+    split_index = e_ids.value().index_select(0, select_index);
+  } else {
+    split_index = select_index;
+  }
+  return {ret, split_index};
 }
 
 torch::Tensor Graph::RandomWalk(torch::Tensor seeds, int64_t walk_length) {
@@ -324,7 +333,7 @@ void Graph::SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
 }
 
 /*! \brief Generalized Sampled Dense-Dense Matrix Multiplication. */
-void Graph::FUSEDUOPV(const std::string& op, torch::Tensor lhs1,
+void Graph::FusedUOPV(const std::string& op, torch::Tensor lhs1,
                       torch::Tensor rhs1, torch::Tensor out1,
                       torch::Tensor lhs2, torch::Tensor rhs2,
                       torch::Tensor out2, int64_t on_format) {
@@ -361,6 +370,81 @@ void Graph::SpMM(const std::string& op, const std::string& reduce,
   } else {
     LOG(FATAL) << "SpMM Error:CSC, CSR and u_target mismatch";
   }
+}
+
+// axis = 0 for row index and sample column;
+// axis = 1 for column index and sample row;
+std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor>
+Graph::FusedSlicingSampling(int64_t axis, torch::Tensor seeds, int64_t fanout,
+                            bool replace, int64_t on_format,
+                            int64_t output_format) {
+  CreateSparseFormat(on_format);
+  torch::Tensor select_index;
+  std::shared_ptr<_TMP> tmp_ptr = nullptr;
+  bool with_coo = output_format & _COO;
+  torch::optional<torch::Tensor> e_ids = torch::nullopt;
+
+  int64_t new_num_cols, new_num_rows;
+  if (axis == 0) {
+    new_num_cols = num_cols_;
+    new_num_rows = seeds.numel();
+  } else {
+    new_num_cols = seeds.numel();
+    new_num_rows = num_rows_;
+  }
+  auto ret = c10::intrusive_ptr<Graph>(
+      std::unique_ptr<Graph>(new Graph(new_num_rows, new_num_cols)));
+
+  if (axis == 0 && on_format == _CSR) {
+    CHECK(output_format != _CSC) << "Error in FusedSlicingSampling, Not "
+                                    "implementation [on_format = CSR, "
+                                    "output_forat = CSC] !";
+    e_ids = csr_->e_ids;
+
+    std::tie(tmp_ptr, select_index) =
+        CSCSlicingSampling(csr_, seeds, fanout, replace, with_coo);
+
+    if (output_format & _CSR)
+      ret->SetCSR(std::make_shared<CSR>(
+          CSR{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+    if (output_format & _COO)
+      ret->SetCOO(std::make_shared<COO>(COO{tmp_ptr->coo_in_indptr,
+                                            tmp_ptr->coo_in_indices,
+                                            torch::nullopt, true, false}));
+
+    ret->SetNumEdges(select_index.numel());
+
+  } else if (axis == 1 && on_format == _CSC) {
+    CHECK(output_format != _CSR) << "Error in FusedSlicingSampling, Not "
+                                    "implementation [on_format = CSC, "
+                                    "output_forat = CSR] !";
+    e_ids = csc_->e_ids;
+
+    std::tie(tmp_ptr, select_index) =
+        CSCSlicingSampling(csc_, seeds, fanout, replace, with_coo);
+    if (output_format & _CSC)
+      ret->SetCSC(std::make_shared<CSC>(
+          CSC{tmp_ptr->indptr, tmp_ptr->coo_in_indices, torch::nullopt}));
+    if (output_format & _COO)
+      ret->SetCOO(std::make_shared<COO>(COO{tmp_ptr->coo_in_indices,
+                                            tmp_ptr->coo_in_indptr,
+                                            torch::nullopt, false, true}));
+
+    ret->SetNumEdges(select_index.numel());
+
+  } else {
+    CHECK(false) << "Error in FusedSlicingSampling, Not implementation [axis = "
+                 << axis << ", on_format = " << on_format
+                 << ", output_forat = " << output_format << "] !";
+  }
+
+  torch::Tensor split_index;
+  if (e_ids.has_value()) {
+    split_index = e_ids.value().index_select(0, select_index);
+  } else {
+    split_index = select_index;
+  }
+  return {ret, split_index};
 }
 
 /*! \brief Generalized Sparse-Dense Matrix Multiplication. */

@@ -27,6 +27,10 @@ std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCColSamplingProbs(
     std::shared_ptr<CSC> csc, torch::Tensor edge_probs, int64_t fanout,
     bool replace, bool with_coo);
 
+std::pair<std::shared_ptr<_TMP>, torch::Tensor> CSCSlicingSampling(
+    std::shared_ptr<CSC> csc, torch::Tensor node_ids, int64_t fanout,
+    bool replace, bool with_coo);
+
 torch::Tensor FusedRandomWalk(std::shared_ptr<CSC> csc, torch::Tensor seeds,
                               int64_t walk_length);
 torch::Tensor FusedNode2Vec(std::shared_ptr<CSC> csc, torch::Tensor seeds,
