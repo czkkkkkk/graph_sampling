@@ -317,6 +317,8 @@ torch::Tensor Graph::Node2Vec(torch::Tensor seeds, int64_t walk_length,
 void Graph::SDDMM(const std::string& op, torch::Tensor lhs, torch::Tensor rhs,
                   torch::Tensor out, int64_t lhs_target, int64_t rhs_target,
                   int64_t on_format) {
+  if (!num_edges_ > 0) return;
+
   CreateSparseFormat(on_format);
   const auto& bcast = CalcBcastOff(op, lhs, rhs);
   if (on_format == _COO) {
@@ -355,6 +357,8 @@ void Graph::SpMM(const std::string& op, const std::string& reduce,
                  torch::Tensor ufeat, torch::Tensor efeat, torch::Tensor out,
                  torch::Tensor argu, torch::Tensor arge, int64_t u_target,
                  int64_t on_format) {
+  if (!num_edges_ > 0) return;
+
   CreateSparseFormat(on_format);
   const auto& bcast = CalcBcastOff(op, ufeat, efeat);
   if (u_target != 0 && u_target != 2) LOG(FATAL) << "Invalid u_target";

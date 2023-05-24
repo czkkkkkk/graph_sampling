@@ -1,15 +1,68 @@
 import torch
-
 from ..format import _COO, _CSC, _CSR
+import torch.fx as fx
 
-target_mapping = {
-    'u': 0,
-    'e': 1,
-    'v': 2,
-    'src': 0,
-    'edge': 1,
-    'dst': 2
-}
+torch.fx.wrap("_unsqueeze")
+torch.fx.wrap("_spmm_squeeze")
+torch.fx.wrap("_sddmm_squeeze")
+torch.fx.wrap("infer_broadcast_shape")
+torch.fx.wrap("_create_space")
+torch.fx.wrap("_chech_input")
+torch.fx.wrap("_torch_zeros")
+
+
+target_mapping = {"u": 0, "e": 1, "v": 2, "src": 0, "edge": 1, "dst": 2}
+
+
+def _unsqueeze(e):
+    if e.dim() == 1:
+        return torch.unsqueeze(e, -1), True
+    else:
+        return e, False
+
+
+def _spmm_squeeze(expand_u, use_u, expand_e, use_e, use_cmp, v, arg_u, arg_e):
+    if (expand_u or not use_u) and (expand_e or not use_e):
+        v = torch.squeeze(v, -1)
+    if expand_u and use_cmp:
+        arg_u = torch.squeeze(arg_u, -1)
+    if expand_e and use_cmp:
+        arg_e = torch.squeeze(arg_e, -1)
+    return v, arg_u, arg_e
+
+
+def _sddmm_squeeze(expand_lhs, use_lhs, expand_rhs, use_rhs, out):
+    if (expand_lhs or not use_lhs) and (expand_rhs or not use_rhs):
+        out = torch.squeeze(out, -1)
+    return out
+
+
+def _create_space(v_shp, dtype, device, reduce_op, use_e, use_u):
+    v = torch.zeros(v_shp, dtype=dtype, device=device)
+    use_cmp = reduce_op in ["max", "min"]
+    arg_u, arg_e = None, None
+    if use_cmp:
+        if use_u:
+            arg_u = torch.zeros(v_shp, dtype=torch.int64, device=device)
+        if use_e:
+            arg_e = torch.zeros(v_shp, dtype=torch.int64, device=device)
+    return v, arg_u, arg_e, use_cmp
+
+
+def _chech_input(use_u, use_e, u, e):
+    if use_u and use_e:
+        if u.device != e.device:
+            raise "The operands data device don't match: {} and {}, please move them to the same device.".format(
+                u.device, e.device
+            )
+        if u.dtype != e.dtype:
+            raise "The node features' data type {} doesn't match edge features' data type {}, please convert them to the same type.".format(
+                u.dtype, e.dtype
+            )
+
+
+def _torch_zeros(shape, device, dtype):
+    return torch.zeros(shape, dtype=dtype, device=device)
 
 
 def infer_broadcast_shape(op, shp1, shp2):
@@ -40,7 +93,8 @@ def infer_broadcast_shape(op, shp1, shp2):
     if op == "dot":
         if shp1[-1] != shp2[-1]:
             raise "Dot operator is only available for arrays with the same size on last dimension, but got {} and {}.".format(
-                shp1, shp2)
+                shp1, shp2
+            )
     # operands are padded to have the same dimensionality with leading 1's.
     if len(shp1) > len(shp2):
         pad_shp2 = (1,) * (len(shp1) - len(shp2)) + shp2
@@ -49,7 +103,8 @@ def infer_broadcast_shape(op, shp1, shp2):
     for d1, d2 in zip(pad_shp1, pad_shp2):
         if d1 != d2 and d1 != 1 and d2 != 1:
             raise "Feature shapes {} and {} are not valid for broadcasting.".format(
-                shp1, shp2)
+                shp1, shp2
+            )
     rst = tuple(max(d1, d2) for d1, d2 in zip(pad_shp1, pad_shp2))
     return rst[:-1] + (1,) if op == "dot" else rst
 
@@ -102,49 +157,40 @@ def _gspmm(gidx, op, reduce_op, u, e, u_target, on_format=_CSC):
     if use_u and use_e:
         if u.device != e.device:
             raise "The operands data device don't match: {} and {}, please move them to the same device.".format(
-                u.device, e.device)
+                u.device, e.device
+            )
         if u.dtype != e.dtype:
             raise "The node features' data type {} doesn't match edge features' data type {}, please convert them to the same type.".format(
-                u.dtype, e.dtype)
+                u.dtype, e.dtype
+            )
     # deal with scalar features.
     expand_u, expand_e = False, False
-    if use_u and u.dim() == 1:
-        u = torch.unsqueeze(u, -1)
-        expand_u = True
-    if use_e and e.dim() == 1:
-        e = torch.unsqueeze(e, -1)
-        expand_e = True
+    if use_u:
+        u, expand_u = _unsqueeze(u)
+    if use_e:
+        e, expand_e = _unsqueeze(e)
 
     device = u.device if use_u else e.device
     dtype = u.dtype if use_u else e.dtype
     u_shp = u.shape if use_u else (0,)
     e_shp = e.shape if use_e else (0,)
     v_out_dim = gidx._CAPI_GetNumCols() if u_target == 0 else gidx._CAPI_GetNumRows()
-    v_shp = (v_out_dim,) + infer_broadcast_shape(
-        op, u_shp[1:], e_shp[1:]
+    v_shp = (v_out_dim,) + infer_broadcast_shape(op, u_shp[1:], e_shp[1:])
+    v, arg_u, arg_e, use_cmp = _create_space(
+        v_shp, dtype, device, reduce_op, use_e, use_u
     )
-    v = torch.zeros(v_shp, dtype=dtype, device=device)
-    use_cmp = reduce_op in ["max", "min"]
-    arg_u, arg_e = None, None
-    if use_cmp:
-        if use_u:
-            arg_u = torch.zeros(v_shp, dtype=torch.int64, device=device)
-        if use_e:
-            arg_e = torch.zeros(v_shp, dtype=torch.int64, device=device)
-    if gidx._CAPI_GetNumEdges() > 0:
-        gidx._CAPI_SpMM(op, reduce_op, u, e, v, arg_u, arg_e, u_target, on_format)
+    # usually true
+    # if gidx._CAPI_GetNumEdges() > 0:
+    gidx._CAPI_SpMM(op, reduce_op, u, e, v, arg_u, arg_e, u_target, on_format)
     # To deal with scalar node/edge features.
-    if (expand_u or not use_u) and (expand_e or not use_e):
-        v = torch.squeeze(v, -1)
-    if expand_u and use_cmp:
-        arg_u = torch.squeeze(arg_u, -1)
-    if expand_e and use_cmp:
-        arg_e = torch.squeeze(arg_e, -1)
+    v, arg_u, arg_e = _spmm_squeeze(
+        expand_u, use_u, expand_e, use_e, use_cmp, v, arg_u, arg_e
+    )
     return v, (arg_u, arg_e)
 
 
-def _gsddmm(gidx, op, lhs, rhs, lhs_target='u', rhs_target='v', on_format=_COO):
-    r""" Generalized Sampled-Dense-Dense Matrix Multiplication interface. It
+def _gsddmm(gidx, op, lhs, rhs, lhs_target="u", rhs_target="v", on_format=_COO):
+    r"""Generalized Sampled-Dense-Dense Matrix Multiplication interface. It
     takes the result of :attr:`op` on source node feature and destination node
     feature, leads to a feature on edge.
 
@@ -184,21 +230,13 @@ def _gsddmm(gidx, op, lhs, rhs, lhs_target='u', rhs_target='v', on_format=_COO):
     """
     use_lhs = op != "copy_rhs"
     use_rhs = op != "copy_lhs"
-    if use_lhs and use_rhs:
-        if lhs.device != rhs.device:
-            raise "The operands data device don't match: {} and {}, please move them to the same device.".format(
-                lhs.device, rhs.device)
-        if lhs.dtype != rhs.dtype:
-            raise "The operands data type don't match: {} and {}, please convert them to the same type.".format(
-                lhs.dtype, rhs.dtype)
+    _chech_input(use_lhs, use_rhs, lhs, rhs)
     # deal with scalar features.
     expand_lhs, expand_rhs = False, False
-    if use_lhs and lhs.dim() == 1:
-        lhs = torch.unsqueeze(lhs, -1)
-        expand_lhs = True
-    if use_rhs and rhs.dim() == 1:
-        rhs = torch.unsqueeze(rhs, -1)
-        expand_rhs = True
+    if use_lhs:
+        lhs, expand_lhs = _unsqueeze(lhs)
+    if use_rhs:
+        rhs, expand_rhs = _unsqueeze(rhs)
     lhs_target = target_mapping[lhs_target]
     rhs_target = target_mapping[rhs_target]
 
@@ -206,11 +244,10 @@ def _gsddmm(gidx, op, lhs, rhs, lhs_target='u', rhs_target='v', on_format=_COO):
     dtype = lhs.dtype if use_lhs else rhs.dtype
     lhs_shp = lhs.shape if use_lhs else (0,)
     rhs_shp = rhs.shape if use_rhs else (0,)
-    out_shp = (gidx._CAPI_GetNumEdges(), ) +\
-        infer_broadcast_shape(op, lhs_shp[1:], rhs_shp[1:])
-    out = torch.zeros(out_shp, dtype=dtype, device=device)
-    if gidx._CAPI_GetNumEdges() > 0:
-        gidx._CAPI_SDDMM(op, lhs, rhs, out, lhs_target, rhs_target, on_format)
-    if (expand_lhs or not use_lhs) and (expand_rhs or not use_rhs):
-        out = torch.squeeze(out, -1)
+    out_shp = (gidx._CAPI_GetNumEdges(),) + infer_broadcast_shape(
+        op, lhs_shp[1:], rhs_shp[1:]
+    )
+    out = _torch_zeros(out_shp, device, dtype)
+    gidx._CAPI_SDDMM(op, lhs, rhs, out, lhs_target, rhs_target, on_format)
+    out = _sddmm_squeeze(expand_lhs, use_lhs, expand_rhs, use_rhs, out)
     return out

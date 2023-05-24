@@ -1,10 +1,13 @@
 from itertools import product
 import sys
+import torch
 
 from .sparse import gsddmm as gsddmm_internal
 from ..format import _COO, _CSC, _CSR
 
 __all__ = ["gsddmm"]
+
+torch.fx.wrap("reshape_lhs_rhs")
 
 
 def reshape_lhs_rhs(lhs_data, rhs_data):

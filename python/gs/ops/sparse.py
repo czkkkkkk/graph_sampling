@@ -96,6 +96,7 @@ class GSpMM(torch.autograd.Function):
     @staticmethod
     def forward(ctx, gidx, op, reduce_op, X, Y, lhs_target, on_format):
         out, (argX, argY) = _gspmm(gidx, op, reduce_op, X, Y, lhs_target, on_format)
+        """
         reduce_last = _need_reduce_last_dim(X, Y)
         X_shape = X.shape if X is not None else None
         Y_shape = Y.shape if Y is not None else None
@@ -124,8 +125,10 @@ class GSpMM(torch.autograd.Function):
         if not spmm_cache_argY(op, reduce_op, req_grad_X, req_grad_Y):
             argY = None
         ctx.save_for_backward(X, Y, argX, argY)
+        """
         return out
 
+    """
     @staticmethod
     def backward(ctx, dZ):
         (
@@ -186,6 +189,7 @@ class GSpMM(torch.autograd.Function):
         else:  # Y has no gradient
             dY = None
         return None, None, None, dX, dY, None, None
+    """
 
 
 def sddmm_cache_X(op, req_grad_X, req_grad_Y):
@@ -206,6 +210,7 @@ class GSDDMM(torch.autograd.Function):
     @staticmethod
     def forward(ctx, gidx, op, X, Y, lhs_target, rhs_target, on_format):
         out = _gsddmm(gidx, op, X, Y, lhs_target, rhs_target, on_format)
+        """
         X_shape = X.shape if X is not None else None
         Y_shape = Y.shape if Y is not None else None
         ctx.backward_cache = (
@@ -224,8 +229,10 @@ class GSDDMM(torch.autograd.Function):
         if not sddmm_cache_Y(op, req_grad_X, req_grad_Y):
             Y = None
         ctx.save_for_backward(X, Y)
+        """
         return out
 
+    """
     @staticmethod
     def backward(ctx, dZ):
         (
@@ -281,6 +288,7 @@ class GSDDMM(torch.autograd.Function):
         else:
             dY = None
         return None, None, dX, dY, None, None, None
+        """
 
 
 def gspmm(gidx, op, reduce_op, lhs_data, rhs_data, lhs_target, on_format=_CSC):
