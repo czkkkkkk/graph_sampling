@@ -6,35 +6,11 @@ from ..format import _COO, _CSC, _CSR
 
 __all__ = ["gsddmm"]
 
-torch.fx.wrap("reshape_lhs_rhs")
 
 target_mapping = {"u": 0, "e": 1, "v": 2, "src": 0, "edge": 1, "dst": 2}
 
 
 def infer_broadcast_shape(op, shp1, shp2):
-    r"""Check the shape validity, and infer the output shape given input shape and operator.
-    Note the both :attr:`shp1`, :attr:`shp2` and the returned shape are feature
-    shapes (i.e. we remove the first dimension, which correspond to graph statistics
-    such as number of nodes, number of edges, etc.).
-
-    We allow applying op on operands with different shapes, according to the
-    broadcasting semantics of Numpy/Scipy:
-    https://numpy.org/doc/stable/user/basics.broadcasting.html
-
-    Parameters
-    ----------
-    op : str
-        The binary op's name, could be `add`, `sub`, `mul`, `div`, `dot`, `copy_lhs`, `copy_rhs`.
-    shp1 : tuple[int]
-        The shape of lhs operand.
-    shp2 : tuple[int]
-        The shape of rhs operand.
-
-    Returns
-    -------
-    tuple[int]
-        shape after broadcasting
-    """
     pad_shp1, pad_shp2 = shp1, shp2
     if op == "dot":
         if shp1[-1] != shp2[-1]:
@@ -56,18 +32,6 @@ def infer_broadcast_shape(op, shp1, shp2):
 
 
 def reshape_lhs_rhs(lhs_data, rhs_data):
-    r"""Expand dims so that there will be no broadcasting issues with different
-    number of dimensions. For example, given two shapes (N, 3, 1), (E, 5, 3, 4)
-    that are valid broadcastable shapes, change them to (N, 1, 3, 1) and
-    (E, 5, 3, 4)
-
-    Parameters
-    ----------
-    lhs_data : tensor or None
-        The left operand, could be None if it's not required by op.
-    rhs_data : tensor or None
-        The right operand, could be None if it's not required by op.
-    """
     lhs_shape = lhs_data.shape
     rhs_shape = rhs_data.shape
     if len(lhs_shape) != len(rhs_shape):
@@ -96,7 +60,6 @@ def gsddmm(g, op, lhs_data, rhs_data, lhs_target="u", rhs_target="v", on_format=
     rhs = rhs_data
 
     use_lhs = op != "copy_rhs"
-
     use_rhs = op != "copy_lhs"
     if use_lhs and use_rhs:
         if lhs.device != rhs.device:
@@ -107,6 +70,7 @@ def gsddmm(g, op, lhs_data, rhs_data, lhs_target="u", rhs_target="v", on_format=
             raise "The operands data type don't match: {} and {}, please convert them to the same type.".format(
                 lhs.dtype, rhs.dtype
             )
+
     # deal with scalar features.
     expand_lhs, expand_rhs = False, False
     if use_lhs and lhs.dim() == 1:

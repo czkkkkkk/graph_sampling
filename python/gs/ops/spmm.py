@@ -9,18 +9,6 @@ __all__ = ["gspmm"]
 
 
 def reshape_lhs_rhs(lhs_data, rhs_data):
-    r"""Expand dims so that there will be no broadcasting issues with different
-    number of dimensions. For example, given two shapes (N, 3, 1), (E, 5, 3, 4)
-    that are valid broadcastable shapes, change them to (N, 1, 3, 1) and
-    (E, 5, 3, 4)
-
-    Parameters
-    ----------
-    lhs_data : tensor or None
-        The left operand, could be None if it's not required by op.
-    rhs_data : tensor or None
-        The right operand, could be None if it's not required by op.
-    """
     lhs_shape = lhs_data.shape
     rhs_shape = rhs_data.shape
     if len(lhs_shape) != len(rhs_shape):
@@ -35,29 +23,6 @@ def reshape_lhs_rhs(lhs_data, rhs_data):
 
 
 def infer_broadcast_shape(op, shp1, shp2):
-    r"""Check the shape validity, and infer the output shape given input shape and operator.
-    Note the both :attr:`shp1`, :attr:`shp2` and the returned shape are feature
-    shapes (i.e. we remove the first dimension, which correspond to graph statistics
-    such as number of nodes, number of edges, etc.).
-
-    We allow applying op on operands with different shapes, according to the
-    broadcasting semantics of Numpy/Scipy:
-    https://numpy.org/doc/stable/user/basics.broadcasting.html
-
-    Parameters
-    ----------
-    op : str
-        The binary op's name, could be `add`, `sub`, `mul`, `div`, `dot`, `copy_lhs`, `copy_rhs`.
-    shp1 : tuple[int]
-        The shape of lhs operand.
-    shp2 : tuple[int]
-        The shape of rhs operand.
-
-    Returns
-    -------
-    tuple[int]
-        shape after broadcasting
-    """
     pad_shp1, pad_shp2 = shp1, shp2
     if op == "dot":
         if shp1[-1] != shp2[-1]:
@@ -79,41 +44,6 @@ def infer_broadcast_shape(op, shp1, shp2):
 
 
 def gspmm(g, op, reduce_op, lhs_data, rhs_data, lhs_target, on_format):
-    r"""Generalized Sparse Matrix Multiplication interface.
-    It fuses two steps into one kernel.
-
-    1. Computes messages by :attr:`op` source node and edge features.
-    2. Aggregate the messages by :attr:`reduce_op` as the features on destination nodes.
-
-    .. math::
-        x_v = \psi_{(u, v, e)\in \mathcal{G}}(\rho(x_u, x_e))
-
-    where :math:`x_v` is the returned feature on destination nodes, and :math:`x_u`,
-    :math:`x_e` refers to :attr:`u`, :attr:`e` respectively. :math:`\rho` means binary
-    operator :attr:`op` and :math:`\psi` means reduce operator :attr:`reduce_op`,
-    :math:`\mathcal{G}` is the graph we apply gspmm on: :attr:`g`.
-
-    Note that this function does not handle gradients.
-
-    Parameters
-    ----------
-    g : DGLGraph
-        The input graph.
-    op : str
-        The binary op's name, could be ``add``, ``sub``, ``mul``, ``div``,
-        ``copy_lhs``, ``copy_rhs``.
-    reduce_op : str
-        Reduce operator, could be ``sum``, ``max``, ``min``, ``mean``.
-    lhs_data : tensor or None
-        The left operand, could be None if it's not required by the op.
-    rhs_data : tensor or None
-        The right operand, could be None if it's not required by the op.
-
-    Returns
-    -------
-    tensor
-        The result tensor.
-    """
     if op not in ["copy_lhs", "copy_rhs"]:
         lhs_data, rhs_data = reshape_lhs_rhs(lhs_data, rhs_data)
     # With max and min reducers infinity will be returned for zero degree nodes
@@ -164,16 +94,10 @@ def gspmm(g, op, reduce_op, lhs_data, rhs_data, lhs_target, on_format):
             arg_u = torch.zeros(v_shp, dtype=torch.int64, device=device)
         if use_e:
             arg_e = torch.zeros(v_shp, dtype=torch.int64, device=device)
-    if g._graph._CAPI_GetNumEdges() > 0:
-        g._graph._CAPI_SpMM(op, reduce_op, u, e, v, arg_u, arg_e, u_target, on_format)
+    g._graph._CAPI_SpMM(op, reduce_op, u, e, v, arg_u, arg_e, u_target, on_format)
     # To deal with scalar node/edge features.
     if (expand_u or not use_u) and (expand_e or not use_e):
         v = torch.squeeze(v, -1)
-    if expand_u and use_cmp:
-        arg_u = torch.squeeze(arg_u, -1)
-    if expand_e and use_cmp:
-        arg_e = torch.squeeze(arg_e, -1)
-    # return v, (arg_u, arg_e)
     return v
 
 
