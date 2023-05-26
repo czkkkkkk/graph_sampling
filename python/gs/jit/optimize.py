@@ -2,7 +2,6 @@ import operator
 import torch.fx as fx
 from typing import List, Tuple, Dict
 
-
 node_kept = (
     "_CAPI_SDDMM",
     "_CAPI_SpMM",
@@ -185,25 +184,24 @@ def merge_relabel_and_all_indices(gm: fx.GraphModule) -> fx.GraphModule:
     return gm
 
 
-def _get_graph_index_node(node):
-    graph_node = None
-    index_node = None
-
-    candidates = list(node.users)
-
-    for n in candidates:
-        if n.args[1] == 0:
-            graph_node = n
-        else:
-            index_node = n
-
-    return graph_node, index_node
-
-
 def fuse_slicing_and_sampling(gm: fx.GraphModule) -> fx.GraphModule:
     # std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Slicing(seeds, axis, on_format, output_format)
     # std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Sampling(axis, fanout, replace, on_format, output_format)
     # std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> FusedSlicingSampling(axis, seeds, fanout, replace, on_format, output_format)
+
+    def _get_graph_index_node(node):
+        graph_node = None
+        index_node = None
+
+        candidates = list(node.users)
+
+        for n in candidates:
+            if n.args[1] == 0:
+                graph_node = n
+            else:
+                index_node = n
+
+        return graph_node, index_node
 
     for node in gm.graph.nodes:
         if (
@@ -289,7 +287,44 @@ def fuse_slicing_and_sampling(gm: fx.GraphModule) -> fx.GraphModule:
 
 
 def fuse_ESqure_and_SumReduce(gm: fx.GraphModule) -> fx.GraphModule:
-    # print(gm.graph)
+    def _get_spmm_node(tmp_node):
+        for n in tmp_node.users:
+            if n.target == operator.getitem and n.args[1] == 1:
+                print(n.users)
+                spmm_node = list(n.users)[0]
+                break
+        return spmm_node
+
+    for node in gm.graph.nodes:
+        if node.target == operator.pow and node.args[1] == 2:
+            node_users = list(node.users)
+            if len(node_users) == 1 and "_before_spmm" in node_users[0].name:
+                print(node)
+                print(node_users)
+
+                ESqure_node = node
+                tmp_node = node_users[0]
+                spmm_node = _get_spmm_node(tmp_node)
+
+                if spmm_node.args[1] != "copy_rhs" and spmm_node.args[2] != "sum":
+                    continue
+
+                print(ESqure_node, tmp_node, spmm_node)
+
+                # replace ESqure_node
+                origin_node = ESqure_node.args[0]
+                print(origin_node)
+                ESqure_node.replace_all_uses_with(origin_node)
+                gm.graph.erase_node(ESqure_node)
+
+                # replace spmm_node
+                with gm.graph.inserting_before(spmm_node):
+                    fused_e_squre_spmm_node = gm.graph.call_method(
+                        "_CAPI_FusedESquareSum", args=(spmm_node.args)
+                    )
+
+                gm.graph.erase_node(spmm_node)
+
     return gm
 
 
