@@ -19,6 +19,7 @@ if __name__ == "__main__":
     m.load_graph("CSC", [csc_indptr.cuda(), csc_indices.cuda()])
 
     seeds = torch.randint(0, 10000, (128,)).cuda()
-    compile_func = randomwalk_sampler
+    compile_func = gs.jit.compile(func=randomwalk_sampler, args=(m, seeds, 80))
+    print(compile_func.gm.code)
     paths = compile_func(m, seeds, 80)
     print(paths)

@@ -23,6 +23,9 @@ if __name__ == "__main__":
     m.load_graph("CSC", [csc_indptr.cuda(), csc_indices.cuda()])
 
     seeds = torch.randint(0, 10000, (2000,)).cuda()
-    compile_func = graphsaint_sampler
+    # compile_func = graphsaint_sampler
+    compile_func = gs.jit.compile(func=graphsaint_sampler, args=(m, seeds, 4))
+    print(compile_func.gm.code)
+
     subA = compile_func(m, seeds, 4)
     print(subA)

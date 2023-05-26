@@ -30,8 +30,6 @@ if __name__ == "__main__":
     seeds = torch.randint(0, 10000, (512,)).cuda()
 
     compile_func = gs.jit.compile(func=fastgcn_sampler, args=(m, seeds, [2000, 2000]))
-
     print(compile_func.gm.code)
-    # compile_func = fastgcn_sampler
     for i in compile_func(m, seeds, [2000, 2000]):
         print(i)

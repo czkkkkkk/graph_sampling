@@ -21,6 +21,6 @@ if __name__ == "__main__":
     m.load_graph("CSC", [csc_indptr.cuda(), csc_indices.cuda()])
 
     seeds = torch.randint(0, 10000, (128,)).cuda()
-    compile_func = node2vec_sampler
+    compile_func = gs.jit.compile(func=node2vec_sampler, args=(m, seeds, 80, 2.0, 0.5))
     paths = compile_func(m, seeds, 80, 2.0, 0.5)
     print(paths)

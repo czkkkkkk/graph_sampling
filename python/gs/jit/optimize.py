@@ -1,6 +1,15 @@
 import operator
 import torch.fx as fx
-from typing import List, Tuple
+from typing import List, Tuple, Dict
+
+
+node_kept = (
+    "_CAPI_SDDMM",
+    "_CAPI_SpMM",
+    "_CAPI_FusedUOPV",
+    "_CAPI_FusedESquareSum",
+    "_CAPI_FusedEDivUSum",
+)
 
 
 def flatten(iter):
@@ -25,11 +34,44 @@ def dce(gm: fx.GraphModule) -> fx.GraphModule:
                 if isinstance(pre_node, fx.Node):
                     used_nodes_set.add(pre_node)
 
+                if isinstance(pre_node, Dict):
+                    for _, value in pre_node.items():
+                        if isinstance(value, fx.Node):
+                            used_nodes_set.add(value)
+
+                if isinstance(pre_node, List):
+                    for value in pre_node:
+                        if isinstance(value, fx.Node):
+                            used_nodes_set.add(value)
+
+                if isinstance(pre_node, Tuple):
+                    for value in pre_node:
+                        if isinstance(value, fx.Node):
+                            used_nodes_set.add(value)
+
             for _, value in node.kwargs.items():
                 if isinstance(value, fx.Node):
                     used_nodes_set.add(value)
 
+                if isinstance(value, Dict):
+                    for _, v in value.items():
+                        if isinstance(v, fx.Node):
+                            used_nodes_set.add(v)
+
+                if isinstance(value, List):
+                    for v in value:
+                        if isinstance(v, fx.Node):
+                            used_nodes_set.add(v)
+
+                if isinstance(value, Tuple):
+                    for v in value:
+                        if isinstance(v, fx.Node):
+                            used_nodes_set.add(v)
+
     for node in reversed(nodes_list):
+        if node in used_nodes_set:
+            continue
+
         if node not in used_nodes_set:
             gm.graph.erase_node(node)
 

@@ -61,8 +61,10 @@ if __name__ == "__main__":
 
     seeds = torch.randint(0, 10000, (64,)).cuda()
 
-    # compile_func = gs.jit.compile(
-    #    func=ladies_sampler, args=(m, seeds, [25, 10]))
-    compile_func = pass_sampler
+    compile_func = gs.jit.compile(
+        func=pass_sampler, args=(m, seeds, [25, 10], features, W1, W2, W3)
+    )
+    print(compile_func.gm.code)
+    # compile_func = pass_sampler
     for i in compile_func(m, seeds, [25, 10], features, W1, W2, W3):
         print(i)
