@@ -165,9 +165,10 @@ def merge_relabel_and_all_indices(gm: fx.GraphModule) -> fx.GraphModule:
     return gm
 
 
-def fuse_slicing_and_sampling(gm):
-    """
-    Fuses columnwise_slicing and columnwise_sampling
+def fuse_slicing_and_sampling(gm: fx.GraphModule) -> fx.GraphModule:
+    # print(gm.graph)
+    return gm
+
     """
     for node in gm.graph.nodes:
         if (
@@ -188,4 +189,21 @@ def fuse_slicing_and_sampling(gm):
 
     # remove dead code
     gm = dce(gm)
+    
+    return gm
+    """
+
+
+def fuse_ESqure_and_SumReduce(gm: fx.GraphModule) -> fx.GraphModule:
+    # print(gm.graph)
+    return gm
+
+
+def fuse_e_div_u_SumReduce(gm: fx.GraphModule) -> fx.GraphModule:
+    # print(gm.graph)
+    return gm
+
+
+def merge_fused_u_mul_v(gm: fx.GraphModule) -> fx.GraphModule:
+    # print(gm.graph)
     return gm

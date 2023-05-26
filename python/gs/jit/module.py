@@ -1,7 +1,14 @@
 from typing import List
 from .trace import gs_symbolic_trace
 from ..matrix_api import Matrix
-from .optimize import merge_relabel_and_all_indices, dce
+from .optimize import (
+    merge_relabel_and_all_indices,
+    dce,
+    merge_fused_u_mul_v,
+    fuse_e_div_u_SumReduce,
+    fuse_ESqure_and_SumReduce,
+    fuse_slicing_and_sampling,
+)
 
 CONVERT_2_MATRIX = "Convert2Matrix"
 STATIS_LIST = "StatisList"
@@ -144,6 +151,10 @@ class compile:
 
         # optimization
         gm = merge_relabel_and_all_indices(gm)
+        gm = fuse_slicing_and_sampling(gm)
+        gm = fuse_e_div_u_SumReduce(gm)
+        gm = fuse_ESqure_and_SumReduce(gm)
+        gm = merge_fused_u_mul_v(gm)
 
         # pass
         gm = dce(gm)
