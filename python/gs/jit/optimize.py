@@ -29,7 +29,7 @@ def dce(gm: fx.GraphModule) -> fx.GraphModule:
         if node.op == "output" or node.op == "placeholder":
             used_nodes_set.add(node)
 
-        if node in used_nodes_set:
+        if node in used_nodes_set or node.target in node_kept:
             for pre_node in flatten(node.args):
                 if isinstance(pre_node, fx.Node):
                     used_nodes_set.add(pre_node)
@@ -69,7 +69,7 @@ def dce(gm: fx.GraphModule) -> fx.GraphModule:
                             used_nodes_set.add(v)
 
     for node in reversed(nodes_list):
-        if node in used_nodes_set:
+        if node.target in node_kept:
             continue
 
         if node not in used_nodes_set:

@@ -57,9 +57,9 @@ if __name__ == "__main__":
 
     seeds = torch.randint(0, 10000, (512,)).cuda()
 
-    compile_func = asgcn_sampler
-    for i in compile_func(m, seeds, [2000, 2000], features, W):
-        print(i)
     compile_func = gs.jit.compile(
         func=asgcn_sampler, args=(m, seeds, [2000, 2000], features, W)
     )
+    print(compile_func.gm.code)
+    for i in compile_func(m, seeds, [2000, 2000], features, W):
+        print(i)
