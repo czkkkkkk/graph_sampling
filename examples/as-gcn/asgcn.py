@@ -35,7 +35,7 @@ def asgcn_sampler(
         sampleA = sampleA.div("w", q[sampleA.row_ndata["_ID"]], 1)
 
         seeds = sampleA.all_nodes()
-        ret.append(sampleA.to_dgl_block())
+        ret.append(sampleA.to_dgl_block(prefetch_edata={"w"}))
     input_nodes = seeds
     return input_nodes, output_nodes, ret
 
@@ -60,6 +60,6 @@ if __name__ == "__main__":
     compile_func = gs.jit.compile(
         func=asgcn_sampler, args=(m, seeds, [2000, 2000], features, W)
     )
-    print(compile_func.gm.code)
+    print(compile_func.gm.graph)
     for i in compile_func(m, seeds, [2000, 2000], features, W):
         print(i)

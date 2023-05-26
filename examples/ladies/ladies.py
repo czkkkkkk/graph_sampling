@@ -9,14 +9,14 @@ def ladies_sampler(A: gs.Matrix, seeds: torch.Tensor, fanouts: List):
     ret = []
     for K in fanouts:
         subA = A[:, seeds]
-        subA.edata["w"] = subA.edata["w"] ** 2
-        prob = subA.sum("w", axis=1)
+        subA.edata["p"] = subA.edata["w"] ** 2
+        prob = subA.sum("p", axis=1)
         sampleA = subA.collective_sampling(K, prob, False)
         sampleA = sampleA.div("w", prob[sampleA.row_ndata["_ID"]], axis=1)
         out = sampleA.sum("w", axis=0)
         sampleA = sampleA.div("w", out, axis=0)
         seeds = sampleA.all_nodes()
-        ret.append(sampleA.to_dgl_block())
+        ret.append(sampleA.to_dgl_block(prefetch_edata={"w"}))
     output_node = seeds
     return input_node, output_node, ret
 
@@ -38,6 +38,6 @@ if __name__ == "__main__":
     seeds = torch.randint(0, 10000, (500,)).cuda()
 
     compile_func = gs.jit.compile(func=ladies_sampler, args=(m, seeds, [2000, 2000]))
-    print(compile_func.gm.code)
+    print(compile_func.gm.graph)
     for i in compile_func(m, seeds, [2000, 2000]):
         print(i)

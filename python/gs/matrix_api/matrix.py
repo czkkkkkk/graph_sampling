@@ -167,7 +167,7 @@ class Matrix(object):
         ret_m.edata[key] = ret_data
         return ret_m
 
-    def to_dgl_block(self) -> DGLBlock:
+    def to_dgl_block(self, prefetch_edata={}) -> DGLBlock:
         col_seeds = self.col_ndata.get("_ID", self.null_tensor)
 
         (
@@ -187,7 +187,8 @@ class Matrix(object):
             num_dst=col_seeds.numel(),
         )
 
-        return assign_block(block, e_ids, self.edata, unique_tensor)
+        assign_edata = {key: self.edata[key] for key in prefetch_edata}
+        return assign_block(block, e_ids, assign_edata, unique_tensor)
 
     def all_nodes(self) -> torch.Tensor:
         return self._graph._CAPI_GetValidNodes(

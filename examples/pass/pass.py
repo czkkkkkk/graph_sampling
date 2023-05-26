@@ -36,7 +36,7 @@ def pass_sampler(
 
         sampleA = subA.individual_sampling(K, probs=att, replace=True)
         seeds = sampleA.all_nodes()
-        ret.append(sampleA.to_dgl_block())
+        ret.append(sampleA.to_dgl_block(prefetch_edata={"w"}))
     input_nodes = seeds
     return input_nodes, output_nodes, ret
 
@@ -64,7 +64,7 @@ if __name__ == "__main__":
     compile_func = gs.jit.compile(
         func=pass_sampler, args=(m, seeds, [25, 10], features, W1, W2, W3)
     )
-    print(compile_func.gm.code)
+    print(compile_func.gm.graph)
     # compile_func = pass_sampler
     for i in compile_func(m, seeds, [25, 10], features, W1, W2, W3):
         print(i)
