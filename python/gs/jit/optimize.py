@@ -22,6 +22,26 @@ def flatten(iter):
     return ret
 
 
+def move_constant_to_top(gm: fx.GraphModule) -> fx.GraphModule:
+    insert_place = None
+    constant_nodes = []
+    for i, node in enumerate(gm.graph.nodes):
+        if node.op == "get_attr" and "constant" in node.name:
+            constant_nodes.append(node)
+
+        if i == 0:
+            insert_place = node
+
+    with gm.graph.inserting_before(insert_place):
+        for n in constant_nodes:
+            new_node = gm.graph.node_copy(n)
+            n.replace_all_uses_with(new_node)
+
+    gm.graph.lint()
+    gm.recompile()
+    return gm
+
+
 def dce(gm: fx.GraphModule) -> fx.GraphModule:
     used_nodes_set = set()
     nodes_list = gm.graph.nodes
@@ -165,33 +185,107 @@ def merge_relabel_and_all_indices(gm: fx.GraphModule) -> fx.GraphModule:
     return gm
 
 
-def fuse_slicing_and_sampling(gm: fx.GraphModule) -> fx.GraphModule:
-    # print(gm.graph)
-    return gm
+def _get_graph_index_node(node):
+    graph_node = None
+    index_node = None
 
-    """
+    candidates = list(node.users)
+
+    for n in candidates:
+        if n.args[1] == 0:
+            graph_node = n
+        else:
+            index_node = n
+
+    return graph_node, index_node
+
+
+def fuse_slicing_and_sampling(gm: fx.GraphModule) -> fx.GraphModule:
+    # std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Slicing(seeds, axis, on_format, output_format)
+    # std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Sampling(axis, fanout, replace, on_format, output_format)
+    # std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> FusedSlicingSampling(axis, seeds, fanout, replace, on_format, output_format)
+
     for node in gm.graph.nodes:
         if (
-            node.target == "_CAPI_columnwise_sampling"
-            and node.args[0].target == "_CAPI_columnwise_slicing"
+            node.target == "_CAPI_Sampling"
+            and node.args[0].args[0].target == "_CAPI_Slicing"
         ):
-            if len(node.args[0].users) > 1:
+            slicing_node = node.args[0].args[0]
+            slicing_graph_node, slicing_index_node = _get_graph_index_node(slicing_node)
+            sampling_node = node
+            sampling_graph_node, sampling_index_node = _get_graph_index_node(
+                sampling_node
+            )
+
+            # check slicing and sampling for same axis
+            if sampling_node.args[1] != slicing_node.args[2]:
                 continue
-            with gm.graph.inserting_after(node):
-                new_node = gm.graph.call_method(
-                    "_CAPI_fused_columnwise_slicing_sampling",
+
+            # check if graph_node are used by other nodes
+            if len(slicing_graph_node.users) > 1:
+                continue
+
+            # check if index_noda are used by other nodes
+            if slicing_index_node is not None:
+                enable_fuse = True
+                data_nodes = list(slicing_index_node.users)
+                for n in data_nodes:
+                    users = list(n.users)
+
+                    if len(users) > 1:
+                        enable_fuse = False
+                        continue
+
+                    if users[0].args[1] != sampling_index_node:
+                        enable_fuse = False
+                        continue
+
+                if not enable_fuse:
+                    continue
+
+            # safe to fuse
+            with gm.graph.inserting_before(slicing_node):
+                fused_node = gm.graph.call_method(
+                    "_CAPI_SlicingSampling",
                     args=(
-                        *node.args[0].args,
-                        *node.args[1:],
+                        slicing_node.args[0],
+                        slicing_node.args[2],
+                        slicing_node.args[1],
+                        sampling_node.args[2],
+                        sampling_node.args[3],
+                        sampling_node.args[4],
+                        sampling_node.args[5],
                     ),
                 )
-                node.replace_all_uses_with(new_node)
+
+                fuse_graph_node = gm.graph.call_function(
+                    operator.getitem, args=(fused_node, 0)
+                )
+                fuse_index_node = gm.graph.call_function(
+                    operator.getitem, args=(fused_node, 1)
+                )
+
+                # replace graph
+                sampling_graph_node.replace_all_uses_with(fuse_graph_node)
+
+                # replace index (more complex)
+                if slicing_index_node is not None:
+                    new_data_nodes = []
+                    be_repalced_nodes = []
+                    for n in slicing_index_node.users:
+                        data_node = gm.graph.call_function(
+                            operator.__getitem__, args=(n.args[0], fuse_index_node)
+                        )
+                        new_data_nodes.append(data_node)
+
+                        be_repalced_nodes.append(list(n.users)[0])
+
+                    for new, old in zip(new_data_nodes, be_repalced_nodes):
+                        old.replace_all_uses_with(new)
 
     # remove dead code
     gm = dce(gm)
-    
     return gm
-    """
 
 
 def fuse_ESqure_and_SumReduce(gm: fx.GraphModule) -> fx.GraphModule:

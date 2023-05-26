@@ -4,10 +4,12 @@ from ..matrix_api import Matrix
 from .optimize import (
     merge_relabel_and_all_indices,
     dce,
+    cse,
     merge_fused_u_mul_v,
     fuse_e_div_u_SumReduce,
     fuse_ESqure_and_SumReduce,
     fuse_slicing_and_sampling,
+    move_constant_to_top,
 )
 
 CONVERT_2_MATRIX = "Convert2Matrix"
@@ -148,6 +150,11 @@ class compile:
         gm = gs_symbolic_trace(
             inner_wrapper, concrete_args={"inner_graph_data_args": graph_data_args}
         )
+
+        # pass
+        gm = cse(gm)
+        gm = dce(gm)
+        gm = move_constant_to_top(gm)
 
         # optimization
         gm = merge_relabel_and_all_indices(gm)

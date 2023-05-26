@@ -37,23 +37,23 @@ class Matrix(object):
 
         if format == "COO":
             coo_row, coo_col = format_tensors
-            self.num_rows = coo_row.max() + 1
-            self.num_cols = coo_col.max() + 1
-            self._graph = torch.classes.gs_classes.Graph(self.num_rows, self.num_cols)
+            num_rows = coo_row.max() + 1
+            num_cols = coo_col.max() + 1
+            self._graph = torch.classes.gs_classes.Graph(num_rows, num_cols)
             self._graph._CAPI_LoadCOO(coo_row, coo_col, False, False)
 
         elif format == "CSC":
             indptr, indices = format_tensors
-            self.num_rows = indices.max() + 1
-            self.num_cols = indptr.numel()
-            self._graph = torch.classes.gs_classes.Graph(self.num_rows, self.num_cols)
+            num_rows = indices.max() + 1
+            num_cols = indptr.numel()
+            self._graph = torch.classes.gs_classes.Graph(num_rows, num_cols)
             self._graph._CAPI_LoadCSC(indptr, indices)
 
         elif format == "CSR":
             indptr, indices = format_tensors
-            self.num_rows = indptr.numel()
-            self.num_cols = indices.max() + 1
-            self._graph = torch.classes.gs_classes.Graph(self.num_rows, self.num_cols)
+            num_rows = indptr.numel()
+            num_cols = indices.max() + 1
+            self._graph = torch.classes.gs_classes.Graph(num_rows, num_cols)
             self._graph._CAPI_LoadCSR(indptr, indices)
 
     # Extract-step operators
@@ -67,7 +67,9 @@ class Matrix(object):
 
         edge_index = None
         row_index = None
+        row_index_tag = False
         col_index = None
+        col_index_tag = False
         graph = self._graph
 
         if isinstance(c_slice, Proxy) or isinstance(c_slice, torch.Tensor):
@@ -77,6 +79,7 @@ class Matrix(object):
             graph, _edge_index = graph._CAPI_Slicing(c_slice, 1, _CSC, _COO)
             edge_index = _edge_index
 
+            col_index_tag = True
             col_index = c_slice
 
         if isinstance(r_slice, Proxy) or isinstance(r_slice, torch.Tensor):
@@ -87,6 +90,7 @@ class Matrix(object):
             if edge_index is not None:
                 edge_index = edge_index[_edge_index]
 
+            row_index_tag = True
             row_index = r_slice
 
         ret_matrix._graph = graph
@@ -94,13 +98,13 @@ class Matrix(object):
             ret_matrix.edata[key] = value[_edge_index]
 
         for key, value in self.col_ndata.items():
-            if col_index != None:
+            if col_index_tag:
                 ret_matrix.col_ndata[key] = value[col_index]
             else:
                 ret_matrix.col_ndata[key] = value
 
         for key, value in self.row_ndata.items():
-            if row_index != None:
+            if row_index_tag:
                 ret_matrix.row_ndata[key] = value[row_index]
             else:
                 ret_matrix.row_ndata[key] = value
