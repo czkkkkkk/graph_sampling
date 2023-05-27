@@ -343,7 +343,6 @@ def fuse_e_div_u_SumReduce(gm: fx.GraphModule) -> fx.GraphModule:
 
 
 def merge_fused_u_mul_v(gm: fx.GraphModule) -> fx.GraphModule:
-    print(gm.graph)
     merge_nodes = {}
 
     def _get_after_node(node):
@@ -356,9 +355,6 @@ def merge_fused_u_mul_v(gm: fx.GraphModule) -> fx.GraphModule:
 
     for node in gm.graph.nodes:
         if node.target == "_CAPI_SDDMM" and node.args[5] == 0 and node.args[6] == 2:
-            # print(node)
-            # print(node.args)
-
             key = str(node.args[0]) + str(node.args[1])
 
             if key in merge_nodes:
@@ -373,8 +369,6 @@ def merge_fused_u_mul_v(gm: fx.GraphModule) -> fx.GraphModule:
         first_node = value[0]
         first_after_node = _get_after_node(first_node)
         second_node = value[1]
-
-        print(first_node, first_node.args)
 
         with gm.graph.inserting_after(second_node):
             new_node = gm.graph.node_copy(first_after_node)
@@ -394,7 +388,5 @@ def merge_fused_u_mul_v(gm: fx.GraphModule) -> fx.GraphModule:
             gm.graph.erase_node(first_node)
             gm.graph.erase_node(second_node)
 
-    print(gm.graph)
-
-    print(merge_nodes)
+    dce(gm)
     return gm

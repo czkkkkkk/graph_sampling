@@ -24,8 +24,6 @@ def pass_sampler(
         v_feats = features[seeds]
         att1 = gs.ops.u_mul_v(subA, u_feats @ W1, v_feats @ W1, _COO)
         att2 = gs.ops.u_mul_v(subA, u_feats @ W2, v_feats @ W2, _COO)
-        print("att1:", att1.shape, att1)
-        print("att2:", att2.shape, att2)
         att1 = torch.sum(att1, dim=1)
         att2 = torch.sum(att2, dim=1)
         att3 = subA.div("w", subA.sum("w", axis=0), axis=0).edata["w"]
@@ -65,6 +63,5 @@ if __name__ == "__main__":
         func=pass_sampler, args=(m, seeds, [25, 10], features, W1, W2, W3)
     )
     print(compile_func.gm.graph)
-    # compile_func = pass_sampler
-    for i in compile_func(m, seeds, [25, 10], features, W1, W2, W3):
+    for i in pass_sampler(m, seeds, [25, 10], features, W1, W2, W3):
         print(i)
