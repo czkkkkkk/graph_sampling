@@ -343,5 +343,58 @@ def fuse_e_div_u_SumReduce(gm: fx.GraphModule) -> fx.GraphModule:
 
 
 def merge_fused_u_mul_v(gm: fx.GraphModule) -> fx.GraphModule:
-    # print(gm.graph)
+    print(gm.graph)
+    merge_nodes = {}
+
+    def _get_after_node(node):
+        tmp_node = node.args[4]
+        for after_node in tmp_node.users:
+            if node != after_node:
+                return after_node
+
+        return None
+
+    for node in gm.graph.nodes:
+        if node.target == "_CAPI_SDDMM" and node.args[5] == 0 and node.args[6] == 2:
+            # print(node)
+            # print(node.args)
+
+            key = str(node.args[0]) + str(node.args[1])
+
+            if key in merge_nodes:
+                merge_nodes[key].append(node)
+            else:
+                merge_nodes[key] = [node]
+
+    for key, value in merge_nodes.items():
+        if len(value) != 2:
+            continue
+
+        first_node = value[0]
+        first_after_node = _get_after_node(first_node)
+        second_node = value[1]
+
+        print(first_node, first_node.args)
+
+        with gm.graph.inserting_after(second_node):
+            new_node = gm.graph.node_copy(first_after_node)
+            first_after_node.replace_all_uses_with(new_node)
+            gm.graph.erase_node(first_after_node)
+
+        with gm.graph.inserting_before(second_node):
+            fused_sddmm_u_op_v = gm.graph.call_method(
+                "_CAPI_FusedUOPV",
+                args=(
+                    *first_node.args[0:5],
+                    *second_node.args[2:5],
+                    second_node.args[-1],
+                ),
+            )
+
+            gm.graph.erase_node(first_node)
+            gm.graph.erase_node(second_node)
+
+    print(gm.graph)
+
+    print(merge_nodes)
     return gm
