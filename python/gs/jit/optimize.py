@@ -298,9 +298,18 @@ def fuse_ESqure_and_SumReduce(gm: fx.GraphModule) -> fx.GraphModule:
     for node in gm.graph.nodes:
         if node.target == operator.pow and node.args[1] == 2:
             node_users = list(node.users)
-            if len(node_users) == 1 and "_before_spmm" in node_users[0].name:
-                print(node)
-                print(node_users)
+            if len(node_users) == 2:
+                if (
+                    "_before_spmm" not in node_users[0].name
+                    and "_before_spmm" not in node_users[1].name
+                ):
+                    continue
+
+                if (
+                    "_CAPI_SpMM" != node_users[0].target
+                    and "_CAPI_SpMM" != node_users[1].target
+                ):
+                    continue
 
                 ESqure_node = node
                 tmp_node = node_users[0]

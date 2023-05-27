@@ -62,7 +62,7 @@ def _before_spmm(num_rows, num_cols, op, reduce_op, lhs_data, rhs_data, lhs_targ
 
     condition = (expand_u or not use_u) and (expand_e or not use_e)
 
-    return u, e, v, arg_u, arg_e, u_target, condition
+    return v, arg_u, arg_e, condition
 
 
 def _after_spmm(v, condition):
@@ -110,7 +110,11 @@ def gspmm(g, op, reduce_op, lhs_data, rhs_data, lhs_target, on_format):
     num_rows = g._graph._CAPI_GetNumRows()
     num_cols = g._graph._CAPI_GetNumCols()
 
-    u, e, v, arg_u, arg_e, u_target, condition = _before_spmm(
+    u = lhs_data
+    e = rhs_data
+    u_target = lhs_target
+
+    v, arg_u, arg_e, condition = _before_spmm(
         num_rows, num_cols, op, reduce_op, lhs_data, rhs_data, lhs_target
     )
 

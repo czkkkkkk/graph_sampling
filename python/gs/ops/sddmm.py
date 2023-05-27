@@ -13,7 +13,7 @@ __all__ = ["gsddmm"]
 target_mapping = {"u": 0, "e": 1, "v": 2, "src": 0, "edge": 1, "dst": 2}
 
 
-def _before_sddmm(num_edges, op, lhs_data, rhs_data, lhs_target, rhs_target):
+def _before_sddmm(num_edges, op, lhs_data, rhs_data):
     if op not in ["copy_lhs", "copy_rhs"]:
         lhs_data, rhs_data = reshape_lhs_rhs(lhs_data, rhs_data)
 
@@ -47,8 +47,6 @@ def _before_sddmm(num_edges, op, lhs_data, rhs_data, lhs_target, rhs_target):
     if use_rhs and rhs.dim() == 1:
         rhs = torch.unsqueeze(rhs, -1)
         expand_rhs = True
-    lhs_target = target_mapping[lhs_target]
-    rhs_target = target_mapping[rhs_target]
 
     device = lhs.device if use_lhs else rhs.device
     dtype = lhs.dtype if use_lhs else rhs.dtype
@@ -58,7 +56,7 @@ def _before_sddmm(num_edges, op, lhs_data, rhs_data, lhs_target, rhs_target):
     out = torch.zeros(out_shp, dtype=dtype, device=device)
     condition = (expand_lhs or not use_lhs) and (expand_rhs or not use_rhs)
 
-    return (lhs, rhs, out, lhs_target, rhs_target, condition)
+    return (lhs, rhs, out, condition)
 
 
 def _after_sddmm(out, condition):
@@ -104,9 +102,9 @@ def reshape_lhs_rhs(lhs_data, rhs_data):
 
 def gsddmm(g, op, lhs_data, rhs_data, lhs_target="u", rhs_target="v", on_format=_COO):
     num_edges = g._graph._CAPI_GetNumEdges()
-    (lhs, rhs, out, lhs_target, rhs_target, condition) = _before_sddmm(
-        num_edges, op, lhs_data, rhs_data, lhs_target, rhs_target
-    )
+    lhs_target = target_mapping[lhs_target]
+    rhs_target = target_mapping[rhs_target]
+    (lhs, rhs, out, condition) = _before_sddmm(num_edges, op, lhs_data, rhs_data)
     g._graph._CAPI_SDDMM(op, lhs, rhs, out, lhs_target, rhs_target, on_format)
     out = _after_sddmm(out, condition)
     return out
