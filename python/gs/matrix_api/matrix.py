@@ -119,7 +119,7 @@ class Matrix(object):
                     self.row_ndata[key] = value[unique_tensor]
                 self.row_ndata["_ID"] = unique_tensor
 
-            self._graph = new_graph
+                self._graph = new_graph
 
         elif axis == 1:
             if "_ID" not in self.col_ndata:
@@ -128,7 +128,7 @@ class Matrix(object):
                     self.col_ndata[key] = value[unique_tensor]
                 self.col_ndata["_ID"] = unique_tensor
 
-            self._graph = new_graph
+                self._graph = new_graph
 
         return self
 
