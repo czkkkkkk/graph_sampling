@@ -1,6 +1,9 @@
 from typing import List
+import torch
+import time
 from .trace import gs_symbolic_trace
 from ..matrix_api import Matrix
+import numpy as np
 from .optimize import (
     merge_relabel_and_all_indices,
     dce,
@@ -79,7 +82,9 @@ def generate_static_args(args, static_actions):
     return static_args
 
 
-def generate_new_args(args, graph_args, inner_graph_data_args, static_args, actions):
+def generate_new_args(
+    args, graph_args, inner_graph_data_args, static_args, actions, compact
+):
     new_args = []
     for index, action in enumerate(actions):
         if action is None:
@@ -93,6 +98,7 @@ def generate_new_args(args, graph_args, inner_graph_data_args, static_args, acti
                         inner_graph_data_args[offset][0],
                         inner_graph_data_args[offset][1],
                         inner_graph_data_args[offset][2],
+                        compact,
                     )
                 )
             elif a == STATIS_LIST:
@@ -103,7 +109,7 @@ def generate_new_args(args, graph_args, inner_graph_data_args, static_args, acti
 
 
 class compile:
-    def __init__(self, func, args):
+    def __init__(self, func, args, try_compact=True):
         """
         This is auto wrapper for user's func.
         We will create an func inner_wrapper according user's func and its args.
@@ -124,33 +130,51 @@ class compile:
         """
 
         # generate actions
-        actions = get_actions(args)
+        self.actions = get_actions(args)
         # extract graph_actions and static_actions from acitons
-        graph_actions, static_actions = split_actions(actions)
+        graph_actions, static_actions = split_actions(self.actions)
         self.graph_actions = graph_actions
         self.static_actions = static_actions
+        self._try_compact = try_compact
+        self.func = func
+        self.iter = 5
+
         # generate static_args via static_actions
-        static_args = generate_static_args(args, self.static_actions)
+        self.static_args = generate_static_args(args, self.static_actions)
 
-        def inner_wrapper(inner_args, inner_graph_args, inner_graph_data_args):
-            # generate new_args for user's arg.
-            # arg in static_args will be compiled as contants.
-            # arg in graph_args will be leveraged to generate Matrix.
-            new_args = generate_new_args(
-                inner_args,
-                inner_graph_args,
-                inner_graph_data_args,
-                static_args,
-                actions,
-            )
-            return func(*new_args)
+        if self._try_compact:
+            compact_gm = self.generate_gm(args, True)
+            non_compcat_gm = self.generate_gm(args, False)
+            self.gm = self.compact_bench(compact_gm, non_compcat_gm, args)
+        else:
+            self.gm = self.generate_gm(args, False)
 
-        # compiled to torch.fx IR
+    def __call__(self, *args):
+        # generate graph_actions via graph_actions
+        # In fact, it stores *._graph in graph_args
         graph_args, graph_data_args = generate_graph_args(args, self.graph_actions)
-        gm = gs_symbolic_trace(
-            inner_wrapper, concrete_args={"inner_graph_data_args": graph_data_args}
-        )
+        return self.gm(args, graph_args, graph_data_args)
 
+    def _bench_gm(self, gm, args):
+        time_list = []
+        for _ in range(self.iter):
+            begin = time.time()
+            graph_args, graph_data_args = generate_graph_args(args, self.graph_actions)
+            gm(args, graph_args, graph_data_args)
+            torch.cuda.synchronize()
+            end = time.time()
+            time_list.append(end - begin)
+        return np.mean(time_list[1:])
+
+    def compact_bench(self, compact_gm, non_compcat_gm, args):
+        a = self._bench_gm(compact_gm, args)
+        b = self._bench_gm(non_compcat_gm, args)
+        if self._bench_gm(compact_gm, args) > self._bench_gm(non_compcat_gm, args):
+            return non_compcat_gm
+        else:
+            return compact_gm
+
+    def optimiza_gm(self, gm):
         # pass
         gm = cse(gm)
         gm = dce(gm)
@@ -165,11 +189,27 @@ class compile:
 
         # pass
         gm = dce(gm)
+        return gm
 
-        self.gm = gm
+    def generate_gm(self, args, try_compat):
+        def inner_wrapper(inner_args, inner_graph_args, inner_graph_data_args):
+            # generate new_args for user's arg.
+            # arg in static_args will be compiled as contants.
+            # arg in graph_args will be leveraged to generate Matrix.
+            new_args = generate_new_args(
+                inner_args,
+                inner_graph_args,
+                inner_graph_data_args,
+                self.static_args,
+                self.actions,
+                try_compat,
+            )
+            return self.func(*new_args)
 
-    def __call__(self, *args):
-        # generate graph_actions via graph_actions
-        # In fact, it stores *._graph in graph_args
+        # compiled to torch.fx IR
         graph_args, graph_data_args = generate_graph_args(args, self.graph_actions)
-        return self.gm(args, graph_args, graph_data_args)
+        gm = gs_symbolic_trace(
+            inner_wrapper, concrete_args={"inner_graph_data_args": graph_data_args}
+        )
+
+        return self.optimiza_gm(gm)

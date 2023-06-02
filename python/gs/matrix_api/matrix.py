@@ -24,12 +24,15 @@ def assign_block(block, e_ids, edata, unique_tensor):
 
 
 class Matrix(object):
-    def __init__(self, graph=None, row_ndata=None, col_ndata=None, edata=None):
+    def __init__(
+        self, graph=None, row_ndata=None, col_ndata=None, edata=None, compact=False
+    ):
         self._graph = graph
         self.null_tensor = torch.Tensor().cuda().long()
         self.row_ndata = {} if row_ndata is None else row_ndata
         self.col_ndata = {} if col_ndata is None else col_ndata
         self.edata = {} if edata is None else edata
+        self._compact = compact
 
     def load_graph(self, format: str, format_tensors: List[torch.Tensor]) -> Matrix:
         assert format in ["CSC", "COO", "CSR"]
@@ -108,6 +111,10 @@ class Matrix(object):
                 ret_matrix.row_ndata[key] = value[row_index]
             else:
                 ret_matrix.row_ndata[key] = value
+
+        if self._compact:
+            ret_matrix.compact(0)
+            ret_matrix.compact(1)
 
         return ret_matrix
 
