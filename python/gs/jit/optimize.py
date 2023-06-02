@@ -290,7 +290,6 @@ def fuse_ESqure_and_SumReduce(gm: fx.GraphModule) -> fx.GraphModule:
     def _get_spmm_node(tmp_node):
         for n in tmp_node.users:
             if n.target == operator.getitem and n.args[1] == 1:
-                print(n.users)
                 spmm_node = list(n.users)[0]
                 break
         return spmm_node
@@ -318,11 +317,8 @@ def fuse_ESqure_and_SumReduce(gm: fx.GraphModule) -> fx.GraphModule:
                 if spmm_node.args[1] != "copy_rhs" and spmm_node.args[2] != "sum":
                     continue
 
-                print(ESqure_node, tmp_node, spmm_node)
-
                 # replace ESqure_node
                 origin_node = ESqure_node.args[0]
-                print(origin_node)
                 ESqure_node.replace_all_uses_with(origin_node)
                 gm.graph.erase_node(ESqure_node)
 

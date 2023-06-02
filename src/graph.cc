@@ -364,7 +364,6 @@ void Graph::SpMM(const std::string& op, const std::string& reduce,
   if (u_target != 0 && u_target != 2) LOG(FATAL) << "Invalid u_target";
 
   if (on_format == _COO) {
-    LOG(INFO) << op << " " << reduce;
     impl::SpMMCOO(op, reduce, bcast, coo_, ufeat, efeat, out, u_target,
                   {argu, arge});
   } else if (on_format == _CSR && u_target == 2) {

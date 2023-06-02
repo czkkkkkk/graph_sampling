@@ -167,8 +167,6 @@ class compile:
         return np.mean(time_list[1:])
 
     def compact_bench(self, compact_gm, non_compcat_gm, args):
-        a = self._bench_gm(compact_gm, args)
-        b = self._bench_gm(non_compcat_gm, args)
         if self._bench_gm(compact_gm, args) > self._bench_gm(non_compcat_gm, args):
             return non_compcat_gm
         else:
@@ -190,6 +188,9 @@ class compile:
         # pass
         gm = dce(gm)
         return gm
+
+    def format_selection_gm(self, gm):
+        pass
 
     def generate_gm(self, args, try_compat):
         def inner_wrapper(inner_args, inner_graph_args, inner_graph_data_args):

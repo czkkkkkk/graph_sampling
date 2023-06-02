@@ -28,6 +28,6 @@ if __name__ == "__main__":
     seeds = torch.randint(0, 10000, (1024,)).cuda()
 
     compile_func = gs.jit.compile(func=graphsage_sampler, args=(m, seeds, [25, 10]))
-    print(compile_func.gm.code)
+    print(compile_func.gm.graph)
     for i in compile_func(m, seeds, [25, 10]):
         print(i)
