@@ -168,7 +168,7 @@ class Matrix(object):
                 probs, K, replace
             )
 
-        return self[selected_index, :]
+        return self[selected_index, :], selected_index
 
     # Compute-step operators
     def sum(self, key, axis, on_format=_CSC) -> torch.Tensor:

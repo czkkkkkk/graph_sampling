@@ -10,7 +10,6 @@ def asgcn_sampler(
     A: gs.Matrix,
     seeds: torch.Tensor,
     fanouts: List,
-    features: torch.Tensor,
     W: torch.Tensor,
 ):
     output_nodes = seeds
@@ -19,8 +18,8 @@ def asgcn_sampler(
         subA = A[:, seeds]
         subA.edata["w"] = subA.edata["w"] ** 2
         p = subA.sum("w", axis=1).sqrt()
-        node_feats_u = features
-        node_feats_v = features[seeds]
+        node_feats_u = subA.row_ndata["feat"]
+        node_feats_v = subA.col_ndata["feat"]
         h_u = node_feats_u @ W[:, 0]
         h_v = node_feats_v @ W[:, 1]
         h_v_sum = torch.sum(h_v)
@@ -28,11 +27,11 @@ def asgcn_sampler(
         g_u = torch.flatten(F.relu(h_u) + 1)
         q = F.normalize(p * attention * g_u, p=1.0, dim=0)
 
-        sampleA = subA.collective_sampling(K, q, False)
+        sampleA, select_index = subA.collective_sampling(K, q, False)
 
-        sampleA.edata["w"] = gs.ops.u_add_v(sampleA, h_u[sampleA.row_ndata["_ID"]], h_v)
+        sampleA.edata["w"] = gs.ops.u_add_v(sampleA, h_u[select_index], h_v)
         sampleA.edata["w"] = (F.relu(sampleA.edata["w"]) + 1) / sampleA.num_rows()
-        sampleA = sampleA.div("w", q[sampleA.row_ndata["_ID"]], 1)
+        sampleA = sampleA.div("w", q[select_index], 1)
 
         seeds = sampleA.all_nodes()
         ret.append(sampleA.to_dgl_block(prefetch_edata={"w"}))
@@ -50,6 +49,8 @@ if __name__ == "__main__":
     m = gs.Matrix()
     m.load_graph("CSC", [csc_indptr.cuda(), csc_indices.cuda()])
     m.edata["w"] = torch.ones(m.num_edges(), dtype=torch.float32).cuda()
+    m.row_ndata["feat"] = features
+    m.col_ndata["feat"] = features
 
     D_in = m.sum("w", axis=0)
     D_out = m.sum("w", axis=1)
@@ -57,9 +58,7 @@ if __name__ == "__main__":
 
     seeds = torch.randint(0, 10000, (512,)).cuda()
 
-    compile_func = gs.jit.compile(
-        func=asgcn_sampler, args=(m, seeds, [2000, 2000], features, W)
-    )
+    compile_func = gs.jit.compile(func=asgcn_sampler, args=(m, seeds, [2000, 2000], W))
     print(compile_func.gm.graph)
-    for i in compile_func(m, seeds, [2000, 2000], features, W):
+    for i in compile_func(m, seeds, [2000, 2000], W):
         print(i)

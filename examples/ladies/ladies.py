@@ -11,8 +11,8 @@ def ladies_sampler(A: gs.Matrix, seeds: torch.Tensor, fanouts: List):
         subA = A[:, seeds]
         subA.edata["p"] = subA.edata["w"] ** 2
         prob = subA.sum("p", axis=1)
-        sampleA = subA.collective_sampling(K, prob, False)
-        sampleA = sampleA.div("w", prob[sampleA.row_ndata["_ID"]], axis=1)
+        sampleA, select_index = subA.collective_sampling(K, prob, False)
+        sampleA = sampleA.div("w", prob[select_index], axis=1)
         out = sampleA.sum("w", axis=0)
         sampleA = sampleA.div("w", out, axis=0)
         seeds = sampleA.all_nodes()

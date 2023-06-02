@@ -9,7 +9,7 @@ def fastgcn_sampler(A: gs.Matrix, seeds: torch.Tensor, fanouts: List):
     ret = []
     for K in fanouts:
         subA = A[:, seeds]
-        sampleA = subA.collective_sampling(K, subA.row_ndata["deg"], False)
+        sampleA, _ = subA.collective_sampling(K, subA.row_ndata["deg"], False)
         seeds = sampleA.all_nodes()
         ret.append(sampleA.to_dgl_block())
     output_node = seeds
