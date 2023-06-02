@@ -9,6 +9,7 @@
 #include "cuda/fusion/fused_csc_e_div_u_sum.h"
 #include "cuda/fusion/fused_coo_e_div_u_sum.h"
 #include "cuda/fusion/fused_coo_e_square_sum.h"
+#include "cuda/fusion/fused_csc_e_square_sum.h"
 #include "cuda/graph_ops.h"
 #include "cuda/sddmm.h"
 #include "cuda/spmm.h"
@@ -350,7 +351,6 @@ void Graph::SpMM(const std::string& op, const std::string& reduce,
   if (u_target != 0 && u_target != 2) LOG(FATAL) << "Invalid u_target";
 
   if (on_format == _COO) {
-    LOG(INFO) << op << " " << reduce;
     impl::SpMMCOO(op, reduce, bcast, coo_, ufeat, efeat, out, u_target,
                   {argu, arge});
   } else if (on_format == _CSR && u_target == 2) {
