@@ -93,6 +93,8 @@ class Graph : public torch::CustomClassHolder {
             torch::Tensor argu, torch::Tensor arge, int64_t u_target,
             int64_t on_format);
 
+  std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Compact(int64_t axis);
+
   std::tuple<torch::Tensor, torch::Tensor, torch::Tensor,
              torch::optional<torch::Tensor>>
   GraphRelabel(torch::Tensor col_seeds, torch::Tensor row_ids);

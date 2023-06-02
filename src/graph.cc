@@ -500,6 +500,74 @@ void Graph::FusedEDivUSum(const std::string& op, const std::string& reduce,
   }
 }
 
+// axis = 0 for row, 1 for col
+// AxisUnique can only be called after Slicing
+// return graph is to disbale some fusion
+std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::Compact(
+    int64_t axis) {
+  torch::Tensor frontiers;
+  std::shared_ptr<CSC> csc_ptr = nullptr;
+  std::shared_ptr<COO> coo_ptr = nullptr;
+  std::shared_ptr<CSR> csr_ptr = nullptr;
+  int64_t new_num_rows = axis == 0 ? -1 : num_rows_;
+  int64_t new_num_cols = axis == 0 ? num_cols_ : -1;
+
+  if (axis == 0) {
+    std::vector<torch::Tensor> relabeled_result;
+
+    if (coo_) {
+      std::tie(frontiers, relabeled_result) =
+          impl::TensorRelabelCUDA({coo_->row}, {coo_->row});
+      coo_ptr =
+          std::make_shared<COO>(COO{relabeled_result[0], coo_->col, coo_->e_ids,
+                                    coo_->row_sorted, coo_->col_sorted});
+      new_num_rows = frontiers.numel();
+    } else if (csc_) {
+      if (new_num_rows > 0) {
+        csc_ptr = std::make_shared<CSC>(
+            CSC{csc_->indptr, relabeled_result[0], csc_->e_ids});
+      } else {
+        std::tie(frontiers, relabeled_result) =
+            impl::TensorRelabelCUDA({csc_->indices}, {csc_->indices});
+        csc_ptr = std::make_shared<CSC>(
+            CSC{csc_->indptr, relabeled_result[0], csc_->e_ids});
+        new_num_rows = frontiers.numel();
+      }
+    }
+  } else if (axis == 1) {
+    std::vector<torch::Tensor> relabeled_result;
+
+    if (coo_) {
+      std::tie(frontiers, relabeled_result) =
+          impl::TensorRelabelCUDA({coo_->col}, {coo_->col});
+      coo_ptr =
+          std::make_shared<COO>(COO{coo_->row, relabeled_result[0], coo_->e_ids,
+                                    coo_->row_sorted, coo_->col_sorted});
+      new_num_cols = frontiers.numel();
+    } else if (csr_) {
+      if (new_num_cols > 0) {
+        csc_ptr = std::make_shared<CSR>(
+            CSR{csr_->indptr, relabeled_result[0], csr_->e_ids});
+      } else {
+        std::tie(frontiers, relabeled_result) =
+            impl::TensorRelabelCUDA({csr_->indices}, {csr_->indices});
+        csc_ptr = std::make_shared<CSC>(
+            CSR{csr_->indptr, relabeled_result[0], csr_->e_ids});
+        new_num_cols = frontiers.numel();
+      }
+    }
+  }
+
+  auto ret = c10::intrusive_ptr<Graph>(
+      std::unique_ptr<Graph>(new Graph(new_num_rows, new_num_cols)));
+  ret->SetNumEdges(num_edges_);
+  ret->SetCOO(coo_ptr);
+  ret->SetCSC(csc_ptr);
+  ret->SetCSR(csr_ptr);
+
+  return {ret, frontiers};
+}
+
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor,
            torch::optional<torch::Tensor>>
 Graph::GraphRelabel(torch::Tensor col_seeds, torch::Tensor row_ids) {

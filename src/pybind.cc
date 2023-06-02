@@ -32,6 +32,7 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_Node2Vec", &Graph::Node2Vec)
       .def("_CAPI_SDDMM", &Graph::SDDMM)
       .def("_CAPI_SpMM", &Graph::SpMM)
+      .def("_CAPI_Compact", &Graph::Compact)
       .def("_CAPI_GraphRelabel", &Graph::GraphRelabel)
       .def("_CAPI_GetValidNodes", &Graph::GetValidNodes)
       .def("_CAPI_SlicingSampling", &Graph::FusedSlicingSampling)

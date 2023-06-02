@@ -111,6 +111,27 @@ class Matrix(object):
 
         return ret_matrix
 
+    def compact(self, axis):
+        if axis == 0:
+            if "_ID" not in self.row_ndata:
+                new_graph, unique_tensor = self._graph._CAPI_Compact(axis)
+                for key, value in self.row_ndata.items():
+                    self.row_ndata[key] = value[unique_tensor]
+                self.row_ndata["_ID"] = unique_tensor
+
+            self._graph = new_graph
+
+        elif axis == 1:
+            if "_ID" not in self.col_ndata:
+                new_graph, unique_tensor = self._graph._CAPI_Compact(axis)
+                for key, value in self.col_ndata.items():
+                    self.col_ndata[key] = value[unique_tensor]
+                self.col_ndata["_ID"] = unique_tensor
+
+            self._graph = new_graph
+
+        return self
+
     # Select-step operators
     def individual_sampling(self, K: int, probs: torch.Tensor, replace: bool) -> Matrix:
         ret_matrix = Matrix()
