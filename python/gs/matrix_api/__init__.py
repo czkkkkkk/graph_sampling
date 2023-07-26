@@ -1,2 +1,2 @@
-from .matrix import Matrix
+from .matrix import Matrix, BatchMatrix
 #from .hetero_matrix import HeteroMatrix

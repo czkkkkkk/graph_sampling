@@ -1,7 +1,6 @@
 #include <torch/custom_class.h>
 #include <torch/script.h>
 
-#include "batch_graph.h"
 #include "graph.h"
 #include "graph_ops.h"
 #include "tensor_ops.h"
@@ -38,43 +37,28 @@ TORCH_LIBRARY(gs_classes, m) {
       .def("_CAPI_SlicingSampling", &Graph::FusedSlicingSampling)
       .def("_CAPI_FusedUOPV", &Graph::FusedUOPV)
       .def("_CAPI_FusedESquareSum", &Graph::FusedESquareSum)
-      .def("_CAPI_FusedEDivUSum", &Graph::FusedEDivUSum);
-  // .def("_CAPI_ToBatchGraph", &Graph::ToBatchGraph);
-
-  m.class_<BatchGraph>("BatchGraph")
-      .def(torch::init<int64_t, int64_t>())
-      .def("_CAPI_LoadCSC", &BatchGraph::LoadCSC)
-      .def("_CAPI_LoadCOO", &BatchGraph::LoadCOO)
-      .def("_CAPI_LoadCSR", &BatchGraph::LoadCSR)
-      .def("_CAPI_GetNumRows", &BatchGraph::GetNumRows)
-      .def("_CAPI_GetNumCols", &BatchGraph::GetNumCols)
-      .def("_CAPI_GetNumEdges", &BatchGraph::GetNumEdges)
-      .def("_CAPI_GetCSCIndptr", &BatchGraph::GetCSCIndptr)
-      .def("_CAPI_GetCSCIndices", &BatchGraph::GetCSCIndices)
-      .def("_CAPI_GetCSCEids", &BatchGraph::GetCSCEids)
-      .def("_CAPI_GetCOORows", &BatchGraph::GetCOORows)
-      .def("_CAPI_GetCOOCols", &BatchGraph::GetCOOCols)
-      .def("_CAPI_GetCOOEids", &BatchGraph::GetCOOEids)
-      .def("_CAPI_GetCSRIndptr", &BatchGraph::GetCSRIndptr)
-      .def("_CAPI_GetCSRIndices", &BatchGraph::GetCSRIndices)
-      .def("_CAPI_GetCSREids", &BatchGraph::GetCSREids)
-      .def("_CAPI_Slicing", &BatchGraph::Slicing)
-      .def("_CAPI_Sampling", &BatchGraph::Sampling)
-      .def("_CAPI_SamplingProbs", &BatchGraph::SamplingProbs)
-      .def("_CAPI_RandomWalk", &BatchGraph::RandomWalk)
-      .def("_CAPI_Node2Vec", &BatchGraph::Node2Vec)
-      .def("_CAPI_SDDMM", &BatchGraph::SDDMM)
-      .def("_CAPI_SpMM", &BatchGraph::SpMM)
-      .def("_CAPI_GetValidNodes", &BatchGraph::GetValidNodes)
-      .def("_CAPI_SlicingBatch", &BatchGraph::BatchColSlicing)
-      .def("_CAPI_GraphRelabel", &BatchGraph::GraphRelabel)
-      .def("_CAPI_SetEdgeBptr", &BatchGraph::SetEdgeBptr);
+      .def("_CAPI_FusedEDivUSum", &Graph::FusedEDivUSum)
+      .def("_CAPI_BatchColSlicing", &Graph::BatchColSlicing)
+      .def("_CAPI_BatchRowSampling", &Graph::BatchRowSampling)
+      .def("_CAPI_BatchRowSamplingProbs", &Graph::BatchRowSamplingProbs)
+      .def("_CAPI_BatchGraphRelabel", &Graph::BatchGraphRelabel)
+      .def("_CAPI_GetEdgeBptr", &Graph::GetEdgeBptr)
+      .def("_CAPI_GetColBptr", &Graph::GetColBptr)
+      .def("_CAPI_BatchGetCSCIndptr", &Graph::BatchGetCSCIndptr)
+      .def("_CAPI_BatchGetCSCIndices", &Graph::BatchGetCSCIndices)
+      .def("_CAPI_BatchGetCSCEids", &Graph::BatchGetCSCEids)
+      .def("_CAPI_BatchGetCOORows", &Graph::BatchGetCOORows)
+      .def("_CAPI_BatchGetCOOCols", &Graph::BatchGetCOORows)
+      .def("_CAPI_BatchGetCOOEids", &Graph::BatchGetCOOEids)
+      .def("_CAPI_BatchGetColCounts", &Graph::BatchGetColCounts)
+      .def("_CAPI_BatchGetValidNodes", &Graph::BatchGetValidNodes);
 }
 
 TORCH_LIBRARY(gs_ops, m) {
   m.def("_CAPI_ListSampling", &ListSampling);
   m.def("_CAPI_ListSamplingWithProbs", &ListSamplingProbs);
-  m.def("_CAPI_ListSamplingWithProbsBatch", &BatchListSamplingProbs);
+  m.def("_CAPI_BatchListSamplingWithProbs", &BatchListSamplingProbs);
+  m.def("_CAPI_BatchListSampling", &BatchListSampling);
 }
 
 namespace gs {}

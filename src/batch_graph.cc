@@ -1,4 +1,4 @@
-#include "batch_graph.h"
+#include "graph.h"
 
 #include <sstream>
 #include "bcast.h"
@@ -9,11 +9,12 @@
 #include "graph_ops.h"
 
 namespace gs {
-// axis == 0 for row, axis == 1 for column
-std::tuple<c10::intrusive_ptr<BatchGraph>, torch::Tensor>
-BatchGraph::BatchColSlicing(torch::Tensor seeds, torch::Tensor batch_ptr,
-                            int64_t axis, int64_t on_format,
-                            int64_t output_format, bool encoding) {
+// batch api
+std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::BatchColSlicing(
+    torch::Tensor seeds, torch::Tensor batch_ptr, bool encoding) {
+  int64_t axis = 1;
+  int64_t on_format = _CSC;
+  int64_t output_format = _CSC + _COO;
   CreateSparseFormat(on_format);
   torch::Tensor select_index;
   std::shared_ptr<COO> coo_ptr = nullptr;
@@ -32,8 +33,8 @@ BatchGraph::BatchColSlicing(torch::Tensor seeds, torch::Tensor batch_ptr,
   } else {
     LOG(FATAL) << "batch slicing only suppurt column wise";
   }
-  auto ret = c10::intrusive_ptr<BatchGraph>(
-      std::unique_ptr<BatchGraph>(new BatchGraph(new_num_rows, new_num_cols)));
+  auto ret = c10::intrusive_ptr<Graph>(
+      std::unique_ptr<Graph>(new Graph(new_num_rows, new_num_cols)));
 
   if (on_format == _CSC) {
     CHECK(output_format != _CSR)
@@ -62,6 +63,8 @@ BatchGraph::BatchColSlicing(torch::Tensor seeds, torch::Tensor batch_ptr,
   ret->SetCOO(coo_ptr);
   ret->SetCSC(csc_ptr);
   ret->SetCSR(csr_ptr);
+  ret->SetColBptr(col_bptr_);
+  ret->SetEdgeBptr(csc_->indptr.index({col_bptr_}));
 
   torch::Tensor split_index;
   if (e_ids.has_value()) {
@@ -73,69 +76,90 @@ BatchGraph::BatchColSlicing(torch::Tensor seeds, torch::Tensor batch_ptr,
   return {ret, split_index};
 }
 
-std::tuple<std::vector<torch::Tensor>, std::vector<torch::Tensor>,
-           std::vector<torch::Tensor>, std::vector<torch::Tensor>, std::string>
-BatchGraph::GraphRelabel(torch::Tensor col_seeds, torch::Tensor row_ids) {
-  auto csc = GetCSC();
-  if (csc != nullptr) {
-    if (col_bptr_.numel() == 0)
-      LOG(FATAL)
-          << "Relabel BatchGraph on CSC must has csc indptr batch pointer";
-    if (edge_bptr_.numel() == 0) edge_bptr_ = csc->indptr.index({col_bptr_});
-
-    torch::Tensor row_indices =
-        row_ids.numel() > 0 ? row_ids.index({csc->indices}) : csc->indices;
-
-    torch::Tensor unique_tensor, unique_tensor_bptr, out_indices, indices_bptr;
-
-    std::tie(unique_tensor, unique_tensor_bptr, out_indices, indices_bptr) =
-        impl::batch::BatchCSCRelabelCUDA(col_seeds, col_bptr_, row_indices,
-                                         edge_bptr_);
-
-    torch::Tensor relabeled_indptr = csc->indptr.clone();
-
-    auto frontier_vector =
-        impl::batch::SplitByOffset(unique_tensor, unique_tensor_bptr);
-    auto indptr_vector =
-        impl::batch::SplitIndptrByOffsetCUDA(csc->indptr, col_bptr_);
-    auto indices_vector = impl::batch::SplitByOffset(out_indices, indices_bptr);
-    std::vector<torch::Tensor> eid_vector;
-    if (csc->e_ids.has_value())
-      eid_vector = impl::batch::SplitByOffset(csc->e_ids.value(), indices_bptr);
-
-    return {frontier_vector, indptr_vector, indices_vector, eid_vector, "csc"};
-  } else {
-    if (edge_bptr_.numel() == 0)
-      LOG(FATAL) << "Relabel BatchGraph on COO must has edge batch pointer";
-
-    CreateSparseFormat(_COO);
-    auto coo = GetCOO();
-
-    if (!coo->col_sorted)
-      LOG(FATAL)
-          << "Relabel BatchGraph on COO must require COO to be column-sorted";
-
-    torch::Tensor coo_col = coo->col;
-    torch::Tensor coo_row =
-        row_ids.numel() > 0 ? row_ids.index({coo->row}) : coo->row;
-
-    torch::Tensor unique_tensor, unique_tensor_bptr;
-    torch::Tensor out_coo_row, out_coo_col, out_coo_bptr;
-    std::tie(unique_tensor, unique_tensor_bptr, out_coo_row, out_coo_col,
-             out_coo_bptr) =
-        impl::batch::BatchCOORelabelCUDA(col_seeds, col_bptr_, coo_col, coo_row,
-                                         edge_bptr_);
-
-    auto frontier_vector =
-        impl::batch::SplitByOffset(unique_tensor, unique_tensor_bptr);
-    auto coo_row_vector = impl::batch::SplitByOffset(out_coo_row, out_coo_bptr);
-    auto coo_col_vector =
-        impl::batch::SplitIndptrByOffsetCUDA(out_coo_col, out_coo_bptr);
-    std::vector<torch::Tensor> eid_vector;
-    if (csc->e_ids.has_value())
-      eid_vector = impl::batch::SplitByOffset(coo->e_ids.value(), out_coo_bptr);
-
-    return {frontier_vector, coo_row_vector, coo_col_vector, eid_vector, "coo"};
-  }
+std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> Graph::BatchRowSampling(
+    int64_t fanout, bool replace) {
+  auto ret = Sampling(1, fanout, replace, _CSC, _CSC + _COO);
+  auto graph_ptr = std::get<0>(ret);
+  auto split_index = std::get<1>(ret);
+  graph_ptr->SetColBptr(col_bptr_);
+  graph_ptr->SetEdgeBptr(graph_ptr->csc_->indptr.index({col_bptr_}));
+  return {graph_ptr, split_index};
 }
+
+std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor>
+Graph::BatchRowSamplingProbs(int64_t fanout, bool replace,
+                             torch::Tensor edge_probs) {
+  auto ret = SamplingProbs(1, edge_probs, fanout, replace, _CSC, _CSC + _COO);
+  auto graph_ptr = std::get<0>(ret);
+  auto split_index = std::get<1>(ret);
+  graph_ptr->SetColBptr(col_bptr_);
+  graph_ptr->SetEdgeBptr(graph_ptr->csc_->indptr.index({col_bptr_}));
+  return {graph_ptr, split_index};
+}
+
+std::tuple<std::vector<torch::Tensor>, std::vector<torch::Tensor>,
+           std::vector<torch::Tensor>, std::vector<torch::Tensor>>
+Graph::BatchGraphRelabel(torch::Tensor col_seeds, torch::Tensor row_ids) {
+  if (edge_bptr_.numel() == 0)
+    LOG(FATAL) << "Relabel BatchGraph on COO must has edge batch pointer";
+
+  CreateSparseFormat(_COO);
+  auto coo = GetCOO();
+
+  if (!coo->col_sorted)
+    LOG(FATAL)
+        << "Relabel BatchGraph on COO must require COO to be column-sorted";
+
+  torch::Tensor coo_col = coo->col;
+  torch::Tensor coo_row =
+      row_ids.numel() > 0 ? row_ids.index({coo->row}) : coo->row;
+
+  torch::Tensor unique_tensor, unique_tensor_bptr;
+  torch::Tensor out_coo_row, out_coo_col, out_coo_bptr;
+  std::tie(unique_tensor, unique_tensor_bptr, out_coo_row, out_coo_col,
+           out_coo_bptr) =
+      impl::batch::BatchCOORelabelCUDA(col_seeds, col_bptr_, coo_col, coo_row,
+                                       edge_bptr_);
+
+  auto frontier_vector =
+      impl::batch::SplitByOffset(unique_tensor, unique_tensor_bptr);
+  auto coo_row_vector = impl::batch::SplitByOffset(out_coo_row, out_coo_bptr);
+  auto coo_col_vector = impl::batch::SplitByOffset(out_coo_col, out_coo_bptr);
+  std::vector<torch::Tensor> eid_vector;
+  if (coo_->e_ids.has_value())
+    eid_vector = impl::batch::SplitByOffset(coo->e_ids.value(), out_coo_bptr);
+  else {
+    eid_vector.resize(out_coo_bptr.numel() - 1);
+    std::fill(eid_vector.begin(), eid_vector.end(), torch::Tensor());
+  }
+
+  return {frontier_vector, coo_row_vector, coo_col_vector, eid_vector};
+}
+
+std::tuple<torch::Tensor, torch::Tensor> Graph::BatchGetValidNodes(
+    torch::Tensor col_seeds, torch::Tensor row_ids) {
+  if (edge_bptr_.numel() == 0)
+    LOG(FATAL) << "Relabel BatchGraph on COO must has edge batch pointer";
+
+  CreateSparseFormat(_COO);
+  auto coo = GetCOO();
+
+  if (!coo->col_sorted)
+    LOG(FATAL)
+        << "Relabel BatchGraph on COO must require COO to be column-sorted";
+
+  torch::Tensor coo_col = coo->col;
+  torch::Tensor coo_row =
+      row_ids.numel() > 0 ? row_ids.index({coo->row}) : coo->row;
+
+  torch::Tensor unique_tensor, unique_tensor_bptr;
+  torch::Tensor out_coo_row, out_coo_col, out_coo_bptr;
+  std::tie(unique_tensor, unique_tensor_bptr, out_coo_row, out_coo_col,
+           out_coo_bptr) =
+      impl::batch::BatchCOORelabelCUDA(col_seeds, col_bptr_, coo_col, coo_row,
+                                       edge_bptr_);
+
+  return {unique_tensor, unique_tensor_bptr};
+};
+
 }  // namespace gs

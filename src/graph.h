@@ -120,6 +120,73 @@ class Graph : public torch::CustomClassHolder {
                      torch::Tensor out, torch::Tensor argu, torch::Tensor arge,
                      int64_t u_target, int64_t on_format);
 
+  // todo: current batch graph will disable graph compaction and the graph
+  // formats must be in [CSC, COO]
+
+  // batch api
+  void SetEdgeBptr(torch::Tensor bptr) { edge_bptr_ = bptr; }
+  void SetColBptr(torch::Tensor bptr) { col_bptr_ = bptr; }
+  torch::Tensor GetEdgeBptr() { return edge_bptr_; }
+  torch::Tensor GetColBptr() { return col_bptr_; }
+
+  std::tuple<torch::Tensor, torch::Tensor> BatchGetCSCIndptr() {
+    CreateSparseFormat(_CSC);
+    return {csc_->indptr, col_bptr_};
+  };
+  std::tuple<torch::Tensor, torch::Tensor> BatchGetCSCIndices() {
+    CreateSparseFormat(_CSC);
+    return {csc_->indices, edge_bptr_};
+  };
+  std::tuple<torch::Tensor, torch::Tensor> BatchGetCSCEids() {
+    CreateSparseFormat(_CSC);
+    if (csc_->e_ids.has_value()) {
+      return {csc_->e_ids.value(), edge_bptr_};
+    } else {
+      return {torch::Tensor(), torch::Tensor()};
+    }
+  };
+  std::tuple<torch::Tensor, torch::Tensor> BatchGetCOORows() {
+    CreateSparseFormat(_COO);
+    return {coo_->row, edge_bptr_};
+  };
+  std::tuple<torch::Tensor, torch::Tensor> BatchGetCOOCols() {
+    CreateSparseFormat(_COO);
+    return {coo_->col, edge_bptr_};
+  };
+  std::tuple<torch::Tensor, torch::Tensor> BatchGetCOOEids() {
+    CreateSparseFormat(_COO);
+    if (coo_->e_ids.has_value()) {
+      return {coo_->e_ids.value(), edge_bptr_};
+    } else {
+      return {torch::Tensor(), torch::Tensor()};
+    }
+  };
+
+  std::vector<int64_t> BatchGetColCounts() {
+    int num_item = col_bptr_.numel() - 1;
+    auto count =
+        col_bptr_.slice(0, 1, num_item + 1) - col_bptr_.slice(0, 0, num_item);
+    auto cpu_count = count.to(torch::kLong).to(torch::kCPU);
+    return std::vector<int64_t>(cpu_count.data_ptr<int64_t>(),
+                                cpu_count.data_ptr<int64_t>() + num_item);
+  };
+
+  std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> BatchColSlicing(
+      torch::Tensor seeds, torch::Tensor batch_ptr, bool encoding);
+
+  std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> BatchRowSampling(
+      int64_t fanout, bool replace);
+
+  std::tuple<c10::intrusive_ptr<Graph>, torch::Tensor> BatchRowSamplingProbs(
+      int64_t fanout, bool replace, torch::Tensor edge_probs);
+
+  std::tuple<std::vector<torch::Tensor>, std::vector<torch::Tensor>,
+             std::vector<torch::Tensor>, std::vector<torch::Tensor>>
+  BatchGraphRelabel(torch::Tensor col_seeds, torch::Tensor row_ids);
+
+  std::tuple<torch::Tensor, torch::Tensor> BatchGetValidNodes(
+      torch::Tensor col_seeds, torch::Tensor row_ids);
+
  private:
   int64_t num_cols_ = 0;   // total number of cols in matrix
   int64_t num_rows_ = 0;   // total number of rows in matrix
@@ -127,6 +194,9 @@ class Graph : public torch::CustomClassHolder {
   std::shared_ptr<CSC> csc_;
   std::shared_ptr<CSR> csr_;
   std::shared_ptr<COO> coo_;
+
+  // batch attr
+  torch::Tensor col_bptr_, edge_bptr_;
 };
 
 }  // namespace gs
