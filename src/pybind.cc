@@ -59,6 +59,7 @@ TORCH_LIBRARY(gs_ops, m) {
   m.def("_CAPI_ListSamplingWithProbs", &ListSamplingProbs);
   m.def("_CAPI_BatchListSamplingWithProbs", &BatchListSamplingProbs);
   m.def("_CAPI_BatchListSampling", &BatchListSampling);
+  m.def("_CAPI_BatchSplitByOffset", &gs::impl::batch::SplitByOffset);
 }
 
 namespace gs {}

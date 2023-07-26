@@ -1,14 +1,8 @@
-import gs
-from gs.matrix_api.matrix import Matrix
 import torch
-from gs.utils import load_graph
-from typing import List
-from torch.fx import Proxy
-from gs import Matrix
-from gs.utils import create_block_from_coo
-from gs.matrix_api.matrix import assign_block
-
-from gs.format import _COO, _CSC, _CSR
+from ..utils import create_block_from_coo
+from ..format import _COO, _CSC, _CSR
+from ..ops import gspmm, gsddmm
+from .matrix import Matrix, assign_block
 
 
 class BatchMatrix(Matrix):
@@ -132,3 +126,11 @@ class BatchMatrix(Matrix):
 
     def all_edges(self):
         return self._graph._CAPI_BatchGetCOOEids()
+
+    def random_walk(self, seeds, seeds_ptr, walk_length) -> torch.Tensor:
+        return torch.ops.gs_ops._CAPI_BatchSplitByOffset(
+            self._graph._CAPI_RandomWalk(seeds, walk_length), seeds_ptr)
+
+    def node2vec(self, seeds, seeds_ptr, walk_length, p, q) -> torch.Tensor:
+        return torch.ops.gs_ops._CAPI_BatchSplitByOffset(
+            self._graph._CAPI_Node2Vec(seeds, walk_length, p, q), seeds_ptr)

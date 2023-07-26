@@ -2,6 +2,7 @@
 #define GS_TENSOR_OPS_H_
 
 #include <torch/script.h>
+#include "cuda/batch/batch_ops.h"
 
 namespace gs {
 
